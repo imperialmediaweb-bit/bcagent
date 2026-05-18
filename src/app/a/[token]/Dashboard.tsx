@@ -6,6 +6,7 @@ import {
   ArrowDownRight,
   ArrowUpRight,
   BarChart3,
+  Bot,
   Building2,
   Calendar,
   CircleUserRound,
@@ -64,6 +65,7 @@ import {
 } from "@/lib/analytics";
 import { generateSampleData } from "@/lib/sample-data";
 import { downloadCSV } from "@/lib/csv-export";
+import AIInsights from "./AIInsights";
 
 const PALETTE = [
   "#6366f1",
@@ -96,9 +98,13 @@ const fmtPct = (n: number) => `${n > 0 ? "+" : ""}${n.toFixed(1)}%`;
 export default function Dashboard({
   agentId,
   agentName,
+  token,
+  aiEnabled,
 }: {
   agentId: string;
   agentName: string;
+  token: string;
+  aiEnabled: boolean;
 }) {
   const [rows, setRows] = useState<NormalizedRow[]>([]);
   const [parseInfo, setParseInfo] = useState<ParseResult | null>(null);
@@ -203,6 +209,92 @@ export default function Dashboard({
 
   const agents = useMemo(() => distinctValues(rows, "agent"), [rows]);
   const producers = useMemo(() => distinctValues(rows, "producer"), [rows]);
+
+  const aiSummary = useMemo(() => {
+    if (filtered.length === 0) return null;
+    let min = filtered[0].date;
+    let max = filtered[0].date;
+    for (const r of filtered) {
+      if (r.date < min) min = r.date;
+      if (r.date > max) max = r.date;
+    }
+    const trim = (
+      arr: Array<{
+        key: string;
+        volume: number;
+        value: number;
+        clients: number;
+        transactions: number;
+      }>,
+    ) =>
+      arr.slice(0, 8).map((a) => ({
+        key: a.key,
+        volume: Math.round(a.volume),
+        value: Math.round(a.value),
+        clients: a.clients,
+        transactions: a.transactions,
+      }));
+    const anomalyByType = anomalies.reduce<Record<string, number>>(
+      (acc, a) => {
+        acc[a.type] = (acc[a.type] ?? 0) + 1;
+        return acc;
+      },
+      {},
+    );
+    return {
+      metric,
+      period,
+      totals: {
+        volume: Math.round(totals.volume),
+        value: Math.round(totals.value),
+        clients: totals.clients,
+        transactions: totals.transactions,
+        returns: totals.returns,
+      },
+      dateRange: {
+        min: min.toISOString().slice(0, 10),
+        max: max.toISOString().slice(0, 10),
+      },
+      byAgent: trim(byAgent),
+      byProducer: trim(byProducer),
+      byClient: trim(byClient),
+      evolution: ts.points.slice(-24).map((p) => ({
+        period: p.period,
+        value: Math.round(p.value),
+        volume: Math.round(p.volume),
+        clients: p.clients,
+      })),
+      agentProducerMatrix: {
+        rows: matrix.rows.slice(0, 6),
+        cols: matrix.cols.slice(0, 6),
+        matrix: matrix.matrix
+          .slice(0, 6)
+          .map((row) => row.slice(0, 6).map((v) => Math.round(v))),
+      },
+      anomalies: {
+        total: anomalies.length,
+        byType: anomalyByType,
+        examples: anomalies.slice(0, 8).map((a) => ({
+          type: a.type,
+          agent: a.row.agent || "(necunoscut)",
+          producer: a.row.producer || "(necunoscut)",
+          volume: a.row.volume,
+          note: a.note,
+        })),
+      },
+    };
+  }, [
+    filtered,
+    metric,
+    period,
+    totals,
+    byAgent,
+    byProducer,
+    byClient,
+    ts.points,
+    matrix,
+    anomalies,
+  ]);
 
   const hasData = rows.length > 0;
   const valueless = metric === "volume";
@@ -325,6 +417,23 @@ export default function Dashboard({
                 deltas={deltas}
                 metric={metric}
               />
+
+              {aiSummary && (
+                <section id="ai" className="scroll-mt fade-in">
+                  <SectionTitle
+                    icon={<Bot className="h-5 w-5" />}
+                    title="AI Insights"
+                    subtitle="Analiză și conversație cu Claude — doar date agregate ajung pe server"
+                  />
+                  <div className="mt-4">
+                    <AIInsights
+                      token={token}
+                      summary={aiSummary}
+                      enabled={aiEnabled}
+                    />
+                  </div>
+                </section>
+              )}
 
               <FiltersBar
                 showFilters={showFilters}
@@ -657,6 +766,7 @@ function initials(name: string): string {
 function Sidebar({ hasData }: { hasData: boolean }) {
   const links = [
     { href: "#overview", label: "Privire ansamblu", icon: BarChart3 },
+    { href: "#ai", label: "AI Insights", icon: Bot },
     { href: "#evolutie", label: "Evoluție", icon: LineChartIcon },
     { href: "#distribuire", label: "Distribuție", icon: PieChartIcon },
     { href: "#matrice", label: "Matrice brand", icon: Grid3X3 },
@@ -691,7 +801,7 @@ function Sidebar({ hasData }: { hasData: boolean }) {
       </nav>
       <div className="border-t border-slate-200 p-4 text-xs text-slate-500">
         <p>Sales analytics</p>
-        <p className="mt-1">v0.2 · magic-link auth</p>
+        <p className="mt-1">v0.3 · token + AI</p>
       </div>
     </aside>
   );
@@ -816,8 +926,8 @@ function Hero({
                   dateRange
                     ? ` din intervalul ${dateRange.min.toLocaleDateString("ro-RO")} – ${dateRange.max.toLocaleDateString("ro-RO")}`
                     : ""
-                }${isDemo ? " (date demo)" : ""}. Filtrează, compară și exportă cu un singur click.`
-              : "Încarcă un fișier XLS/XLSX/CSV cu vânzările tale — sistemul detectează automat coloanele și îți construiește panoul în câteva secunde. Datele rămân în browser-ul tău."}
+                }${isDemo ? " (date demo)" : ""}. Filtrează, compară și întreabă AI cu un singur click.`
+              : "Încarcă un fișier XLS/XLSX/CSV cu vânzările tale — sistemul detectează automat coloanele, construiește panoul și activează analiza AI. Datele rămân în browser-ul tău."}
           </p>
         </div>
 
