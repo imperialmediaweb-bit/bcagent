@@ -995,6 +995,73 @@ function Hero({
             {parseInfo.skipped > 0
               ? ` · ${parseInfo.skipped} sărite (dată invalidă)`
               : ""}
+            {parseInfo.diagnostic?.sheetUsed
+              ? ` · foaia "${parseInfo.diagnostic.sheetUsed}", header pe rândul ${parseInfo.diagnostic.headerRow}`
+              : ""}
+          </p>
+        </div>
+      )}
+      {parseInfo && parseInfo.rows.length === 0 && parseInfo.diagnostic && (
+        <div className="relative mt-4 space-y-3 rounded-lg bg-amber-500/20 p-4 text-xs text-white">
+          <p className="font-medium">
+            Nu am putut detecta automat coloanele. Iată ce am găsit în fișier:
+          </p>
+          <div>
+            <p className="font-medium text-white/80">
+              Foi în fișier: {parseInfo.diagnostic.sheetNames.length}
+            </p>
+            <ul className="ml-4 list-disc text-white/70">
+              {parseInfo.diagnostic.sheetNames.map((n) => (
+                <li key={n}>{n}</li>
+              ))}
+            </ul>
+          </div>
+          {parseInfo.diagnostic.sample && parseInfo.diagnostic.sample.length > 0 && (
+            <div>
+              <p className="font-medium text-white/80">
+                Primele {parseInfo.diagnostic.sample.length} rânduri (raw):
+              </p>
+              <div className="mt-1 overflow-x-auto rounded bg-black/30 p-2">
+                <table className="text-[10px]">
+                  <tbody>
+                    {parseInfo.diagnostic.sample.map((row, i) => (
+                      <tr key={i} className="border-b border-white/10 last:border-0">
+                        <td className="pr-2 font-mono text-white/50">
+                          R{String(row._row)}:
+                        </td>
+                        {Object.entries(row)
+                          .filter(([k]) => k !== "_row")
+                          .map(([k, v], j) => (
+                            <td key={j} className="px-2 font-mono text-white/80">
+                              {v == null ? "" : String(v).slice(0, 30)}
+                            </td>
+                          ))}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+          {parseInfo.diagnostic.candidates && parseInfo.diagnostic.candidates.length > 0 && (
+            <div>
+              <p className="font-medium text-white/80">
+                Top candidați (coloane detectate):
+              </p>
+              <ul className="ml-4 list-disc text-white/70">
+                {parseInfo.diagnostic.candidates.map((c, i) => (
+                  <li key={i}>
+                    foaia &quot;{c.sheet}&quot;, header pe rândul {c.headerRow}: {c.mappedCount} coloane mapate, {c.rowsCount} rânduri parsabile
+                    <div className="ml-2 text-[10px] text-white/60">
+                      → {Object.entries(c.mapping).map(([k, v]) => `${k}=${v}`).join(", ")}
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+          <p className="text-white/90">
+            <strong>Trimite-mi un screenshot cu această informație</strong> sau spune-mi numele exact al coloanelor din fișier ca să adaug aliasul lipsă.
           </p>
         </div>
       )}
