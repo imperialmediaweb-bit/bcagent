@@ -352,6 +352,155 @@ function scanSheet(
   };
 }
 
+/**
+ * Parser dedicat pentru rapoarte tip "pivot grupat pe agent" (SAGA et al.):
+ *
+ *   Iesiri marfuri pe documente
+ *   ...
+ *   Perioada: 01.04.2026..30.04.2026
+ *   ...
+ *   Agent | Nume grupa | Cantitate
+ *         | BRITISH    | 1.529,00
+ *         | CARPATI    | 20
+ *   ...
+ *   T:Calinciuc Gabriel |   | 4.054,00
+ *         | BRITISH    | 2.320,00
+ *   ...
+ *   T:Cojocaru Razvan   |   | 5.809,00
+ *   ...
+ *   Total general:      |   | 25.998,00
+ *
+ * Coloana Agent e goală pe rândurile de detaliu — agentul apare doar la
+ * subtotaluri sub forma "T:Nume". Data nu apare pe rând, doar în header
+ * ca "Perioada: dd.mm.yyyy..dd.mm.yyyy". Aplic data de start tuturor.
+ */
+function parseGroupedPivot(
+  sheet: XLSX.WorkSheet,
+  sheetName: string,
+): {
+  rows: NormalizedRow[];
+  defaultDate: Date | null;
+  headerRow: number;
+  sheetName: string;
+} | null {
+  const aoa = XLSX.utils.sheet_to_json<unknown[]>(sheet, {
+    header: 1,
+    defval: null,
+    raw: false,
+    blankrows: false,
+  });
+  if (aoa.length < 3) return null;
+
+  // 1. Extrage data din header (Perioada: dd.mm.yyyy..dd.mm.yyyy)
+  let defaultDate: Date | null = null;
+  for (let i = 0; i < Math.min(25, aoa.length); i++) {
+    const row = aoa[i];
+    if (!Array.isArray(row)) continue;
+    const text = row
+      .map((c) => (c == null ? "" : String(c)))
+      .join(" ");
+    const m = text.match(
+      /[Pp]erioada[:\s]+(\d{1,2})[./-](\d{1,2})[./-](\d{4})/,
+    );
+    if (m) {
+      defaultDate = new Date(
+        parseInt(m[3], 10),
+        parseInt(m[2], 10) - 1,
+        parseInt(m[1], 10),
+      );
+      break;
+    }
+  }
+
+  // 2. Găsește rândul de header cu Agent + grupa/brand/producator + Cantitate
+  let headerIdx = -1;
+  let agentCol = -1;
+  let groupCol = -1;
+  let qtyCol = -1;
+  let valueCol = -1;
+  for (let i = 0; i < Math.min(30, aoa.length); i++) {
+    const row = aoa[i];
+    if (!Array.isArray(row)) continue;
+    const norm = row.map((c) => normalize(String(c ?? "")));
+    const aIdx = norm.findIndex((s) => s === "agent" || s === "vanzator");
+    const gIdx = norm.findIndex(
+      (s) =>
+        s === "nume grupa" ||
+        s === "grupa" ||
+        s === "brand" ||
+        s === "producator" ||
+        s === "marca" ||
+        s === "denumire grupa",
+    );
+    const qIdx = norm.findIndex(
+      (s) => s === "cantitate" || s === "cant" || s === "qty",
+    );
+    if (aIdx >= 0 && gIdx >= 0 && qIdx >= 0) {
+      headerIdx = i;
+      agentCol = aIdx;
+      groupCol = gIdx;
+      qtyCol = qIdx;
+      // Optional: caută și coloană de valoare
+      const vIdx = norm.findIndex(
+        (s) => s === "valoare" || s === "value" || s === "suma",
+      );
+      if (vIdx >= 0) valueCol = vIdx;
+      break;
+    }
+  }
+  if (headerIdx < 0) return null;
+
+  // 3. Parsează rândurile sub header
+  const rows: NormalizedRow[] = [];
+  let pending: Array<{ producer: string; volume: number; value: number }> = [];
+
+  for (let i = headerIdx + 1; i < aoa.length; i++) {
+    const row = aoa[i];
+    if (!Array.isArray(row)) continue;
+
+    const firstAgentCell = String(row[agentCol] ?? "").trim();
+    const groupCell = String(row[groupCol] ?? "").trim();
+    const qtyRaw = row[qtyCol];
+    const valueRaw = valueCol >= 0 ? row[valueCol] : null;
+
+    // Total general → stop
+    const joined = `${firstAgentCell} ${groupCell}`.toLowerCase();
+    if (/total\s+general/.test(joined)) break;
+
+    // T:Nume agent → flush buffer
+    const subtotalMatch = firstAgentCell.match(/^T\s*:\s*(.+?)\s*$/);
+    if (subtotalMatch) {
+      const agentName = subtotalMatch[1].trim();
+      if (agentName) {
+        for (const item of pending) {
+          rows.push({
+            date: defaultDate ?? new Date(),
+            agent: agentName,
+            producer: item.producer,
+            client: "",
+            volume: item.volume,
+            value: item.value,
+          });
+        }
+      }
+      pending = [];
+      continue;
+    }
+
+    // Rând de detaliu (brand + cantitate)
+    if (groupCell && (qtyRaw != null || valueRaw != null)) {
+      pending.push({
+        producer: groupCell,
+        volume: qtyRaw != null ? parseNumber(qtyRaw) : 0,
+        value: valueRaw != null ? parseNumber(valueRaw) : 0,
+      });
+    }
+  }
+
+  if (rows.length === 0) return null;
+  return { rows, defaultDate, headerRow: headerIdx + 1, sheetName };
+}
+
 export async function parseXLSBuffer(buffer: ArrayBuffer): Promise<ParseResult> {
   const wb = XLSX.read(buffer, { type: "array", cellDates: true });
   const sheetNames = wb.SheetNames;
@@ -413,6 +562,35 @@ export async function parseXLSBuffer(buffer: ArrayBuffer): Promise<ParseResult> 
   });
 
   if (!best || best.rows.length === 0) {
+    // Fallback: încearcă parser-ul de pivot grupat (SAGA & co.)
+    for (const sn of sheetNames) {
+      const sheet = wb.Sheets[sn];
+      if (!sheet) continue;
+      const pivot = parseGroupedPivot(sheet, sn);
+      if (pivot && pivot.rows.length > 0) {
+        return {
+          rows: pivot.rows,
+          mapping: {
+            date: "(perioada — extras din header)",
+            agent: "Agent",
+            producer: "Nume grupa",
+            volume: "Cantitate",
+          },
+          headers: ["Agent", "Nume grupa", "Cantitate"],
+          skipped: 0,
+          diagnostic: {
+            sheetNames,
+            sheetUsed: pivot.sheetName,
+            headerRow: pivot.headerRow,
+            sample,
+            candidates: allCandidates
+              .sort((a, b) => b.rowsCount - a.rowsCount)
+              .slice(0, 5),
+          },
+        };
+      }
+    }
+
     return {
       rows: [],
       mapping: best?.mapping ?? {},
