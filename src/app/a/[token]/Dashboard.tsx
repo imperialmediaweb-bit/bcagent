@@ -132,48 +132,15 @@ export default function Dashboard({
   const STORAGE_KEY = `bcagent:data:${agentId}`;
   const [storageMode, setStorageMode] = useState<"db" | "local">("local");
 
-  // Restore date la mount: DB-first, fallback la localStorage
+  // Restore date la mount: încarcă PARALEL din localStorage și DB,
+  // apoi îmbinăm. Dacă DB e gol și localStorage are date → migrare auto.
   useEffect(() => {
     let cancelled = false;
-    async function load() {
-      // 1. Încearcă să încarci din DB
-      try {
-        const res = await fetch(
-          `/api/data?token=${encodeURIComponent(token)}`,
-          { cache: "no-store" },
-        );
-        if (res.ok) {
-          const data = await res.json();
-          if (cancelled) return;
-          if (data.enabled) {
-            setStorageMode("db");
-            const restored: NormalizedRow[] = (data.rows ?? []).map(
-              (r: { date: string } & Omit<NormalizedRow, "date">) => ({
-                ...r,
-                date: new Date(r.date),
-              }),
-            );
-            setRows(restored);
-            setBatches(data.batches ?? []);
-            if (data.settings) {
-              setAgentRates(data.settings.agentRates ?? {});
-              if (typeof data.settings.defaultRate === "number")
-                setDefaultRate(data.settings.defaultRate);
-              if (typeof data.settings.avgPrice === "number")
-                setAvgPrice(data.settings.avgPrice);
-            }
-            if (restored.length > 0) setSavedAt(new Date());
-            return;
-          }
-        }
-      } catch {
-        // fall through to localStorage
-      }
 
-      // 2. Fallback localStorage
+    function loadLocal() {
       try {
         const raw = localStorage.getItem(STORAGE_KEY);
-        if (!raw) return;
+        if (!raw) return null;
         const parsed = JSON.parse(raw) as {
           rows: Array<Omit<NormalizedRow, "date"> & { date: string }>;
           parseInfo?: ParseResult | null;
@@ -184,26 +151,102 @@ export default function Dashboard({
           avgPrice?: number;
           batches?: typeof batches;
         };
-        if (parsed.rows && Array.isArray(parsed.rows)) {
-          const restored: NormalizedRow[] = parsed.rows.map((r) => ({
-            ...r,
-            date: new Date(r.date),
-          }));
-          if (cancelled) return;
-          setRows(restored);
-          setParseInfo(parsed.parseInfo ?? null);
-          setIsDemo(parsed.isDemo ?? false);
-          setAgentRates(parsed.agentRates ?? {});
-          setBatches(parsed.batches ?? []);
-          if (typeof parsed.defaultRate === "number")
-            setDefaultRate(parsed.defaultRate);
-          if (typeof parsed.avgPrice === "number") setAvgPrice(parsed.avgPrice);
-          if (parsed.savedAt) setSavedAt(new Date(parsed.savedAt));
-        }
+        return parsed;
       } catch {
-        // ignor
+        return null;
       }
     }
+
+    async function load() {
+      // ÎNTÂI restore instant din localStorage — userul vede datele imediat
+      const local = loadLocal();
+      if (local && !cancelled) {
+        if (local.rows && Array.isArray(local.rows)) {
+          setRows(
+            local.rows.map((r) => ({ ...r, date: new Date(r.date) })),
+          );
+        }
+        setParseInfo(local.parseInfo ?? null);
+        setIsDemo(local.isDemo ?? false);
+        setAgentRates(local.agentRates ?? {});
+        setBatches(local.batches ?? []);
+        if (typeof local.defaultRate === "number")
+          setDefaultRate(local.defaultRate);
+        if (typeof local.avgPrice === "number") setAvgPrice(local.avgPrice);
+        if (local.savedAt) setSavedAt(new Date(local.savedAt));
+      }
+
+      // Apoi încearcă DB (overrideaza dacă DB are date)
+      try {
+        const res = await fetch(
+          `/api/data?token=${encodeURIComponent(token)}`,
+          { cache: "no-store" },
+        );
+        if (!res.ok) return;
+        const data = await res.json();
+        if (cancelled) return;
+        if (!data.enabled) return; // localStorage rămâne sursa
+
+        setStorageMode("db");
+
+        if ((data.batches?.length ?? 0) > 0) {
+          // DB are date → folosim DB
+          const restored: NormalizedRow[] = (data.rows ?? []).map(
+            (r: { date: string } & Omit<NormalizedRow, "date">) => ({
+              ...r,
+              date: new Date(r.date),
+            }),
+          );
+          setRows(restored);
+          setBatches(data.batches ?? []);
+          if (data.settings) {
+            setAgentRates(data.settings.agentRates ?? {});
+            if (typeof data.settings.defaultRate === "number")
+              setDefaultRate(data.settings.defaultRate);
+            if (typeof data.settings.avgPrice === "number")
+              setAvgPrice(data.settings.avgPrice);
+          }
+          if (restored.length > 0) setSavedAt(new Date());
+        } else if (local?.batches && local.batches.length > 0) {
+          // DB e gol dar avem date local → migrăm din local în DB
+          const localRows = (local.rows ?? []).map(
+            (r) => ({ ...r, date: new Date(r.date) } as NormalizedRow),
+          );
+          let cursor = 0;
+          for (const b of local.batches) {
+            const slice = localRows.slice(cursor, cursor + b.rowCount);
+            cursor += b.rowCount;
+            try {
+              await fetch("/api/batches", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ token, batch: { ...b, rows: slice } }),
+              });
+            } catch {
+              // ignor — datele rămân în localStorage
+            }
+          }
+          // Sync settings de asemenea
+          try {
+            await fetch("/api/settings", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                token,
+                defaultRate: local.defaultRate ?? defaultRate,
+                avgPrice: local.avgPrice ?? avgPrice,
+                agentRates: local.agentRates ?? {},
+              }),
+            });
+          } catch {
+            // ignor
+          }
+        }
+      } catch {
+        // localStorage rămâne sursa
+      }
+    }
+
     load();
     return () => {
       cancelled = true;
