@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   AlertTriangle,
   ArrowDownRight,
@@ -118,6 +118,101 @@ export default function Dashboard({
   const [defaultRate, setDefaultRate] = useState(5);
   const [avgPrice, setAvgPrice] = useState(1);
   const [agentRates, setAgentRates] = useState<Record<string, number>>({});
+  const [savedAt, setSavedAt] = useState<Date | null>(null);
+  const [batches, setBatches] = useState<
+    Array<{
+      id: string;
+      fileName: string;
+      uploadedAt: string;
+      rowCount: number;
+      dateRange: { min: string; max: string };
+    }>
+  >([]);
+
+  const STORAGE_KEY = `bcagent:data:${agentId}`;
+
+  // Restore din localStorage la mount
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (!raw) return;
+      const parsed = JSON.parse(raw) as {
+        rows: Array<Omit<NormalizedRow, "date"> & { date: string }>;
+        parseInfo?: ParseResult | null;
+        isDemo?: boolean;
+        savedAt?: string;
+        agentRates?: Record<string, number>;
+        defaultRate?: number;
+        avgPrice?: number;
+        batches?: Array<{
+          id: string;
+          fileName: string;
+          uploadedAt: string;
+          rowCount: number;
+          dateRange: { min: string; max: string };
+        }>;
+      };
+      if (parsed.rows && Array.isArray(parsed.rows)) {
+        const restored: NormalizedRow[] = parsed.rows.map((r) => ({
+          ...r,
+          date: new Date(r.date),
+        }));
+        setRows(restored);
+        setParseInfo(parsed.parseInfo ?? null);
+        setIsDemo(parsed.isDemo ?? false);
+        setAgentRates(parsed.agentRates ?? {});
+        setBatches(parsed.batches ?? []);
+        if (typeof parsed.defaultRate === "number") setDefaultRate(parsed.defaultRate);
+        if (typeof parsed.avgPrice === "number") setAvgPrice(parsed.avgPrice);
+        if (parsed.savedAt) setSavedAt(new Date(parsed.savedAt));
+      }
+    } catch {
+      // storage corupt → ignor
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [agentId]);
+
+  function persist(
+    newRows: NormalizedRow[],
+    info: ParseResult | null,
+    demo: boolean,
+    newBatches: typeof batches,
+  ) {
+    try {
+      const now = new Date();
+      const payload = {
+        rows: newRows,
+        parseInfo: info,
+        isDemo: demo,
+        savedAt: now.toISOString(),
+        agentRates,
+        defaultRate,
+        avgPrice,
+        batches: newBatches,
+      };
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
+      setSavedAt(now);
+    } catch {
+      // quota exceeded sau localStorage indisponibil → silent fail
+    }
+  }
+
+  // Auto-save când se schimbă rate/prețuri (datele nu se schimbă fără upload)
+  useEffect(() => {
+    if (rows.length === 0) return;
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (!raw) return;
+      const parsed = JSON.parse(raw);
+      parsed.agentRates = agentRates;
+      parsed.defaultRate = defaultRate;
+      parsed.avgPrice = avgPrice;
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(parsed));
+    } catch {
+      // ignore
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [agentRates, defaultRate, avgPrice]);
 
   async function handleFile(file: File) {
     setLoading(true);
@@ -129,11 +224,38 @@ export default function Dashboard({
         setError(
           "Fișierul nu conține date valide sau coloanele nu au putut fi detectate.",
         );
+        setParseInfo(result);
+        return;
       }
-      setRows(result.rows);
+      // În demo mode? Trecem la date reale → curățăm și pornim fresh.
+      const startingRows = isDemo ? [] : rows;
+      const startingBatches = isDemo ? [] : batches;
+
+      // Calculează interval pentru noul batch
+      let min = result.rows[0].date;
+      let max = result.rows[0].date;
+      for (const r of result.rows) {
+        if (r.date < min) min = r.date;
+        if (r.date > max) max = r.date;
+      }
+      const newBatch = {
+        id: `b-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        fileName: file.name,
+        uploadedAt: new Date().toISOString(),
+        rowCount: result.rows.length,
+        dateRange: {
+          min: min.toISOString().slice(0, 10),
+          max: max.toISOString().slice(0, 10),
+        },
+      };
+
+      const mergedRows = [...startingRows, ...result.rows];
+      const mergedBatches = [...startingBatches, newBatch];
+      setRows(mergedRows);
+      setBatches(mergedBatches);
       setParseInfo(result);
       setIsDemo(false);
-      setAgentRates({});
+      persist(mergedRows, result, false, mergedBatches);
     } catch (e) {
       setError(
         "Eroare la parsarea fișierului: " +
@@ -144,20 +266,46 @@ export default function Dashboard({
     }
   }
 
+  function removeBatch(id: string) {
+    const idx = batches.findIndex((b) => b.id === id);
+    if (idx < 0) return;
+    // Reconstruim rândurile excluzând batch-ul șters.
+    // Identificăm rândurile aparținând batch-ului prin ordinea cumulativă.
+    const before = batches.slice(0, idx);
+    const after = batches.slice(idx + 1);
+    const removeStart = before.reduce((s, b) => s + b.rowCount, 0);
+    const removeEnd = removeStart + batches[idx].rowCount;
+    const newRows = [...rows.slice(0, removeStart), ...rows.slice(removeEnd)];
+    const newBatches = [...before, ...after];
+    setRows(newRows);
+    setBatches(newBatches);
+    persist(newRows, parseInfo, false, newBatches);
+  }
+
   function loadDemo() {
-    setRows(generateSampleData());
+    const demoRows = generateSampleData();
+    setRows(demoRows);
     setIsDemo(true);
     setParseInfo(null);
     setError(null);
     setAgentRates({});
+    setBatches([]);
+    persist(demoRows, null, true, []);
   }
 
   function reset() {
     setRows([]);
+    setBatches([]);
     setParseInfo(null);
     setIsDemo(false);
     setFilters({});
     setAgentRates({});
+    setSavedAt(null);
+    try {
+      localStorage.removeItem(STORAGE_KEY);
+    } catch {
+      // ignore
+    }
   }
 
   const filtered = useMemo(() => applyFilters(rows, filters), [rows, filters]);
@@ -337,6 +485,7 @@ export default function Dashboard({
           agentId={agentId}
           hasData={hasData}
           isDemo={isDemo}
+          savedAt={savedAt}
           onExport={exportCSV}
           onReset={reset}
         />
@@ -353,6 +502,40 @@ export default function Dashboard({
             onFile={handleFile}
             onDemo={loadDemo}
           />
+
+          {batches.length > 0 && (
+            <section className="card p-5 fade-in">
+              <div className="flex items-center justify-between">
+                <h2 className="text-sm font-semibold text-slate-800">
+                  Surse de date încărcate ({batches.length})
+                </h2>
+                <p className="text-xs text-slate-500">
+                  Datele se păstrează între refresh-uri pe acest device. Încarcă alt fișier ca să adaugi (nu înlocuiește).
+                </p>
+              </div>
+              <ul className="mt-3 divide-y divide-slate-100">
+                {batches.map((b) => (
+                  <li key={b.id} className="flex items-center justify-between py-2">
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-medium text-slate-800">
+                        {b.fileName}
+                      </p>
+                      <p className="text-xs text-slate-500">
+                        {b.rowCount} rânduri · {b.dateRange.min === b.dateRange.max ? b.dateRange.min : `${b.dateRange.min} → ${b.dateRange.max}`} · încărcat {new Date(b.uploadedAt).toLocaleString("ro-RO")}
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => removeBatch(b.id)}
+                      className="ml-3 rounded-md border border-slate-200 px-2 py-1 text-xs text-slate-600 hover:bg-rose-50 hover:text-rose-700"
+                    >
+                      Șterge
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
 
           {hasData && (
             <>
@@ -824,6 +1007,7 @@ function Topbar({
   agentId,
   hasData,
   isDemo,
+  savedAt,
   onExport,
   onReset,
 }: {
@@ -831,6 +1015,7 @@ function Topbar({
   agentId: string;
   hasData: boolean;
   isDemo: boolean;
+  savedAt: Date | null;
   onExport: () => void;
   onReset: () => void;
 }) {
@@ -856,6 +1041,15 @@ function Topbar({
             <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
             Token valid
           </span>
+          {savedAt && hasData && (
+            <span
+              className="hidden items-center gap-1 rounded-full bg-sky-50 px-3 py-1 text-xs font-medium text-sky-700 sm:flex"
+              title={`Salvat în browser-ul tău la ${savedAt.toLocaleString("ro-RO")}`}
+            >
+              <span className="h-1.5 w-1.5 rounded-full bg-sky-500" />
+              Salvat local
+            </span>
+          )}
           {hasData && (
             <>
               <button
