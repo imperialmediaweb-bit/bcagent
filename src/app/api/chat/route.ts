@@ -1,5 +1,5 @@
 import { verifyToken } from "@/lib/signed-token";
-import { getAnthropicClient, MODEL, SYSTEM_PROMPT } from "@/lib/anthropic";
+import { isAIEnabled, streamCompletion, SYSTEM_PROMPT } from "@/lib/llm";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -17,9 +17,12 @@ export async function POST(req: Request) {
       { status: 500 },
     );
   }
-  if (!process.env.ANTHROPIC_API_KEY) {
+  if (!isAIEnabled()) {
     return Response.json(
-      { error: "AI dezactivat — ANTHROPIC_API_KEY lipsește." },
+      {
+        error:
+          "AI dezactivat — niciun provider configurat. Setează OPENAI_API_KEY sau ANTHROPIC_API_KEY.",
+      },
       { status: 503 },
     );
   }
@@ -63,44 +66,26 @@ export async function POST(req: Request) {
     );
   }
 
-  let client;
-  try {
-    client = getAnthropicClient();
-  } catch (e) {
-    return Response.json(
-      { error: e instanceof Error ? e.message : "AI client error" },
-      { status: 500 },
-    );
-  }
-
   const dataContext = `## Context date curente (agent: ${payload.agentName})
 
 \`\`\`json
 ${JSON.stringify(body.summary, null, 2)}
 \`\`\``;
 
-  const stream = client.messages.stream({
-    model: MODEL,
-    max_tokens: 1536,
-    system: [
-      {
-        type: "text",
-        text: SYSTEM_PROMPT,
-        cache_control: { type: "ephemeral" },
-      },
-      { type: "text", text: dataContext },
-    ],
-    messages: cleanMessages,
-  });
+  const fullSystem = `${SYSTEM_PROMPT}\n\n${dataContext}`;
 
   const encoder = new TextEncoder();
   const readable = new ReadableStream({
     async start(controller) {
       try {
-        stream.on("text", (text) => {
-          controller.enqueue(encoder.encode(text));
+        await streamCompletion({
+          system: fullSystem,
+          messages: cleanMessages,
+          maxTokens: 1536,
+          onText: (text) => {
+            controller.enqueue(encoder.encode(text));
+          },
         });
-        await stream.finalMessage();
         controller.close();
       } catch (e) {
         controller.enqueue(

@@ -1,5 +1,5 @@
 import { verifyToken } from "@/lib/signed-token";
-import { getAnthropicClient, MODEL, SYSTEM_PROMPT } from "@/lib/anthropic";
+import { isAIEnabled, streamCompletion, SYSTEM_PROMPT } from "@/lib/llm";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -12,9 +12,12 @@ export async function POST(req: Request) {
       { status: 500 },
     );
   }
-  if (!process.env.ANTHROPIC_API_KEY) {
+  if (!isAIEnabled()) {
     return Response.json(
-      { error: "AI dezactivat — ANTHROPIC_API_KEY nu e configurat pe server." },
+      {
+        error:
+          "AI dezactivat — niciun provider configurat. Setează OPENAI_API_KEY sau ANTHROPIC_API_KEY.",
+      },
       { status: 503 },
     );
   }
@@ -41,16 +44,6 @@ export async function POST(req: Request) {
     );
   }
 
-  let client;
-  try {
-    client = getAnthropicClient();
-  } catch (e) {
-    return Response.json(
-      { error: e instanceof Error ? e.message : "AI client error" },
-      { status: 500 },
-    );
-  }
-
   const userPrompt = `Date agregate pentru agentul **${payload.agentName}** (ID: ${payload.agentId}):
 
 \`\`\`json
@@ -59,27 +52,18 @@ ${JSON.stringify(body.summary, null, 2)}
 
 Generează o analiză concisă în format markdown (## Privire generală / ## Observații / ## Recomandări), maxim 200 cuvinte total. Mergi direct la concluzii, fără preambul.`;
 
-  const stream = client.messages.stream({
-    model: MODEL,
-    max_tokens: 2048,
-    system: [
-      {
-        type: "text",
-        text: SYSTEM_PROMPT,
-        cache_control: { type: "ephemeral" },
-      },
-    ],
-    messages: [{ role: "user", content: userPrompt }],
-  });
-
   const encoder = new TextEncoder();
   const readable = new ReadableStream({
     async start(controller) {
       try {
-        stream.on("text", (text) => {
-          controller.enqueue(encoder.encode(text));
+        await streamCompletion({
+          system: SYSTEM_PROMPT,
+          messages: [{ role: "user", content: userPrompt }],
+          maxTokens: 2048,
+          onText: (text) => {
+            controller.enqueue(encoder.encode(text));
+          },
         });
-        await stream.finalMessage();
         controller.close();
       } catch (e) {
         controller.enqueue(
