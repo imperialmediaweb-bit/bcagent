@@ -21,7 +21,9 @@ import {
   PieChart as PieChartIcon,
   Sparkles,
   Trophy,
+  Menu,
   Upload,
+  X,
   Users,
 } from "lucide-react";
 import {
@@ -119,6 +121,7 @@ export default function Dashboard({
   const [avgPrice, setAvgPrice] = useState(1);
   const [agentRates, setAgentRates] = useState<Record<string, number>>({});
   const [savedAt, setSavedAt] = useState<Date | null>(null);
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [batches, setBatches] = useState<
     Array<{
       id: string;
@@ -612,7 +615,11 @@ export default function Dashboard({
 
   return (
     <div className="min-h-screen bg-slate-50">
-      <Sidebar hasData={hasData} />
+      <Sidebar
+        hasData={hasData}
+        mobileOpen={mobileNavOpen}
+        onCloseMobile={() => setMobileNavOpen(false)}
+      />
 
       <div className="lg:pl-60">
         <Topbar
@@ -623,6 +630,7 @@ export default function Dashboard({
           savedAt={savedAt}
           onExport={exportCSV}
           onReset={reset}
+          onOpenMobileNav={() => setMobileNavOpen(true)}
         />
 
         <main className="mx-auto max-w-7xl space-y-8 px-4 py-8 sm:px-6 lg:px-8">
@@ -1093,7 +1101,15 @@ function initials(name: string): string {
     .join("");
 }
 
-function Sidebar({ hasData }: { hasData: boolean }) {
+function Sidebar({
+  hasData,
+  mobileOpen,
+  onCloseMobile,
+}: {
+  hasData: boolean;
+  mobileOpen: boolean;
+  onCloseMobile: () => void;
+}) {
   const links = [
     { href: "#overview", label: "Privire ansamblu", icon: BarChart3 },
     { href: "#ai", label: "AI Insights", icon: Bot },
@@ -1106,34 +1122,59 @@ function Sidebar({ hasData }: { hasData: boolean }) {
     { href: "#anomalii", label: "Anomalii", icon: AlertTriangle },
   ];
   return (
-    <aside className="hidden lg:fixed lg:inset-y-0 lg:flex lg:w-60 lg:flex-col lg:border-r lg:border-slate-200 lg:bg-white">
-      <div className="flex h-16 items-center gap-2 border-b border-slate-200 px-6">
-        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-indigo-500 to-violet-500 text-white">
-          <BarChart3 className="h-4 w-4" />
-        </div>
-        <span className="font-semibold tracking-tight">BC Agent</span>
-      </div>
-      <nav className="flex-1 space-y-1 px-3 py-4">
-        {links.map((l) => (
-          <a
-            key={l.href}
-            href={l.href}
-            className={`flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition ${
-              hasData
-                ? "text-slate-700 hover:bg-slate-100"
-                : "pointer-events-none text-slate-400"
-            }`}
+    <>
+      {/* Mobile backdrop */}
+      {mobileOpen && (
+        <div
+          onClick={onCloseMobile}
+          className="fixed inset-0 z-40 bg-slate-900/40 backdrop-blur-sm lg:hidden"
+          aria-hidden="true"
+        />
+      )}
+      <aside
+        className={`fixed inset-y-0 z-50 flex w-64 flex-col border-r border-slate-200 bg-white transition-transform duration-200 lg:w-60 lg:translate-x-0 ${
+          mobileOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
+        }`}
+      >
+        <div className="flex h-16 items-center justify-between gap-2 border-b border-slate-200 px-4 lg:px-6">
+          <div className="flex items-center gap-2">
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-indigo-500 to-violet-500 text-white">
+              <BarChart3 className="h-4 w-4" />
+            </div>
+            <span className="font-semibold tracking-tight">BC Agent</span>
+          </div>
+          <button
+            type="button"
+            onClick={onCloseMobile}
+            className="rounded-md p-1 text-slate-500 hover:bg-slate-100 lg:hidden"
+            aria-label="Închide meniul"
           >
-            <l.icon className="h-4 w-4" />
-            {l.label}
-          </a>
-        ))}
-      </nav>
-      <div className="border-t border-slate-200 p-4 text-xs text-slate-500">
-        <p>Sales analytics</p>
-        <p className="mt-1">v0.3 · token + AI</p>
-      </div>
-    </aside>
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+        <nav className="flex-1 space-y-1 overflow-y-auto px-3 py-4">
+          {links.map((l) => (
+            <a
+              key={l.href}
+              href={l.href}
+              onClick={onCloseMobile}
+              className={`flex items-center gap-3 rounded-md px-3 py-2.5 text-sm font-medium transition ${
+                hasData
+                  ? "text-slate-700 hover:bg-slate-100"
+                  : "pointer-events-none text-slate-400"
+              }`}
+            >
+              <l.icon className="h-4 w-4" />
+              {l.label}
+            </a>
+          ))}
+        </nav>
+        <div className="border-t border-slate-200 p-4 text-xs text-slate-500">
+          <p>Sales analytics</p>
+          <p className="mt-1">v0.4 · token + AI + DB</p>
+        </div>
+      </aside>
+    </>
   );
 }
 
@@ -1145,6 +1186,7 @@ function Topbar({
   savedAt,
   onExport,
   onReset,
+  onOpenMobileNav,
 }: {
   agentName: string;
   agentId: string;
@@ -1153,17 +1195,26 @@ function Topbar({
   savedAt: Date | null;
   onExport: () => void;
   onReset: () => void;
+  onOpenMobileNav: () => void;
 }) {
   return (
-    <header className="sticky top-0 z-20 border-b border-slate-200 bg-white/80 backdrop-blur">
-      <div className="flex h-16 items-center justify-between px-4 sm:px-6 lg:px-8">
-        <div className="flex items-center gap-3">
+    <header className="sticky top-0 z-30 border-b border-slate-200 bg-white/80 backdrop-blur">
+      <div className="flex h-16 items-center justify-between gap-3 px-3 sm:px-6 lg:px-8">
+        <div className="flex min-w-0 items-center gap-2 sm:gap-3">
+          <button
+            type="button"
+            onClick={onOpenMobileNav}
+            className="rounded-md p-1.5 text-slate-600 hover:bg-slate-100 lg:hidden"
+            aria-label="Deschide meniul"
+          >
+            <Menu className="h-5 w-5" />
+          </button>
           <div className="hidden h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-indigo-500 to-violet-500 text-sm font-semibold text-white sm:flex">
             {initials(agentName)}
           </div>
-          <div>
-            <p className="text-sm font-semibold text-slate-800">{agentName}</p>
-            <p className="text-xs text-slate-500">Agent · {agentId}</p>
+          <div className="min-w-0">
+            <p className="truncate text-sm font-semibold text-slate-800">{agentName}</p>
+            <p className="truncate text-xs text-slate-500">Agent · {agentId}</p>
           </div>
           {isDemo && (
             <span className="ml-2 rounded-full bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-700">

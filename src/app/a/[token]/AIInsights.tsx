@@ -2,6 +2,20 @@
 
 import { useMemo, useRef, useState } from "react";
 import { marked } from "marked";
+import DOMPurify from "isomorphic-dompurify";
+
+function safeMarkdown(text: string): string {
+  const html = marked.parse(text, { async: false }) as string;
+  return DOMPurify.sanitize(html, {
+    ALLOWED_TAGS: [
+      "p", "br", "strong", "em", "code", "pre", "ul", "ol", "li",
+      "h1", "h2", "h3", "h4", "h5", "h6", "blockquote", "a", "hr",
+      "table", "thead", "tbody", "tr", "th", "td",
+    ],
+    ALLOWED_ATTR: ["href"],
+    ALLOW_DATA_ATTR: false,
+  });
+}
 import {
   Bot,
   Loader2,
@@ -204,7 +218,7 @@ export default function AIInsights({
 
   const insightsHtml = useMemo(() => {
     if (!insights) return "";
-    return marked.parse(insights) as string;
+    return safeMarkdown(insights);
   }, [insights]);
 
   if (!enabled) {
@@ -344,7 +358,7 @@ export default function AIInsights({
                   <div
                     className="prose-ai"
                     dangerouslySetInnerHTML={{
-                      __html: marked.parse(m.content) as string,
+                      __html: safeMarkdown(m.content),
                     }}
                   />
                 ) : (

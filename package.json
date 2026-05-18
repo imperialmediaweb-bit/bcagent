@@ -15,6 +15,7 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.96.0",
+    "isomorphic-dompurify": "^3.13.0",
     "lucide-react": "^0.471.0",
     "marked": "^15.0.6",
     "next": "15.5.18",

@@ -1,5 +1,6 @@
 import { verifyToken } from "@/lib/signed-token";
 import { isAIEnabled, streamCompletion, SYSTEM_PROMPT } from "@/lib/llm";
+import { clientIP, rateLimit } from "@/lib/rate-limit";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -10,6 +11,21 @@ interface ChatMessage {
 }
 
 export async function POST(req: Request) {
+  // Rate limit pe IP
+  const ip = clientIP(req);
+  const rl = rateLimit(`chat:${ip}`, { max: 30, windowMs: 60_000 });
+  if (!rl.ok) {
+    return Response.json(
+      { error: "Prea multe mesaje AI. Reîncearcă într-un minut." },
+      {
+        status: 429,
+        headers: {
+          "Retry-After": String(Math.ceil(rl.retryAfterMs / 1000)),
+        },
+      },
+    );
+  }
+
   const tokenSecret = process.env.TOKEN_SECRET;
   if (!tokenSecret) {
     return Response.json(
