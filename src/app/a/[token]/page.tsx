@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import { verifyToken } from "@/lib/signed-token";
-import { activeProviderLabel, isAIEnabled } from "@/lib/llm";
+import { isAIEnabled } from "@/lib/llm";
 import Dashboard from "./Dashboard";
 
 export const dynamic = "force-dynamic";
@@ -25,7 +25,6 @@ export default async function TokenPage({
       agentName={payload.agentName}
       token={token}
       aiEnabled={isAIEnabled()}
-      aiProvider={activeProviderLabel()}
     />
   );
 }
