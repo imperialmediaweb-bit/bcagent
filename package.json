@@ -11,7 +11,9 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.43.0",
     "lucide-react": "^0.471.0",
+    "marked": "^15.0.6",
     "next": "15.5.18",
     "react": "19.0.0",
     "react-dom": "19.0.0",

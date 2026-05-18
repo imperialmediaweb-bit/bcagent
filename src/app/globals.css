@@ -31,3 +31,23 @@ body {
 
 .no-scrollbar::-webkit-scrollbar { display: none; }
 .no-scrollbar { scrollbar-width: none; }
+
+.prose-ai h1, .prose-ai h2, .prose-ai h3 {
+  font-weight: 600;
+  margin-top: 0.75rem;
+  margin-bottom: 0.25rem;
+  color: rgb(30 41 59);
+}
+.prose-ai h2 { font-size: 0.95rem; }
+.prose-ai h3 { font-size: 0.85rem; }
+.prose-ai p { margin: 0.4rem 0; line-height: 1.5; }
+.prose-ai ul, .prose-ai ol { margin: 0.4rem 0; padding-left: 1.25rem; }
+.prose-ai li { margin: 0.2rem 0; line-height: 1.5; }
+.prose-ai strong { color: rgb(30 41 59); font-weight: 600; }
+.prose-ai code {
+  background: rgb(241 245 249);
+  padding: 0.1rem 0.35rem;
+  border-radius: 0.25rem;
+  font-size: 0.85em;
+}
+.prose-ai a { color: rgb(79 70 229); text-decoration: underline; }

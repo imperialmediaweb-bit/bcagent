@@ -18,5 +18,13 @@ export default async function TokenPage({
   if (!payload) {
     notFound();
   }
-  return <Dashboard agentId={payload.agentId} agentName={payload.agentName} />;
+  const aiEnabled = !!process.env.ANTHROPIC_API_KEY;
+  return (
+    <Dashboard
+      agentId={payload.agentId}
+      agentName={payload.agentName}
+      token={token}
+      aiEnabled={aiEnabled}
+    />
+  );
 }
