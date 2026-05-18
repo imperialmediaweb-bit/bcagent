@@ -130,47 +130,86 @@ export default function Dashboard({
   >([]);
 
   const STORAGE_KEY = `bcagent:data:${agentId}`;
+  const [storageMode, setStorageMode] = useState<"db" | "local">("local");
 
-  // Restore din localStorage la mount
+  // Restore date la mount: DB-first, fallback la localStorage
   useEffect(() => {
-    try {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      if (!raw) return;
-      const parsed = JSON.parse(raw) as {
-        rows: Array<Omit<NormalizedRow, "date"> & { date: string }>;
-        parseInfo?: ParseResult | null;
-        isDemo?: boolean;
-        savedAt?: string;
-        agentRates?: Record<string, number>;
-        defaultRate?: number;
-        avgPrice?: number;
-        batches?: Array<{
-          id: string;
-          fileName: string;
-          uploadedAt: string;
-          rowCount: number;
-          dateRange: { min: string; max: string };
-        }>;
-      };
-      if (parsed.rows && Array.isArray(parsed.rows)) {
-        const restored: NormalizedRow[] = parsed.rows.map((r) => ({
-          ...r,
-          date: new Date(r.date),
-        }));
-        setRows(restored);
-        setParseInfo(parsed.parseInfo ?? null);
-        setIsDemo(parsed.isDemo ?? false);
-        setAgentRates(parsed.agentRates ?? {});
-        setBatches(parsed.batches ?? []);
-        if (typeof parsed.defaultRate === "number") setDefaultRate(parsed.defaultRate);
-        if (typeof parsed.avgPrice === "number") setAvgPrice(parsed.avgPrice);
-        if (parsed.savedAt) setSavedAt(new Date(parsed.savedAt));
+    let cancelled = false;
+    async function load() {
+      // 1. Încearcă să încarci din DB
+      try {
+        const res = await fetch(
+          `/api/data?token=${encodeURIComponent(token)}`,
+          { cache: "no-store" },
+        );
+        if (res.ok) {
+          const data = await res.json();
+          if (cancelled) return;
+          if (data.enabled) {
+            setStorageMode("db");
+            const restored: NormalizedRow[] = (data.rows ?? []).map(
+              (r: { date: string } & Omit<NormalizedRow, "date">) => ({
+                ...r,
+                date: new Date(r.date),
+              }),
+            );
+            setRows(restored);
+            setBatches(data.batches ?? []);
+            if (data.settings) {
+              setAgentRates(data.settings.agentRates ?? {});
+              if (typeof data.settings.defaultRate === "number")
+                setDefaultRate(data.settings.defaultRate);
+              if (typeof data.settings.avgPrice === "number")
+                setAvgPrice(data.settings.avgPrice);
+            }
+            if (restored.length > 0) setSavedAt(new Date());
+            return;
+          }
+        }
+      } catch {
+        // fall through to localStorage
       }
-    } catch {
-      // storage corupt → ignor
+
+      // 2. Fallback localStorage
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if (!raw) return;
+        const parsed = JSON.parse(raw) as {
+          rows: Array<Omit<NormalizedRow, "date"> & { date: string }>;
+          parseInfo?: ParseResult | null;
+          isDemo?: boolean;
+          savedAt?: string;
+          agentRates?: Record<string, number>;
+          defaultRate?: number;
+          avgPrice?: number;
+          batches?: typeof batches;
+        };
+        if (parsed.rows && Array.isArray(parsed.rows)) {
+          const restored: NormalizedRow[] = parsed.rows.map((r) => ({
+            ...r,
+            date: new Date(r.date),
+          }));
+          if (cancelled) return;
+          setRows(restored);
+          setParseInfo(parsed.parseInfo ?? null);
+          setIsDemo(parsed.isDemo ?? false);
+          setAgentRates(parsed.agentRates ?? {});
+          setBatches(parsed.batches ?? []);
+          if (typeof parsed.defaultRate === "number")
+            setDefaultRate(parsed.defaultRate);
+          if (typeof parsed.avgPrice === "number") setAvgPrice(parsed.avgPrice);
+          if (parsed.savedAt) setSavedAt(new Date(parsed.savedAt));
+        }
+      } catch {
+        // ignor
+      }
     }
+    load();
+    return () => {
+      cancelled = true;
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [agentId]);
+  }, [agentId, token]);
 
   function persist(
     newRows: NormalizedRow[],
@@ -178,6 +217,7 @@ export default function Dashboard({
     demo: boolean,
     newBatches: typeof batches,
   ) {
+    // Întotdeauna salvăm și în localStorage (cache local + fallback)
     try {
       const now = new Date();
       const payload = {
@@ -193,24 +233,64 @@ export default function Dashboard({
       localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
       setSavedAt(now);
     } catch {
-      // quota exceeded sau localStorage indisponibil → silent fail
+      // quota exceeded sau localStorage indisponibil
     }
   }
 
-  // Auto-save când se schimbă rate/prețuri (datele nu se schimbă fără upload)
+  // Salvează un batch în DB (best-effort)
+  async function persistBatchToDB(b: typeof batches[number], rows: NormalizedRow[]) {
+    if (storageMode !== "db") return;
+    try {
+      await fetch("/api/batches", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          token,
+          batch: { ...b, rows },
+        }),
+      });
+    } catch {
+      // ignor — datele rămân în localStorage oricum
+    }
+  }
+
+  // Sync settings la DB (debounced via useEffect deja)
+  async function persistSettingsToDB() {
+    if (storageMode !== "db") return;
+    try {
+      await fetch("/api/settings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          token,
+          defaultRate,
+          avgPrice,
+          agentRates,
+        }),
+      });
+    } catch {
+      // ignor
+    }
+  }
+
+  // Auto-save când se schimbă rate/prețuri
   useEffect(() => {
     if (rows.length === 0) return;
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
-      if (!raw) return;
-      const parsed = JSON.parse(raw);
-      parsed.agentRates = agentRates;
-      parsed.defaultRate = defaultRate;
-      parsed.avgPrice = avgPrice;
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(parsed));
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        parsed.agentRates = agentRates;
+        parsed.defaultRate = defaultRate;
+        parsed.avgPrice = avgPrice;
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(parsed));
+      }
     } catch {
       // ignore
     }
+    // Debounced DB sync (1s)
+    const t = setTimeout(() => persistSettingsToDB(), 1000);
+    return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [agentRates, defaultRate, avgPrice]);
 
@@ -256,6 +336,8 @@ export default function Dashboard({
       setParseInfo(result);
       setIsDemo(false);
       persist(mergedRows, result, false, mergedBatches);
+      // Sync DB (în paralel cu UI-ul)
+      persistBatchToDB(newBatch, result.rows);
     } catch (e) {
       setError(
         "Eroare la parsarea fișierului: " +
@@ -269,8 +351,6 @@ export default function Dashboard({
   function removeBatch(id: string) {
     const idx = batches.findIndex((b) => b.id === id);
     if (idx < 0) return;
-    // Reconstruim rândurile excluzând batch-ul șters.
-    // Identificăm rândurile aparținând batch-ului prin ordinea cumulativă.
     const before = batches.slice(0, idx);
     const after = batches.slice(idx + 1);
     const removeStart = before.reduce((s, b) => s + b.rowCount, 0);
@@ -280,6 +360,12 @@ export default function Dashboard({
     setRows(newRows);
     setBatches(newBatches);
     persist(newRows, parseInfo, false, newBatches);
+    // Sync DB
+    if (storageMode === "db") {
+      fetch(`/api/batches/${encodeURIComponent(id)}?token=${encodeURIComponent(token)}`, {
+        method: "DELETE",
+      }).catch(() => {});
+    }
   }
 
   function loadDemo() {
@@ -305,6 +391,12 @@ export default function Dashboard({
       localStorage.removeItem(STORAGE_KEY);
     } catch {
       // ignore
+    }
+    // Sync DB
+    if (storageMode === "db") {
+      fetch(`/api/data?token=${encodeURIComponent(token)}`, {
+        method: "DELETE",
+      }).catch(() => {});
     }
   }
 
