@@ -63,6 +63,14 @@ const ALIASES: Record<keyof ColumnMapping, string[]> = {
     "manufacturer",
     "vendor",
     "fabricant",
+    "grupa",
+    "grupa produs",
+    "grupa produse",
+    "categorie",
+    "categorie produs",
+    "familie",
+    "linie",
+    "linie produs",
   ],
   client: [
     "client",
@@ -108,7 +116,7 @@ function normalize(s: string): string {
   return s
     .toLowerCase()
     .normalize("NFD")
-    .replace(/[̀-ͯ]/g, "")
+    .replace(/[\u0300-\u036f]/g, "")
     .replace(/[^a-z0-9]/g, " ")
     .replace(/\s+/g, " ")
     .trim();
@@ -142,10 +150,17 @@ export function detectColumns(headers: string[]): ColumnMapping {
 function parseDateCell(v: unknown): Date | null {
   if (v instanceof Date) return isNaN(v.getTime()) ? null : v;
   if (typeof v === "number") {
-    const utcDays = v - 25569;
-    const utcValue = utcDays * 86400;
-    const d = new Date(utcValue * 1000);
-    if (!isNaN(d.getTime())) return d;
+    // Excel serial date → build LOCAL date so day-level buckets are stable
+    // across timezones (otherwise 2024-01-01 in Excel can land in 2023-12-31).
+    const utcMs = (v - 25569) * 86400 * 1000;
+    const utc = new Date(utcMs);
+    if (!isNaN(utc.getTime())) {
+      return new Date(
+        utc.getUTCFullYear(),
+        utc.getUTCMonth(),
+        utc.getUTCDate(),
+      );
+    }
   }
   if (typeof v === "string") {
     const m = v.match(
@@ -168,14 +183,21 @@ function parseNumber(v: unknown): number {
   if (typeof v === "string") {
     const trimmed = v.trim();
     if (!trimmed) return 0;
-    // Handle Romanian format "1.234,56" → "1234.56"
     const hasComma = trimmed.includes(",");
     const hasDot = trimmed.includes(".");
     let cleaned = trimmed.replace(/[^\d,.\-]/g, "");
     if (hasComma && hasDot) {
+      // Format românesc cu mii și zecimale: "1.234,56" → 1234.56
       cleaned = cleaned.replace(/\./g, "").replace(",", ".");
     } else if (hasComma) {
+      // Doar virgulă = zecimală românească: "1234,56" → 1234.56
       cleaned = cleaned.replace(",", ".");
+    } else if (hasDot) {
+      // Doar punct: ambiguu. Euristică — dacă cifrele după punct sunt
+      // exact 3 (sau multiple grupuri de 3), e separator de mii românesc;
+      // altfel decimal stil EN.
+      const m = cleaned.match(/^-?\d{1,3}(\.\d{3})+$/);
+      if (m) cleaned = cleaned.replace(/\./g, "");
     }
     const n = parseFloat(cleaned);
     return isNaN(n) ? 0 : n;

@@ -198,13 +198,25 @@ export default function Dashboard({
   );
 
   const deltas = useMemo(() => computeDeltas(filtered, period), [filtered, period]);
+  const transactionsByPeriod = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const r of filtered) {
+      const k = periodKey(r.date, period);
+      m.set(k, (m.get(k) ?? 0) + 1);
+    }
+    return Array.from(m.entries())
+      .sort((a, b) => a[0].localeCompare(b[0]))
+      .map(([k, n]) => ({ x: k, y: n }));
+  }, [filtered, period]);
+
   const sparklines = useMemo(
     () => ({
       value: ts.points.map((p) => ({ x: p.period, y: p.value })),
       volume: ts.points.map((p) => ({ x: p.period, y: p.volume })),
       clients: ts.points.map((p) => ({ x: p.period, y: p.clients })),
+      transactions: transactionsByPeriod,
     }),
-    [ts.points],
+    [ts.points, transactionsByPeriod],
   );
 
   const agents = useMemo(() => distinctValues(rows, "agent"), [rows]);
@@ -393,7 +405,7 @@ export default function Dashboard({
                     label="Tranzacții"
                     value={fmtNum(totals.transactions)}
                     delta={deltas.transactions}
-                    spark={sparklines.value}
+                    spark={sparklines.transactions}
                     color="#f59e0b"
                     icon={<FileSpreadsheet className="h-4 w-4" />}
                   />

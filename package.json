@@ -11,7 +11,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.43.0",
+    "@anthropic-ai/sdk": "^0.96.0",
     "lucide-react": "^0.471.0",
     "marked": "^15.0.6",
     "next": "15.5.18",
@@ -19,7 +19,7 @@
     "react": "19.0.0",
     "react-dom": "19.0.0",
     "recharts": "^2.15.0",
-    "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz"
+    "xlsx": "^0.18.5"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.0.0",

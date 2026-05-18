@@ -10,3 +10,6 @@ out
 next-env.d.ts
 .idea
 .vscode
+
+# TypeScript incremental build cache
+*.tsbuildinfo

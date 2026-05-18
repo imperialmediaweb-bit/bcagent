@@ -7,10 +7,10 @@ function b64uEncode(bytes: Uint8Array): string {
   return btoa(bin).replace(/=+$/, "").replace(/\+/g, "-").replace(/\//g, "_");
 }
 
-function b64uDecode(s: string): Uint8Array {
+function b64uDecode(s: string): Uint8Array<ArrayBuffer> {
   const pad = s.length % 4 === 0 ? "" : "=".repeat(4 - (s.length % 4));
   const bin = atob(s.replace(/-/g, "+").replace(/_/g, "/") + pad);
-  const out = new Uint8Array(bin.length);
+  const out = new Uint8Array(new ArrayBuffer(bin.length));
   for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
   return out;
 }
@@ -52,7 +52,7 @@ export async function verifyToken(
   if (parts.length !== 2) return null;
   const [body, sigPart] = parts;
   if (!body || !sigPart) return null;
-  let sig: Uint8Array;
+  let sig: Uint8Array<ArrayBuffer>;
   try {
     sig = b64uDecode(sigPart);
   } catch {
@@ -63,7 +63,10 @@ export async function verifyToken(
   if (!ok) return null;
   try {
     const payload = JSON.parse(dec.decode(b64uDecode(body))) as TokenPayload;
-    if (payload.exp && payload.exp * 1000 < Date.now()) return null;
+    if (typeof payload.exp !== "number" || payload.exp * 1000 < Date.now())
+      return null;
+    if (typeof payload.agentId !== "string" || !payload.agentId) return null;
+    if (typeof payload.agentName !== "string" || !payload.agentName) return null;
     return payload;
   } catch {
     return null;
