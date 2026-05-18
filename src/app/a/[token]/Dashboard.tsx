@@ -939,7 +939,7 @@ function Hero({
                     ? ` din intervalul ${dateRange.min.toLocaleDateString("ro-RO")} – ${dateRange.max.toLocaleDateString("ro-RO")}`
                     : ""
                 }${isDemo ? " (date demo)" : ""}. Filtrează, compară și întreabă AI cu un singur click.`
-              : "Încarcă un fișier XLS/XLSX/CSV cu vânzările tale — sistemul detectează automat coloanele, construiește panoul și activează analiza AI. Datele rămân în browser-ul tău."}
+              : "Încarcă un fișier XLSX/XLS/ODS/CSV cu vânzările tale — sistemul detectează automat coloanele, construiește panoul și activează analiza AI. Datele rămân în browser-ul tău."}
           </p>
         </div>
 
@@ -948,14 +948,14 @@ function Hero({
             <label className="flex flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed border-white/40 px-4 py-6 text-center transition hover:bg-white/10">
               <Upload className="h-6 w-6" />
               <span className="text-sm font-medium">
-                {loading ? "Se procesează..." : "Încarcă XLS / XLSX / CSV"}
+                {loading ? "Se procesează..." : "Încarcă XLSX / XLS / ODS / CSV"}
               </span>
               <span className="text-xs text-white/70">
                 Detecție automată a coloanelor
               </span>
               <input
                 type="file"
-                accept=".xlsx,.xls,.csv"
+                accept=".xlsx,.xls,.ods,.csv,.tsv,.txt"
                 className="hidden"
                 onChange={(e) => {
                   const f = e.target.files?.[0];
