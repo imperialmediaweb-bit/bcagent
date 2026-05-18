@@ -2,16 +2,19 @@
 
 import { useMemo, useState } from "react";
 import {
+  AlertTriangle,
   ArrowDownRight,
   ArrowUpRight,
   BarChart3,
   Building2,
   Calendar,
   CircleUserRound,
+  Coins,
   Download,
   Factory,
   FileSpreadsheet,
   Filter,
+  Grid3X3,
   LineChart as LineChartIcon,
   LogOut,
   PieChart as PieChartIcon,
@@ -46,12 +49,17 @@ import {
   aggregateByDimension,
   agentEfficiency,
   applyFilters,
+  computeCommissions,
   computeTotals,
+  crossTab,
   distinctValues,
+  findAnomalies,
+  hasValueData,
   periodKey,
   timeSeries,
   type Dimension,
   type Filters,
+  type Metric,
   type Period,
 } from "@/lib/analytics";
 import { generateSampleData } from "@/lib/sample-data";
@@ -83,8 +91,7 @@ const fmtCompact = (n: number) =>
     notation: "compact",
     maximumFractionDigits: 1,
   }).format(n);
-const fmtPct = (n: number) =>
-  `${n > 0 ? "+" : ""}${n.toFixed(1)}%`;
+const fmtPct = (n: number) => `${n > 0 ? "+" : ""}${n.toFixed(1)}%`;
 
 export default function Dashboard({
   agentId,
@@ -102,6 +109,9 @@ export default function Dashboard({
   const [error, setError] = useState<string | null>(null);
   const [isDemo, setIsDemo] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
+  const [defaultRate, setDefaultRate] = useState(5);
+  const [avgPrice, setAvgPrice] = useState(1);
+  const [agentRates, setAgentRates] = useState<Record<string, number>>({});
 
   async function handleFile(file: File) {
     setLoading(true);
@@ -117,6 +127,7 @@ export default function Dashboard({
       setRows(result.rows);
       setParseInfo(result);
       setIsDemo(false);
+      setAgentRates({});
     } catch (e) {
       setError(
         "Eroare la parsarea fișierului: " +
@@ -132,6 +143,7 @@ export default function Dashboard({
     setIsDemo(true);
     setParseInfo(null);
     setError(null);
+    setAgentRates({});
   }
 
   function reset() {
@@ -139,30 +151,44 @@ export default function Dashboard({
     setParseInfo(null);
     setIsDemo(false);
     setFilters({});
+    setAgentRates({});
   }
 
   const filtered = useMemo(() => applyFilters(rows, filters), [rows, filters]);
+  const metric: Metric = useMemo(
+    () => (hasValueData(filtered) ? "value" : "volume"),
+    [filtered],
+  );
   const totals = useMemo(() => computeTotals(filtered), [filtered]);
   const byAgent = useMemo(
-    () => aggregateByDimension(filtered, "agent"),
-    [filtered],
+    () => aggregateByDimension(filtered, "agent", metric),
+    [filtered, metric],
   );
   const byProducer = useMemo(
-    () => aggregateByDimension(filtered, "producer"),
-    [filtered],
+    () => aggregateByDimension(filtered, "producer", metric),
+    [filtered, metric],
   );
   const byClient = useMemo(
-    () => aggregateByDimension(filtered, "client"),
-    [filtered],
+    () => aggregateByDimension(filtered, "client", metric),
+    [filtered, metric],
   );
   const efficiency = useMemo(
-    () => agentEfficiency(filtered, period),
-    [filtered, period],
+    () => agentEfficiency(filtered, period, metric),
+    [filtered, period, metric],
   );
   const ts = useMemo(
     () =>
       timeSeries(filtered, period, groupBy === "none" ? undefined : groupBy),
     [filtered, period, groupBy],
+  );
+  const matrix = useMemo(
+    () => crossTab(filtered, "agent", "producer", metric, 10, 20),
+    [filtered, metric],
+  );
+  const anomalies = useMemo(() => findAnomalies(filtered), [filtered]);
+  const commissions = useMemo(
+    () => computeCommissions(filtered, agentRates, defaultRate, avgPrice),
+    [filtered, agentRates, defaultRate, avgPrice],
   );
 
   const deltas = useMemo(() => computeDeltas(filtered, period), [filtered, period]);
@@ -179,12 +205,13 @@ export default function Dashboard({
   const producers = useMemo(() => distinctValues(rows, "producer"), [rows]);
 
   const hasData = rows.length > 0;
+  const valueless = metric === "volume";
 
   function exportCSV() {
     if (!filtered.length) return;
     downloadCSV(
       `vanzari_${new Date().toISOString().slice(0, 10)}.csv`,
-      ["Data", "Agent", "Producător", "Client", "Volum", "Valoare"],
+      ["Data", "Agent", "Producător", "Client", "Cantitate", "Valoare"],
       filtered.map((r) => [
         r.date.toISOString().slice(0, 10),
         r.agent,
@@ -225,6 +252,18 @@ export default function Dashboard({
 
           {hasData && (
             <>
+              {valueless && (
+                <div className="flex items-start gap-3 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+                  <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+                  <div>
+                    <p className="font-medium">Mod cantitate</p>
+                    <p className="text-xs">
+                      Nu s-a detectat coloană de valoare — toate clasamentele și KPI-urile folosesc <strong>cantitatea</strong>. Pentru estimări în RON, setează prețul mediu în secțiunea Comisioane.
+                    </p>
+                  </div>
+                </div>
+              )}
+
               <section id="overview" className="scroll-mt fade-in">
                 <SectionTitle
                   icon={<BarChart3 className="h-5 w-5" />}
@@ -232,16 +271,18 @@ export default function Dashboard({
                   subtitle={`${fmtNum(filtered.length)} tranzacții în intervalul selectat`}
                 />
                 <div className="mt-4 grid grid-cols-2 gap-4 lg:grid-cols-4">
+                  {!valueless && (
+                    <KpiCard
+                      label="Valoare totală"
+                      value={fmtMoney(totals.value)}
+                      delta={deltas.value}
+                      spark={sparklines.value}
+                      color="#6366f1"
+                      icon={<Sparkles className="h-4 w-4" />}
+                    />
+                  )}
                   <KpiCard
-                    label="Valoare totală"
-                    value={fmtMoney(totals.value)}
-                    delta={deltas.value}
-                    spark={sparklines.value}
-                    color="#6366f1"
-                    icon={<Sparkles className="h-4 w-4" />}
-                  />
-                  <KpiCard
-                    label="Volum total"
+                    label={valueless ? "Cantitate totală" : "Volum total"}
                     value={fmtCompact(totals.volume)}
                     delta={deltas.volume}
                     spark={sparklines.volume}
@@ -264,6 +305,16 @@ export default function Dashboard({
                     color="#f59e0b"
                     icon={<FileSpreadsheet className="h-4 w-4" />}
                   />
+                  {valueless && (
+                    <KpiCard
+                      label="Storno-uri"
+                      value={fmtNum(totals.returns)}
+                      delta={null}
+                      spark={[]}
+                      color="#ef4444"
+                      icon={<AlertTriangle className="h-4 w-4" />}
+                    />
+                  )}
                 </div>
               </section>
 
@@ -272,6 +323,7 @@ export default function Dashboard({
                 byProducer={byProducer}
                 byClient={byClient}
                 deltas={deltas}
+                metric={metric}
               />
 
               <FiltersBar
@@ -295,11 +347,12 @@ export default function Dashboard({
                 />
                 <div className="mt-4 grid gap-6 lg:grid-cols-3">
                   <div className="card p-6 lg:col-span-2">
-                    <div className="flex items-center justify-between">
-                      <h3 className="text-sm font-semibold text-slate-700">
-                        Valoare {groupBy !== "none" ? `per ${groupBy === "agent" ? "agent" : "producător"}` : "în timp"}
-                      </h3>
-                    </div>
+                    <h3 className="text-sm font-semibold text-slate-700">
+                      {valueless ? "Cantitate" : "Valoare"}{" "}
+                      {groupBy !== "none"
+                        ? `per ${groupBy === "agent" ? "agent" : "producător"}`
+                        : "în timp"}
+                    </h3>
                     <div className="mt-4 h-72">
                       <ResponsiveContainer width="100%" height="100%">
                         {ts.matrix && ts.groups ? (
@@ -308,7 +361,9 @@ export default function Dashboard({
                             <XAxis dataKey="period" tick={{ fontSize: 11 }} stroke="#94a3b8" />
                             <YAxis tick={{ fontSize: 11 }} stroke="#94a3b8" tickFormatter={fmtCompact} />
                             <Tooltip
-                              formatter={(v: number) => fmtMoney(v)}
+                              formatter={(v: number) =>
+                                valueless ? fmtNum(v) : fmtMoney(v)
+                              }
                               contentStyle={tooltipStyle}
                             />
                             <Legend />
@@ -335,16 +390,18 @@ export default function Dashboard({
                             <XAxis dataKey="period" tick={{ fontSize: 11 }} stroke="#94a3b8" />
                             <YAxis tick={{ fontSize: 11 }} stroke="#94a3b8" tickFormatter={fmtCompact} />
                             <Tooltip
-                              formatter={(v: number) => fmtMoney(v)}
+                              formatter={(v: number) =>
+                                valueless ? fmtNum(v) : fmtMoney(v)
+                              }
                               contentStyle={tooltipStyle}
                             />
                             <Area
                               type="monotone"
-                              dataKey="value"
+                              dataKey={valueless ? "volume" : "value"}
                               stroke="#6366f1"
                               strokeWidth={2}
                               fill="url(#valArea)"
-                              name="Valoare"
+                              name={valueless ? "Cantitate" : "Valoare"}
                             />
                           </AreaChart>
                         )}
@@ -393,26 +450,55 @@ export default function Dashboard({
                   <DonutCard
                     title="Cota de piață per producător"
                     data={byProducer.slice(0, 8)}
+                    metric={metric}
                     icon={<Factory className="h-4 w-4" />}
                   />
                   <RankingCard
                     title="Volume per agent"
                     data={byAgent}
+                    metric={metric}
                     icon={<CircleUserRound className="h-4 w-4" />}
                   />
                   <RankingCard
                     title="Volume per producător"
                     data={byProducer}
+                    metric={metric}
                     icon={<Factory className="h-4 w-4" />}
                   />
                 </div>
+              </section>
+
+              <section id="matrice" className="scroll-mt fade-in">
+                <SectionTitle
+                  icon={<Grid3X3 className="h-5 w-5" />}
+                  title="Matrice Agent × Producător"
+                  subtitle="Cine vinde ce brand. Culoarea = intensitate."
+                />
+                <CrossTabPanel matrix={matrix} metric={metric} />
+              </section>
+
+              <section id="comisioane" className="scroll-mt fade-in">
+                <SectionTitle
+                  icon={<Coins className="h-5 w-5" />}
+                  title="Comisioane per agent"
+                  subtitle="Configurează rata și prețul mediu — sistemul calculează sumele"
+                />
+                <CommissionPanel
+                  commissions={commissions}
+                  defaultRate={defaultRate}
+                  setDefaultRate={setDefaultRate}
+                  avgPrice={avgPrice}
+                  setAvgPrice={setAvgPrice}
+                  agentRates={agentRates}
+                  setAgentRates={setAgentRates}
+                  valueless={valueless}
+                />
               </section>
 
               <section id="eficienta" className="scroll-mt fade-in">
                 <SectionTitle
                   icon={<Trophy className="h-5 w-5" />}
                   title="Eficiență per agent"
-                  subtitle="Performanță, fidelizare clienți și constanță"
                 />
                 <div className="card mt-4 overflow-hidden">
                   <div className="overflow-x-auto">
@@ -420,12 +506,12 @@ export default function Dashboard({
                       <thead className="border-b border-slate-200 bg-slate-50/50 text-left text-xs uppercase tracking-wide text-slate-500">
                         <tr>
                           <th className="px-4 py-3">Agent</th>
-                          <th className="px-4 py-3">Valoare</th>
-                          <th className="px-4 py-3">Volum</th>
+                          <th className="px-4 py-3">{valueless ? "Cantitate" : "Valoare"}</th>
+                          {!valueless && <th className="px-4 py-3">Cantitate</th>}
                           <th className="px-4 py-3">Clienți unici</th>
                           <th className="px-4 py-3">Tranzacții</th>
-                          <th className="px-4 py-3">Val./client</th>
-                          <th className="px-4 py-3">Avg tranzacție</th>
+                          {!valueless && <th className="px-4 py-3">Val./client</th>}
+                          {!valueless && <th className="px-4 py-3">Avg tranzacție</th>}
                           <th className="px-4 py-3">Perioade active</th>
                         </tr>
                       </thead>
@@ -446,12 +532,20 @@ export default function Dashboard({
                                 <span className="font-medium text-slate-800">{e.agent}</span>
                               </div>
                             </td>
-                            <td className="px-4 py-3 font-semibold text-slate-800">{fmtMoney(e.value)}</td>
-                            <td className="px-4 py-3 text-slate-600">{fmtNum(e.volume)}</td>
+                            <td className="px-4 py-3 font-semibold text-slate-800">
+                              {valueless ? fmtNum(e.volume) : fmtMoney(e.value)}
+                            </td>
+                            {!valueless && (
+                              <td className="px-4 py-3 text-slate-600">{fmtNum(e.volume)}</td>
+                            )}
                             <td className="px-4 py-3 text-slate-600">{fmtNum(e.uniqueClients)}</td>
                             <td className="px-4 py-3 text-slate-600">{fmtNum(e.transactions)}</td>
-                            <td className="px-4 py-3 text-slate-600">{fmtMoney(e.valuePerClient)}</td>
-                            <td className="px-4 py-3 text-slate-600">{fmtMoney(e.avgDealSize)}</td>
+                            {!valueless && (
+                              <td className="px-4 py-3 text-slate-600">{fmtMoney(e.valuePerClient)}</td>
+                            )}
+                            {!valueless && (
+                              <td className="px-4 py-3 text-slate-600">{fmtMoney(e.avgDealSize)}</td>
+                            )}
                             <td className="px-4 py-3 text-slate-600">{e.activePeriods}</td>
                           </tr>
                         ))}
@@ -465,7 +559,7 @@ export default function Dashboard({
                 <SectionTitle
                   icon={<Building2 className="h-5 w-5" />}
                   title="Top clienți"
-                  subtitle="Top 10 după valoare"
+                  subtitle="Top 10 după valoare / cantitate"
                 />
                 <div className="card mt-4 overflow-hidden">
                   <div className="overflow-x-auto">
@@ -474,15 +568,17 @@ export default function Dashboard({
                         <tr>
                           <th className="px-4 py-3">#</th>
                           <th className="px-4 py-3">Client</th>
-                          <th className="px-4 py-3">Valoare</th>
-                          <th className="px-4 py-3">Volum</th>
+                          <th className="px-4 py-3">{valueless ? "Cantitate" : "Valoare"}</th>
+                          {!valueless && <th className="px-4 py-3">Cantitate</th>}
                           <th className="px-4 py-3">Tranzacții</th>
                           <th className="px-4 py-3 w-1/4">Pondere</th>
                         </tr>
                       </thead>
                       <tbody>
                         {byClient.slice(0, 10).map((c, i) => {
-                          const pct = totals.value > 0 ? (c.value / totals.value) * 100 : 0;
+                          const denom = valueless ? totals.volume : totals.value;
+                          const num = valueless ? c.volume : c.value;
+                          const pct = denom > 0 ? (num / denom) * 100 : 0;
                           return (
                             <tr
                               key={c.key}
@@ -490,8 +586,12 @@ export default function Dashboard({
                             >
                               <td className="px-4 py-3 text-slate-400">{i + 1}</td>
                               <td className="px-4 py-3 font-medium text-slate-800">{c.key}</td>
-                              <td className="px-4 py-3 font-semibold text-slate-800">{fmtMoney(c.value)}</td>
-                              <td className="px-4 py-3 text-slate-600">{fmtNum(c.volume)}</td>
+                              <td className="px-4 py-3 font-semibold text-slate-800">
+                                {valueless ? fmtNum(c.volume) : fmtMoney(c.value)}
+                              </td>
+                              {!valueless && (
+                                <td className="px-4 py-3 text-slate-600">{fmtNum(c.volume)}</td>
+                              )}
                               <td className="px-4 py-3 text-slate-600">{fmtNum(c.transactions)}</td>
                               <td className="px-4 py-3">
                                 <div className="flex items-center gap-2">
@@ -511,6 +611,15 @@ export default function Dashboard({
                     </table>
                   </div>
                 </div>
+              </section>
+
+              <section id="anomalii" className="scroll-mt fade-in">
+                <SectionTitle
+                  icon={<AlertTriangle className="h-5 w-5" />}
+                  title="Anomalii și storno-uri"
+                  subtitle={`${anomalies.length} rânduri detectate`}
+                />
+                <AnomaliesPanel anomalies={anomalies} />
               </section>
             </>
           )}
@@ -550,8 +659,11 @@ function Sidebar({ hasData }: { hasData: boolean }) {
     { href: "#overview", label: "Privire ansamblu", icon: BarChart3 },
     { href: "#evolutie", label: "Evoluție", icon: LineChartIcon },
     { href: "#distribuire", label: "Distribuție", icon: PieChartIcon },
+    { href: "#matrice", label: "Matrice brand", icon: Grid3X3 },
+    { href: "#comisioane", label: "Comisioane", icon: Coins },
     { href: "#eficienta", label: "Eficiență", icon: Trophy },
     { href: "#clienti", label: "Top clienți", icon: Building2 },
+    { href: "#anomalii", label: "Anomalii", icon: AlertTriangle },
   ];
   return (
     <aside className="hidden lg:fixed lg:inset-y-0 lg:flex lg:w-60 lg:flex-col lg:border-r lg:border-slate-200 lg:bg-white">
@@ -579,7 +691,7 @@ function Sidebar({ hasData }: { hasData: boolean }) {
       </nav>
       <div className="border-t border-slate-200 p-4 text-xs text-slate-500">
         <p>Sales analytics</p>
-        <p className="mt-1">v0.1 · magic-link auth</p>
+        <p className="mt-1">v0.2 · magic-link auth</p>
       </div>
     </aside>
   );
@@ -704,7 +816,7 @@ function Hero({
                   dateRange
                     ? ` din intervalul ${dateRange.min.toLocaleDateString("ro-RO")} – ${dateRange.max.toLocaleDateString("ro-RO")}`
                     : ""
-                }${isDemo ? " (date demo)" : ""}. Filtrează, compară și exportă cu un singur click."
+                }${isDemo ? " (date demo)" : ""}. Filtrează, compară și exportă cu un singur click.`
               : "Încarcă un fișier XLS/XLSX/CSV cu vânzările tale — sistemul detectează automat coloanele și îți construiește panoul în câteva secunde. Datele rămân în browser-ul tău."}
           </p>
         </div>
@@ -754,7 +866,7 @@ function Hero({
           <Mapping label="Agent" value={parseInfo.mapping.agent} />
           <Mapping label="Producător" value={parseInfo.mapping.producer} />
           <Mapping label="Client" value={parseInfo.mapping.client} />
-          <Mapping label="Volum" value={parseInfo.mapping.volume} />
+          <Mapping label="Cantitate" value={parseInfo.mapping.volume} />
           <Mapping label="Valoare" value={parseInfo.mapping.value} />
           <p className="text-white/70 sm:col-span-2 lg:col-span-3">
             {parseInfo.rows.length} rânduri procesate
@@ -879,15 +991,22 @@ function InsightsStrip({
   byProducer,
   byClient,
   deltas,
+  metric,
 }: {
   byAgent: ReturnType<typeof aggregateByDimension>;
   byProducer: ReturnType<typeof aggregateByDimension>;
   byClient: ReturnType<typeof aggregateByDimension>;
   deltas: ReturnType<typeof computeDeltas>;
+  metric: Metric;
 }) {
   const topAgent = byAgent[0];
   const topProducer = byProducer[0];
   const topClient = byClient[0];
+
+  const formatVal = (a?: { value: number; volume: number }) => {
+    if (!a) return undefined;
+    return metric === "value" ? fmtMoney(a.value) : `${fmtNum(a.volume)} buc`;
+  };
 
   return (
     <section className="fade-in grid grid-cols-2 gap-4 lg:grid-cols-4">
@@ -895,36 +1014,36 @@ function InsightsStrip({
         icon={<Trophy className="h-4 w-4" />}
         label="Top agent"
         value={topAgent?.key ?? "—"}
-        sub={topAgent ? fmtMoney(topAgent.value) : undefined}
+        sub={formatVal(topAgent)}
         accent="from-indigo-500 to-violet-500"
       />
       <InsightCard
         icon={<Factory className="h-4 w-4" />}
         label="Top producător"
         value={topProducer?.key ?? "—"}
-        sub={topProducer ? fmtMoney(topProducer.value) : undefined}
+        sub={formatVal(topProducer)}
         accent="from-emerald-500 to-teal-500"
       />
       <InsightCard
         icon={<Building2 className="h-4 w-4" />}
         label="Top client"
         value={topClient?.key ?? "—"}
-        sub={topClient ? fmtMoney(topClient.value) : undefined}
+        sub={formatVal(topClient)}
         accent="from-amber-500 to-orange-500"
       />
       <InsightCard
         icon={
-          (deltas.value ?? 0) >= 0 ? (
+          (deltas[metric] ?? 0) >= 0 ? (
             <ArrowUpRight className="h-4 w-4" />
           ) : (
             <ArrowDownRight className="h-4 w-4" />
           )
         }
         label="Ritm creștere"
-        value={deltas.value !== null ? fmtPct(deltas.value) : "—"}
+        value={deltas[metric] !== null ? fmtPct(deltas[metric] as number) : "—"}
         sub="Perioada curentă vs precedentă"
         accent={
-          (deltas.value ?? 0) >= 0
+          (deltas[metric] ?? 0) >= 0
             ? "from-emerald-500 to-green-500"
             : "from-rose-500 to-pink-500"
         }
@@ -1179,13 +1298,16 @@ function DateRange({
 function DonutCard({
   title,
   data,
+  metric,
   icon,
 }: {
   title: string;
   data: ReturnType<typeof aggregateByDimension>;
+  metric: Metric;
   icon: React.ReactNode;
 }) {
-  const total = data.reduce((s, d) => s + d.value, 0);
+  const total = data.reduce((s, d) => s + d[metric], 0);
+  const chartData = data.map((d) => ({ ...d, _metric: d[metric] }));
   return (
     <div className="card flex flex-col p-6">
       <div className="flex items-center gap-2 text-sm font-semibold text-slate-700">
@@ -1196,20 +1318,22 @@ function DonutCard({
         <ResponsiveContainer width="100%" height="100%">
           <PieChart>
             <Pie
-              data={data}
-              dataKey="value"
+              data={chartData}
+              dataKey="_metric"
               nameKey="key"
               innerRadius={50}
               outerRadius={80}
               paddingAngle={2}
               isAnimationActive={false}
             >
-              {data.map((_, i) => (
+              {chartData.map((_, i) => (
                 <Cell key={i} fill={PALETTE[i % PALETTE.length]} />
               ))}
             </Pie>
             <Tooltip
-              formatter={(v: number) => fmtMoney(v)}
+              formatter={(v: number) =>
+                metric === "value" ? fmtMoney(v) : `${fmtNum(v)} buc`
+              }
               contentStyle={tooltipStyle}
             />
           </PieChart>
@@ -1217,7 +1341,7 @@ function DonutCard({
       </div>
       <ul className="mt-2 space-y-1.5 text-xs">
         {data.slice(0, 5).map((d, i) => {
-          const pct = total > 0 ? (d.value / total) * 100 : 0;
+          const pct = total > 0 ? (d[metric] / total) * 100 : 0;
           return (
             <li key={d.key} className="flex items-center gap-2">
               <span
@@ -1237,13 +1361,15 @@ function DonutCard({
 function RankingCard({
   title,
   data,
+  metric,
   icon,
 }: {
   title: string;
   data: ReturnType<typeof aggregateByDimension>;
+  metric: Metric;
   icon: React.ReactNode;
 }) {
-  const top = data.slice(0, 6);
+  const top = data.slice(0, 6).map((d) => ({ ...d, _metric: d[metric] }));
   return (
     <div className="card p-6">
       <div className="flex items-center gap-2 text-sm font-semibold text-slate-700">
@@ -1263,10 +1389,12 @@ function RankingCard({
               stroke="#94a3b8"
             />
             <Tooltip
-              formatter={(v: number) => fmtMoney(v)}
+              formatter={(v: number) =>
+                metric === "value" ? fmtMoney(v) : `${fmtNum(v)} buc`
+              }
               contentStyle={tooltipStyle}
             />
-            <Bar dataKey="value" radius={[0, 6, 6, 0]} isAnimationActive={false}>
+            <Bar dataKey="_metric" radius={[0, 6, 6, 0]} isAnimationActive={false}>
               {top.map((_, i) => (
                 <Cell key={i} fill={PALETTE[i % PALETTE.length]} />
               ))}
@@ -1274,6 +1402,318 @@ function RankingCard({
           </BarChart>
         </ResponsiveContainer>
       </div>
+    </div>
+  );
+}
+
+function CrossTabPanel({
+  matrix,
+  metric,
+}: {
+  matrix: ReturnType<typeof crossTab>;
+  metric: Metric;
+}) {
+  const fmt = metric === "value" ? fmtMoney : fmtNum;
+  if (matrix.rows.length === 0) {
+    return (
+      <div className="card mt-4 p-6 text-sm text-slate-500">
+        Nu există date suficiente pentru matrice.
+      </div>
+    );
+  }
+  return (
+    <div className="card mt-4 overflow-hidden">
+      <div className="overflow-x-auto">
+        <table className="w-full text-xs">
+          <thead>
+            <tr>
+              <th className="sticky left-0 z-10 border-b border-r border-slate-200 bg-white px-3 py-2 text-left font-semibold text-slate-600">
+                Agent \ Producător
+              </th>
+              {matrix.cols.map((c) => (
+                <th
+                  key={c}
+                  className="border-b border-slate-200 px-3 py-2 text-left font-semibold text-slate-600"
+                >
+                  {c}
+                </th>
+              ))}
+              <th className="border-b border-l border-slate-200 bg-slate-50 px-3 py-2 text-right font-semibold text-slate-700">
+                Total
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {matrix.rows.map((rk, i) => (
+              <tr key={rk}>
+                <td className="sticky left-0 z-10 border-r border-slate-200 bg-white px-3 py-2 font-medium text-slate-800">
+                  {rk}
+                </td>
+                {matrix.matrix[i].map((v, j) => {
+                  const intensity = matrix.max > 0 ? v / matrix.max : 0;
+                  return (
+                    <td
+                      key={j}
+                      className="border-t border-slate-100 px-3 py-2 text-right tabular-nums"
+                      style={{
+                        background:
+                          v > 0
+                            ? `rgba(99, 102, 241, ${0.05 + intensity * 0.45})`
+                            : undefined,
+                        color: intensity > 0.6 ? "white" : "#1f2937",
+                      }}
+                    >
+                      {v === 0 ? "–" : fmt(v)}
+                    </td>
+                  );
+                })}
+                <td className="border-l border-t border-slate-100 bg-slate-50 px-3 py-2 text-right font-semibold text-slate-800">
+                  {fmt(matrix.rowTotals[i])}
+                </td>
+              </tr>
+            ))}
+            <tr>
+              <td className="sticky left-0 z-10 border-r border-t-2 border-slate-200 bg-slate-50 px-3 py-2 font-semibold text-slate-700">
+                Total
+              </td>
+              {matrix.colTotals.map((v, j) => (
+                <td
+                  key={j}
+                  className="border-t-2 border-slate-200 bg-slate-50 px-3 py-2 text-right font-semibold text-slate-700 tabular-nums"
+                >
+                  {fmt(v)}
+                </td>
+              ))}
+              <td className="border-l border-t-2 border-slate-200 bg-slate-100 px-3 py-2 text-right font-semibold text-slate-900">
+                {fmt(matrix.grandTotal)}
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+function CommissionPanel({
+  commissions,
+  defaultRate,
+  setDefaultRate,
+  avgPrice,
+  setAvgPrice,
+  agentRates,
+  setAgentRates,
+  valueless,
+}: {
+  commissions: ReturnType<typeof computeCommissions>;
+  defaultRate: number;
+  setDefaultRate: (n: number) => void;
+  avgPrice: number;
+  setAvgPrice: (n: number) => void;
+  agentRates: Record<string, number>;
+  setAgentRates: (r: Record<string, number>) => void;
+  valueless: boolean;
+}) {
+  const totalCommission = commissions.reduce((s, c) => s + c.commission, 0);
+  return (
+    <div className="card mt-4 p-6">
+      <div className="grid gap-4 sm:grid-cols-3">
+        <NumberInput
+          label="Rată implicită (%)"
+          value={defaultRate}
+          onChange={setDefaultRate}
+          step={0.5}
+          min={0}
+          max={100}
+        />
+        {valueless && (
+          <NumberInput
+            label="Preț mediu / unitate (RON)"
+            value={avgPrice}
+            onChange={setAvgPrice}
+            step={0.1}
+            min={0}
+            max={100000}
+          />
+        )}
+        <div className="flex items-end">
+          <div className="w-full rounded-lg bg-indigo-50 px-4 py-3">
+            <p className="text-xs font-medium uppercase text-indigo-600">
+              Total comisioane
+            </p>
+            <p className="mt-1 text-xl font-semibold text-indigo-900">
+              {fmtMoney(totalCommission)}
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <div className="mt-6 overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead className="border-b border-slate-200 text-left text-xs uppercase tracking-wide text-slate-500">
+            <tr>
+              <th className="py-2 pr-3">Agent</th>
+              <th className="py-2 pr-3">Cantitate</th>
+              <th className="py-2 pr-3">Valoare estimată</th>
+              <th className="py-2 pr-3">Rată (%)</th>
+              <th className="py-2 pr-3 text-right">Comision</th>
+            </tr>
+          </thead>
+          <tbody>
+            {commissions.map((c, i) => (
+              <tr key={c.agent} className="border-b border-slate-100 last:border-0">
+                <td className="py-2 pr-3">
+                  <div className="flex items-center gap-2">
+                    <span
+                      className="flex h-7 w-7 items-center justify-center rounded-full text-xs font-semibold text-white"
+                      style={{ background: PALETTE[i % PALETTE.length] }}
+                    >
+                      {initials(c.agent)}
+                    </span>
+                    <span className="font-medium text-slate-800">{c.agent}</span>
+                  </div>
+                </td>
+                <td className="py-2 pr-3 text-slate-600">{fmtNum(c.volume)}</td>
+                <td className="py-2 pr-3 text-slate-600">{fmtMoney(c.inferredValue)}</td>
+                <td className="py-2 pr-3">
+                  <input
+                    type="number"
+                    step={0.5}
+                    min={0}
+                    max={100}
+                    value={agentRates[c.agent] ?? defaultRate}
+                    onChange={(e) =>
+                      setAgentRates({
+                        ...agentRates,
+                        [c.agent]: parseFloat(e.target.value) || 0,
+                      })
+                    }
+                    className="w-20 rounded-md border border-slate-200 px-2 py-1 text-sm"
+                  />
+                </td>
+                <td className="py-2 pr-3 text-right font-semibold text-slate-800">
+                  {fmtMoney(c.commission)}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+function NumberInput({
+  label,
+  value,
+  onChange,
+  step,
+  min,
+  max,
+}: {
+  label: string;
+  value: number;
+  onChange: (n: number) => void;
+  step?: number;
+  min?: number;
+  max?: number;
+}) {
+  return (
+    <label className="block">
+      <span className="text-xs font-medium uppercase text-slate-500">{label}</span>
+      <input
+        type="number"
+        value={value}
+        step={step}
+        min={min}
+        max={max}
+        onChange={(e) => onChange(parseFloat(e.target.value) || 0)}
+        className="mt-1 block w-full rounded-md border border-slate-200 px-3 py-2 text-sm"
+      />
+    </label>
+  );
+}
+
+function AnomaliesPanel({
+  anomalies,
+}: {
+  anomalies: ReturnType<typeof findAnomalies>;
+}) {
+  if (anomalies.length === 0) {
+    return (
+      <div className="card mt-4 flex items-center gap-3 p-6 text-sm text-emerald-700">
+        <span className="flex h-8 w-8 items-center justify-center rounded-full bg-emerald-100">
+          ✓
+        </span>
+        Nu s-au detectat anomalii.
+      </div>
+    );
+  }
+  const counts = anomalies.reduce<Record<string, number>>((acc, a) => {
+    acc[a.type] = (acc[a.type] ?? 0) + 1;
+    return acc;
+  }, {});
+  const TYPE_STYLES: Record<string, { label: string; cls: string }> = {
+    return: { label: "Storno", cls: "bg-rose-50 text-rose-700" },
+    missing: { label: "Lipsă date", cls: "bg-amber-50 text-amber-700" },
+    implicit: { label: "IMPLICIT", cls: "bg-orange-50 text-orange-700" },
+    outlier: { label: "Outlier", cls: "bg-violet-50 text-violet-700" },
+  };
+  return (
+    <div className="card mt-4 overflow-hidden">
+      <div className="flex flex-wrap gap-2 border-b border-slate-100 p-4">
+        {Object.entries(counts).map(([t, n]) => (
+          <span
+            key={t}
+            className={`rounded-full px-3 py-1 text-xs font-semibold ${TYPE_STYLES[t]?.cls ?? ""}`}
+          >
+            {TYPE_STYLES[t]?.label ?? t}: {n}
+          </span>
+        ))}
+      </div>
+      <div className="max-h-96 overflow-auto">
+        <table className="w-full text-sm">
+          <thead className="sticky top-0 border-b border-slate-200 bg-slate-50/80 text-left text-xs uppercase tracking-wide text-slate-500 backdrop-blur">
+            <tr>
+              <th className="px-4 py-2">Tip</th>
+              <th className="px-4 py-2">Data</th>
+              <th className="px-4 py-2">Agent</th>
+              <th className="px-4 py-2">Producător</th>
+              <th className="px-4 py-2">Client</th>
+              <th className="px-4 py-2 text-right">Cantitate</th>
+              <th className="px-4 py-2">Detalii</th>
+            </tr>
+          </thead>
+          <tbody>
+            {anomalies.slice(0, 200).map((a, i) => (
+              <tr key={i} className="border-b border-slate-100 last:border-0">
+                <td className="px-4 py-2">
+                  <span
+                    className={`rounded-full px-2 py-0.5 text-xs font-semibold ${TYPE_STYLES[a.type]?.cls ?? ""}`}
+                  >
+                    {TYPE_STYLES[a.type]?.label ?? a.type}
+                  </span>
+                </td>
+                <td className="px-4 py-2 text-slate-600">
+                  {a.row.date.toLocaleDateString("ro-RO")}
+                </td>
+                <td className="px-4 py-2 text-slate-800">{a.row.agent || "—"}</td>
+                <td className="px-4 py-2 text-slate-800">{a.row.producer || "—"}</td>
+                <td className="px-4 py-2 text-slate-600">{a.row.client || "—"}</td>
+                <td className="px-4 py-2 text-right tabular-nums text-slate-600">
+                  {fmtNum(a.row.volume)}
+                </td>
+                <td className="px-4 py-2 text-xs text-slate-500">{a.note}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      {anomalies.length > 200 && (
+        <p className="border-t border-slate-100 p-3 text-center text-xs text-slate-500">
+          Afișate primele 200 din {anomalies.length}
+        </p>
+      )}
     </div>
   );
 }
@@ -1317,7 +1757,8 @@ function computeDeltas(rows: NormalizedRow[], period: Period) {
   };
   const c = sum(cur);
   const p = sum(prev);
-  const pct = (a: number, b: number) => (b === 0 ? (a === 0 ? 0 : 100) : ((a - b) / b) * 100);
+  const pct = (a: number, b: number) =>
+    b === 0 ? (a === 0 ? 0 : 100) : ((a - b) / b) * 100;
   return {
     value: pct(c.value, p.value),
     volume: pct(c.volume, p.volume),
