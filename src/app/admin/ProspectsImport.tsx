@@ -118,31 +118,63 @@ export default function ProspectsImport({
       let totalProcessed = 0;
       let totalInactive = 0;
       let totalWrongProfile = 0;
-      for (let i = 0; i < 60; i++) {
-        const res = await fetch("/api/prospects/enrich", {
-          method: "POST",
-          headers: { "x-admin-secret": adminSecret },
-        });
-        const json = await res.json();
-        if (!res.ok) {
-          setEnrichStatus(`Eroare: ${json.error ?? res.status}`);
-          return;
+      let consecutiveErrors = 0;
+      // 44k firme / 500 per apel ≈ 90 apeluri; lăsăm loc de retry-uri
+      for (let i = 0; i < 250; i++) {
+        let json: {
+          error?: string;
+          processed?: number;
+          inactive?: number;
+          wrongProfile?: number;
+          remaining?: number;
+        } | null = null;
+        try {
+          const res = await fetch("/api/prospects/enrich", {
+            method: "POST",
+            headers: { "x-admin-secret": adminSecret },
+          });
+          // Răspunsul poate fi text brut de la proxy ("upstream error") —
+          // parsăm defensiv, nu crăpăm pe JSON invalid.
+          const text = await res.text();
+          try {
+            json = JSON.parse(text);
+          } catch {
+            json = { error: `Server: ${text.slice(0, 80)} (${res.status})` };
+          }
+          if (!res.ok || json?.error) {
+            throw new Error(json?.error ?? `Eroare ${res.status}`);
+          }
+        } catch (err) {
+          consecutiveErrors++;
+          if (consecutiveErrors >= 5) {
+            setEnrichStatus(
+              `S-au adunat erori consecutive (${err instanceof Error ? err.message : "network"}). Progresul e salvat — apasă din nou butonul ca să continui de unde a rămas.`,
+            );
+            return;
+          }
+          setEnrichStatus(
+            `Eroare temporară (${consecutiveErrors}/5) — reîncerc în 3 secunde... (${totalProcessed.toLocaleString("ro-RO")} verificate până acum)`,
+          );
+          await new Promise((r) => setTimeout(r, 3000));
+          continue;
         }
-        totalProcessed += json.processed ?? 0;
-        totalInactive += json.inactive ?? 0;
-        totalWrongProfile += json.wrongProfile ?? 0;
-        if ((json.remaining ?? 0) === 0) {
+        consecutiveErrors = 0;
+        totalProcessed += json?.processed ?? 0;
+        totalInactive += json?.inactive ?? 0;
+        totalWrongProfile += json?.wrongProfile ?? 0;
+        const remaining = json?.remaining ?? 0;
+        if (remaining === 0) {
           setEnrichStatus(
             `Gata: ${totalProcessed.toLocaleString("ro-RO")} verificate · ${totalWrongProfile.toLocaleString("ro-RO")} eliminate (alt profil decât alimentar/bar/tutun) · ${totalInactive.toLocaleString("ro-RO")} inactive. Lista de prospecți e curată.`,
           );
           return;
         }
         setEnrichStatus(
-          `${totalProcessed.toLocaleString("ro-RO")} verificate · ${totalWrongProfile.toLocaleString("ro-RO")} alt profil eliminate · ${json.remaining.toLocaleString("ro-RO")} rămase...`,
+          `${totalProcessed.toLocaleString("ro-RO")} verificate · ${totalWrongProfile.toLocaleString("ro-RO")} alt profil eliminate · ${remaining.toLocaleString("ro-RO")} rămase...`,
         );
       }
       setEnrichStatus(
-        `${totalProcessed.toLocaleString("ro-RO")} verificate — mai apasă o dată pentru restul.`,
+        `${totalProcessed.toLocaleString("ro-RO")} verificate — mai apasă o dată pentru restul (progresul e salvat).`,
       );
     } catch (e) {
       setEnrichStatus(

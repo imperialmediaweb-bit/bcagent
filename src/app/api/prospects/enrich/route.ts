@@ -29,7 +29,8 @@ export async function POST(req: Request) {
     return Response.json({ error: "Server not configured" }, { status: 500 });
   }
   const ip = clientIP(req);
-  const rl = rateLimit(`prospects-enrich:${ip}`, { max: 20, windowMs: 60_000 });
+  // 1 batch ANAF per apel → UI face ~10-17 apeluri/min la enrich complet
+  const rl = rateLimit(`prospects-enrich:${ip}`, { max: 40, windowMs: 60_000 });
   if (!rl.ok) {
     return Response.json({ error: "Prea multe cereri" }, { status: 429 });
   }
@@ -43,11 +44,13 @@ export async function POST(req: Request) {
 
   try {
     await ensureSchema();
+    // UN singur batch ANAF per cerere HTTP — ține cererea sub ~10s
+    // (Railway proxy taie cererile lungi cu "upstream error").
     const pending = await db<Array<{ cui: string }>>`
       SELECT cui FROM prospects
       WHERE activ IS NULL
       ORDER BY cui
-      LIMIT ${ANAF_BATCH_SIZE * 2}
+      LIMIT ${ANAF_BATCH_SIZE}
     `;
     if (pending.length === 0) {
       const [{ remaining }] = await db<[{ remaining: string }]>`

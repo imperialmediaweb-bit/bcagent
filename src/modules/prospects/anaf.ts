@@ -61,7 +61,7 @@ export async function queryAnafBatch(
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
-    signal: AbortSignal.timeout(30_000),
+    signal: AbortSignal.timeout(20_000),
   });
   if (!res.ok) {
     throw new Error(`ANAF a răspuns cu ${res.status}`);
