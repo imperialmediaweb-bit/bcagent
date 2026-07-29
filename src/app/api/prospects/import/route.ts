@@ -52,9 +52,9 @@ export async function POST(req: Request) {
   if (!Array.isArray(body.prospects)) {
     return Response.json({ error: "prospects[] lipsește" }, { status: 400 });
   }
-  if (body.prospects.length > 2000) {
+  if (body.prospects.length > 5000) {
     return Response.json(
-      { error: "Maxim 2000 prospecți per chunk" },
+      { error: "Maxim 5000 prospecți per chunk" },
       { status: 400 },
     );
   }

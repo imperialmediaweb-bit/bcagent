@@ -148,11 +148,16 @@ export async function streamImportFirms(
   });
 
   const flush = async (force: boolean) => {
-    if (buffer.length === 0) return;
-    if (!force && buffer.length < batchSize) return;
-    const batch = buffer;
-    buffer = [];
-    await options.onBatch(batch);
+    // Trimite în felii de maxim batchSize — bufferul poate depăși pragul
+    // când multe potriviri vin în rafală (fișierul e grupat pe zone).
+    while (buffer.length >= batchSize) {
+      const batch = buffer.splice(0, batchSize);
+      await options.onBatch(batch);
+    }
+    if (force && buffer.length > 0) {
+      const batch = buffer.splice(0, buffer.length);
+      await options.onBatch(batch);
+    }
   };
 
   const processLine = (line: string) => {

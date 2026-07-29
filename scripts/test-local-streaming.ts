@@ -44,6 +44,7 @@ async function main() {
   // Test principal
   const received: RawFirmRow[] = [];
   let batches = 0;
+  let maxBatchExceeded = false;
   let progressCalls = 0;
   const t0 = Date.now();
   const result = await streamImportFirms(blob, {
@@ -53,6 +54,7 @@ async function main() {
     },
     onBatch: async (rows) => {
       batches++;
+      if (rows.length > 1500) maxBatchExceeded = true;
       received.push(...rows);
     },
   });
@@ -85,6 +87,7 @@ async function main() {
     received.every((r) => ["4711", "5630", "4726"].includes(r.caen)),
   );
   check("progres raportat", progressCalls > 0, `(${progressCalls})`);
+  check("niciun lot peste batchSize (limita serverului)", !maxBatchExceeded);
 
   // Test binar: xlsx fals (începe cu PK)
   const zipBlob = new Blob([new Uint8Array([0x50, 0x4b, 0x03, 0x04, 1, 2, 3])]);
