@@ -69,6 +69,20 @@ export async function ensureSchema(): Promise<void> {
     CREATE INDEX IF NOT EXISTS prospects_status ON prospects(status);
     CREATE INDEX IF NOT EXISTS prospects_caen ON prospects(caen);
     CREATE INDEX IF NOT EXISTS prospects_localitate ON prospects(localitate);
+    -- Progres procesare incrementală a fișierelor mari din R2 (dataset MF).
+    CREATE TABLE IF NOT EXISTS sync_state (
+      key TEXT PRIMARY KEY,
+      byte_offset BIGINT NOT NULL DEFAULT 0,
+      total_size BIGINT NOT NULL DEFAULT 0,
+      carry TEXT NOT NULL DEFAULT '',
+      delimiter TEXT,
+      column_map JSONB,
+      header_done BOOLEAN NOT NULL DEFAULT FALSE,
+      processed BIGINT NOT NULL DEFAULT 0,
+      matched BIGINT NOT NULL DEFAULT 0,
+      done BOOLEAN NOT NULL DEFAULT FALSE,
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
   `);
   schemaReady = true;
 }

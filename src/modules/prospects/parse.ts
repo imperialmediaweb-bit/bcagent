@@ -33,7 +33,7 @@ const COLUMN_ALIASES: Record<keyof Omit<RawFirmRow, "stare">, string[]> & {
   stare: ["stare", "stare firma", "stare inregistrare", "status", "stare fiscala"],
 };
 
-function detectDelimiter(lines: string[]): string {
+export function detectDelimiter(lines: string[]): string {
   let best: string = DELIMITERS[0];
   let bestScore = -1;
   for (const d of DELIMITERS) {
@@ -55,7 +55,7 @@ function detectDelimiter(lines: string[]): string {
   return best;
 }
 
-function mapColumnsByHeader(
+export function mapColumnsByHeader(
   headerCells: string[],
 ): Record<string, number> | null {
   const norm = headerCells.map(normalizeHeader);
@@ -81,7 +81,7 @@ function mapColumnsByHeader(
  * CODPOSTAL|ACT_AUTORIZARE|STARE_FIRMA|...
  * (poziții aproximative — validăm prin heuristici pe primul rând de date)
  */
-function positionalMap(cells: string[]): Record<string, number> | null {
+export function positionalMap(cells: string[]): Record<string, number> | null {
   if (cells.length < 5) return null;
   // CUI = primul câmp numeric de 2-10 cifre
   const cuiIdx = cells.findIndex((c) => /^\d{2,10}$/.test(c.trim()));
@@ -187,33 +187,12 @@ export function parseFirmsFile(
   let skipped = 0;
   const startIdx = headerLineIdx >= 0 ? headerLineIdx + 1 : 0;
   for (let i = startIdx; i < nonEmpty.length; i++) {
-    const cells = nonEmpty[i].split(delimiter);
-    const get = (field: string): string => {
-      const idx = columnMap![field];
-      return idx !== undefined && idx < cells.length
-        ? cells[idx].trim()
-        : "";
-    };
-    const cuiRaw = get("cui").replace(/^RO/i, "").replace(/\D/g, "");
-    const denumire = get("denumire");
-    if (!cuiRaw || !denumire) {
+    const row = parseFirmLine(nonEmpty[i], delimiter, columnMap, options);
+    if (!row) {
       skipped++;
       continue;
     }
-    const adresa = get("adresa");
-    const judetRaw = get("judet");
-    const judet = judetRaw
-      ? normalizeCounty(judetRaw)
-      : (options.defaultCounty ?? extractCountyFromAddress(adresa));
-    rows.push({
-      cui: cuiRaw,
-      denumire,
-      adresa,
-      localitate: get("localitate") || extractLocalitate(adresa),
-      judet,
-      caen: get("caen"),
-      stare: get("stare"),
-    });
+    rows.push(row);
   }
 
   return {
@@ -224,6 +203,68 @@ export function parseFirmsFile(
     columnMap,
     headers,
   };
+}
+
+/**
+ * Parsează O linie de date cu delimitator + mapare de coloane cunoscute.
+ * Returnează null pentru linii invalide (fără CUI sau denumire).
+ * Folosită atât de parseFirmsFile cât și de procesarea incrementală R2.
+ */
+export function parseFirmLine(
+  line: string,
+  delimiter: string,
+  columnMap: Record<string, number>,
+  options: { defaultCounty?: string } = {},
+): RawFirmRow | null {
+  const cells = line.split(delimiter);
+  const get = (field: string): string => {
+    const idx = columnMap[field];
+    return idx !== undefined && idx < cells.length ? cells[idx].trim() : "";
+  };
+  const cuiRaw = get("cui").replace(/^RO/i, "").replace(/\D/g, "");
+  const denumire = get("denumire");
+  if (!cuiRaw || !denumire) return null;
+  const adresa = get("adresa");
+  const judetRaw = get("judet");
+  const judet = judetRaw
+    ? normalizeCounty(judetRaw)
+    : (options.defaultCounty ?? extractCountyFromAddress(adresa));
+  return {
+    cui: cuiRaw,
+    denumire,
+    adresa,
+    localitate: get("localitate") || extractLocalitate(adresa),
+    judet,
+    caen: get("caen"),
+    stare: get("stare"),
+  };
+}
+
+/**
+ * Detectează configurația de parsare (delimitator + mapare coloane + dacă
+ * prima linie e header) din primele linii ale fișierului.
+ * Folosită la începutul procesării incrementale — configurația se
+ * serializează în sync_state și se refolosește la fiecare chunk.
+ */
+export function detectParserConfig(firstLines: string[]): {
+  delimiter: string;
+  columnMap: Record<string, number>;
+  headerLines: number;
+} | null {
+  const nonEmpty = firstLines.filter((l) => l.trim() !== "");
+  if (nonEmpty.length === 0) return null;
+  const delimiter = detectDelimiter(nonEmpty);
+  for (let i = 0; i < Math.min(3, nonEmpty.length); i++) {
+    const cells = nonEmpty[i].split(delimiter).map((c) => c.trim());
+    const m = mapColumnsByHeader(cells);
+    if (m) return { delimiter, columnMap: m, headerLines: i + 1 };
+  }
+  for (let i = 0; i < Math.min(5, nonEmpty.length); i++) {
+    const cells = nonEmpty[i].split(delimiter).map((c) => c.trim());
+    const m = positionalMap(cells);
+    if (m) return { delimiter, columnMap: m, headerLines: 0 };
+  }
+  return null;
 }
 
 function extractCountyFromAddress(adresa: string): string {

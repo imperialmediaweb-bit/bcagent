@@ -19,6 +19,13 @@ export {
   normalizeCaen,
   normalizeCounty,
 } from "./caen";
-export { parseFirmsFile, isActiveByState } from "./parse";
+export {
+  parseFirmsFile,
+  isActiveByState,
+  parseFirmLine,
+  detectParserConfig,
+  detectDelimiter,
+  mapColumnsByHeader,
+} from "./parse";
 export { queryAnafBatch, ANAF_BATCH_SIZE } from "./anaf";
 export type { AnafFirmInfo } from "./anaf";
