@@ -17,6 +17,21 @@ export interface StreamImportResult {
   matched: number;
   /** Setat dacă fișierul nu a putut fi procesat. */
   error?: string;
+  /** Informații pentru depanare când potrivirile sunt 0/suspecte. */
+  diagnostic?: StreamDiagnostic;
+}
+
+export interface StreamDiagnostic {
+  delimiter: string;
+  columnMap: Record<string, number>;
+  /** Primele linii brute din fișier (trunchiate). */
+  firstLines: string[];
+  /** Top valori văzute în câmpul județ (după normalizare) cu frecvențe. */
+  countyTop: Array<[string, number]>;
+  /** Top valori văzute în câmpul CAEN (după normalizare) cu frecvențe. */
+  caenTop: Array<[string, number]>;
+  /** Primele rânduri parsate (cum le vede sistemul). */
+  sampleRows: RawFirmRow[];
 }
 
 export interface StreamImportOptions {
@@ -95,6 +110,26 @@ export async function streamImportFirms(
   let buffer: RawFirmRow[] = [];
   let configError: string | null = null;
 
+  // Diagnostic — colectat mereu, ieftin (doar contoare + primele mostre)
+  const firstLines: string[] = [];
+  const countyHist = new Map<string, number>();
+  const caenHist = new Map<string, number>();
+  const sampleRows: RawFirmRow[] = [];
+
+  const topOf = (m: Map<string, number>, n: number): Array<[string, number]> =>
+    Array.from(m.entries())
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, n);
+
+  const makeDiagnostic = (): StreamDiagnostic => ({
+    delimiter: delimiter ?? "?",
+    columnMap: columnMap ?? {},
+    firstLines: firstLines.slice(0, 3).map((l) => l.slice(0, 200)),
+    countyTop: topOf(countyHist, 10),
+    caenTop: topOf(caenHist, 10),
+    sampleRows: sampleRows.slice(0, 3),
+  });
+
   const flush = async (force: boolean) => {
     if (buffer.length === 0) return;
     if (!force && buffer.length < batchSize) return;
@@ -105,6 +140,7 @@ export async function streamImportFirms(
 
   const processLine = (line: string) => {
     if (!line.trim()) return;
+    if (firstLines.length < 3) firstLines.push(line);
     if (!delimiter || !columnMap) {
       bootstrap.push(line);
       if (bootstrap.length >= 10) initConfig();
@@ -113,13 +149,19 @@ export async function streamImportFirms(
     processed++;
     const row = parseFirmLine(line, delimiter, columnMap);
     if (!row) return;
+    if (sampleRows.length < 3) sampleRows.push(row);
+    // Histograme pentru diagnostic (mereu, foarte ieftin)
+    const cKey = row.judet || "(gol)";
+    countyHist.set(cKey, (countyHist.get(cKey) ?? 0) + 1);
+    const caenNorm = normalizeCaen(row.caen);
+    const kKey = caenNorm || "(gol)";
+    caenHist.set(kKey, (caenHist.get(kKey) ?? 0) + 1);
     // Filtre în ordinea costului: județ → CAEN → stare
     if (!row.judet || !counties.includes(row.judet)) return;
-    const caen = normalizeCaen(row.caen);
-    if (caen && !isTargetCaen(caen)) return;
+    if (caenNorm && !isTargetCaen(caenNorm)) return;
     if (!isActiveByState(row.stare)) return;
     matched++;
-    buffer.push({ ...row, caen });
+    buffer.push({ ...row, caen: caenNorm });
   };
 
   const initConfig = () => {
@@ -152,7 +194,7 @@ export async function streamImportFirms(
       for (const line of parts) {
         processLine(line);
         if (configError) {
-          return { processed, matched, error: configError };
+          return { processed, matched, error: configError, diagnostic: makeDiagnostic() };
         }
       }
       await flush(false);
@@ -166,12 +208,12 @@ export async function streamImportFirms(
       carry = "";
       initConfig();
       if (configError) {
-        return { processed, matched, error: configError };
+        return { processed, matched, error: configError, diagnostic: makeDiagnostic() };
       }
     }
     if (carry.trim()) processLine(carry);
     if (configError) {
-      return { processed, matched, error: configError };
+      return { processed, matched, error: configError, diagnostic: makeDiagnostic() };
     }
     await flush(true);
     options.onProgress?.(blob.size, blob.size, processed, matched);
@@ -184,8 +226,9 @@ export async function streamImportFirms(
       processed,
       matched,
       error: "Fișierul nu conține date recunoscibile (prea puține linii sau format necunoscut).",
+      diagnostic: makeDiagnostic(),
     };
   }
 
-  return { processed, matched };
+  return { processed, matched, diagnostic: makeDiagnostic() };
 }

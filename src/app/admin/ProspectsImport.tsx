@@ -5,6 +5,7 @@ import {
   normalizeCaen,
   streamImportFirms,
   type RawFirmRow,
+  type StreamDiagnostic,
 } from "@/modules/prospects";
 
 interface ImportStats {
@@ -25,6 +26,7 @@ export default function ProspectsImport({
   const [progressPct, setProgressPct] = useState<number | null>(null);
   const [enriching, setEnriching] = useState(false);
   const [enrichStatus, setEnrichStatus] = useState<string | null>(null);
+  const [diagnostic, setDiagnostic] = useState<StreamDiagnostic | null>(null);
 
   async function handleFile(file: File) {
     if (!adminSecret) {
@@ -78,14 +80,17 @@ export default function ProspectsImport({
 
       if (result.error) {
         setError(result.error);
+        setDiagnostic(result.diagnostic ?? null);
         return;
       }
       if (result.matched === 0) {
         setError(
-          `Fișier procesat (${result.processed.toLocaleString("ro-RO")} firme citite) dar nicio firmă din SV/BT cu profil alimentar/bar/tutun nu a fost găsită. Verifică dacă e fișierul potrivit — sau trimite-mi primele câteva linii din el.`,
+          `Fișier procesat (${result.processed.toLocaleString("ro-RO")} firme citite) dar nicio firmă din SV/BT cu profil alimentar/bar/tutun nu a fost găsită. Mai jos e ce vede sistemul în fișier — fă screenshot și trimite-l.`,
         );
+        setDiagnostic(result.diagnostic ?? null);
         return;
       }
+      setDiagnostic(null);
       setStats({
         totalLines: result.processed,
         matched: result.matched,
@@ -206,6 +211,66 @@ export default function ProspectsImport({
       {error && (
         <div className="mt-4 rounded-md bg-rose-50 px-4 py-3 text-sm text-rose-700">
           {error}
+        </div>
+      )}
+
+      {diagnostic && (
+        <div className="mt-4 space-y-3 rounded-lg border border-amber-200 bg-amber-50 p-4 text-xs text-amber-900">
+          <p className="text-sm font-semibold">
+            🔍 Ce vede sistemul în fișier (screenshot la asta):
+          </p>
+          <div>
+            <p className="font-medium">Delimitator: <code className="rounded bg-white px-1">{diagnostic.delimiter === "\t" ? "TAB" : diagnostic.delimiter}</code></p>
+            <p className="font-medium">
+              Coloane mapate:{" "}
+              <code className="rounded bg-white px-1">
+                {Object.entries(diagnostic.columnMap)
+                  .map(([k, v]) => `${k}→col${v + 1}`)
+                  .join(", ") || "(niciuna)"}
+              </code>
+            </p>
+          </div>
+          {diagnostic.firstLines.length > 0 && (
+            <div>
+              <p className="font-medium">Primele linii din fișier:</p>
+              <pre className="mt-1 overflow-x-auto rounded bg-white p-2 text-[10px] leading-relaxed">
+                {diagnostic.firstLines.join("\n")}
+              </pre>
+            </div>
+          )}
+          {diagnostic.countyTop.length > 0 && (
+            <div>
+              <p className="font-medium">Top valori „județ" văzute (după normalizare):</p>
+              <p className="mt-0.5 font-mono text-[11px]">
+                {diagnostic.countyTop
+                  .map(([v, n]) => `${v}: ${n.toLocaleString("ro-RO")}`)
+                  .join(" · ")}
+              </p>
+            </div>
+          )}
+          {diagnostic.caenTop.length > 0 && (
+            <div>
+              <p className="font-medium">Top valori CAEN văzute:</p>
+              <p className="mt-0.5 font-mono text-[11px]">
+                {diagnostic.caenTop
+                  .map(([v, n]) => `${v}: ${n.toLocaleString("ro-RO")}`)
+                  .join(" · ")}
+              </p>
+            </div>
+          )}
+          {diagnostic.sampleRows.length > 0 && (
+            <div>
+              <p className="font-medium">Primele rânduri cum le-a înțeles sistemul:</p>
+              <pre className="mt-1 overflow-x-auto rounded bg-white p-2 text-[10px] leading-relaxed">
+                {diagnostic.sampleRows
+                  .map(
+                    (r) =>
+                      `CUI=${r.cui} | denumire=${r.denumire.slice(0, 30)} | judet=${r.judet || "(gol)"} | caen=${r.caen || "(gol)"} | localitate=${r.localitate.slice(0, 20) || "(gol)"}`,
+                  )
+                  .join("\n")}
+              </pre>
+            </div>
+          )}
         </div>
       )}
 

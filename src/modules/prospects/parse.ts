@@ -11,6 +11,36 @@ import { normalizeCounty } from "./caen";
 
 const DELIMITERS = ["|", "^", "\t", ";", ","] as const;
 
+/**
+ * Împarte o linie pe delimitator respectând câmpurile între ghilimele
+ * (CSV standard: `"FIRMA X, SRL",123` → ["FIRMA X, SRL", "123"]).
+ * Fast-path fără ghilimele = split simplu.
+ */
+export function splitDelimited(line: string, delimiter: string): string[] {
+  if (!line.includes('"')) return line.split(delimiter);
+  const out: string[] = [];
+  let cur = "";
+  let inQuotes = false;
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i];
+    if (ch === '"') {
+      if (inQuotes && line[i + 1] === '"') {
+        cur += '"'; // ghilimele escapate ""
+        i++;
+      } else {
+        inQuotes = !inQuotes;
+      }
+    } else if (ch === delimiter && !inQuotes) {
+      out.push(cur);
+      cur = "";
+    } else {
+      cur += ch;
+    }
+  }
+  out.push(cur);
+  return out;
+}
+
 function normalizeHeader(s: string): string {
   return s
     .toLowerCase()
@@ -149,7 +179,7 @@ export function parseFirmsFile(
   let headerLineIdx = -1;
   let headers: string[] = [];
   for (let i = 0; i < Math.min(3, nonEmpty.length); i++) {
-    const cells = nonEmpty[i].split(delimiter).map((c) => c.trim());
+    const cells = splitDelimited(nonEmpty[i], delimiter).map((c) => c.trim());
     const m = mapColumnsByHeader(cells);
     if (m) {
       columnMap = m;
@@ -162,7 +192,7 @@ export function parseFirmsFile(
   // Fallback pozițional pe primul rând care arată a date
   if (!columnMap) {
     for (let i = 0; i < Math.min(5, nonEmpty.length); i++) {
-      const cells = nonEmpty[i].split(delimiter).map((c) => c.trim());
+      const cells = splitDelimited(nonEmpty[i], delimiter).map((c) => c.trim());
       const m = positionalMap(cells);
       if (m) {
         columnMap = m;
@@ -216,7 +246,7 @@ export function parseFirmLine(
   columnMap: Record<string, number>,
   options: { defaultCounty?: string } = {},
 ): RawFirmRow | null {
-  const cells = line.split(delimiter);
+  const cells = splitDelimited(line, delimiter);
   const get = (field: string): string => {
     const idx = columnMap[field];
     return idx !== undefined && idx < cells.length ? cells[idx].trim() : "";
@@ -255,12 +285,12 @@ export function detectParserConfig(firstLines: string[]): {
   if (nonEmpty.length === 0) return null;
   const delimiter = detectDelimiter(nonEmpty);
   for (let i = 0; i < Math.min(3, nonEmpty.length); i++) {
-    const cells = nonEmpty[i].split(delimiter).map((c) => c.trim());
+    const cells = splitDelimited(nonEmpty[i], delimiter).map((c) => c.trim());
     const m = mapColumnsByHeader(cells);
     if (m) return { delimiter, columnMap: m, headerLines: i + 1 };
   }
   for (let i = 0; i < Math.min(5, nonEmpty.length); i++) {
-    const cells = nonEmpty[i].split(delimiter).map((c) => c.trim());
+    const cells = splitDelimited(nonEmpty[i], delimiter).map((c) => c.trim());
     const m = positionalMap(cells);
     if (m) return { delimiter, columnMap: m, headerLines: 0 };
   }
