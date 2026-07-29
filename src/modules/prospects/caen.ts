@@ -67,6 +67,12 @@ export function normalizeCounty(judet: string): string {
     const n = parseInt(raw, 10);
     return COUNTY_NUMERIC[n] ?? raw;
   }
+  // Cod Registrul Comerțului: "J33" / "F33" / "C33" → 33 → SV
+  const jMatch = raw.match(/^[JFC](\d{1,2})$/i);
+  if (jMatch) {
+    const n = parseInt(jMatch[1], 10);
+    return COUNTY_NUMERIC[n] ?? raw.toUpperCase();
+  }
   if (/^[A-Za-z]{1,2}$/.test(raw)) return raw.toUpperCase();
   const lower = raw
     .toLowerCase()

@@ -15,6 +15,8 @@ export interface AnafFirmInfo {
   radiata: boolean;
   denumire?: string;
   adresa?: string;
+  /** Codul CAEN principal raportat de ANAF (4 cifre). */
+  caen?: string;
 }
 
 interface AnafResponseEntry {
@@ -22,6 +24,7 @@ interface AnafResponseEntry {
     cui?: number | string;
     denumire?: string;
     adresa?: string;
+    cod_CAEN?: string | number;
     statusRO_e_Factura?: boolean;
   };
   inregistrare_scop_Tva?: { scpTVA?: boolean };
@@ -69,6 +72,7 @@ export async function queryAnafBatch(
     if (!cui) continue;
     const inactiv = entry.stare_inactiv?.statusInactivi === true;
     const radiata = !!entry.stare_inactiv?.dataRadiere;
+    const caenRaw = String(entry.date_generale?.cod_CAEN ?? "").replace(/\D/g, "");
     result.set(cui, {
       cui,
       activ: !inactiv && !radiata,
@@ -76,6 +80,7 @@ export async function queryAnafBatch(
       radiata,
       denumire: entry.date_generale?.denumire,
       adresa: entry.date_generale?.adresa,
+      caen: caenRaw ? caenRaw.slice(0, 4) : undefined,
     });
   }
   return result;

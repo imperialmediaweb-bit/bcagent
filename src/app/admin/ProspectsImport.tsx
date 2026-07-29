@@ -117,7 +117,8 @@ export default function ProspectsImport({
     try {
       let totalProcessed = 0;
       let totalInactive = 0;
-      for (let i = 0; i < 30; i++) {
+      let totalWrongProfile = 0;
+      for (let i = 0; i < 60; i++) {
         const res = await fetch("/api/prospects/enrich", {
           method: "POST",
           headers: { "x-admin-secret": adminSecret },
@@ -129,18 +130,19 @@ export default function ProspectsImport({
         }
         totalProcessed += json.processed ?? 0;
         totalInactive += json.inactive ?? 0;
+        totalWrongProfile += json.wrongProfile ?? 0;
         if ((json.remaining ?? 0) === 0) {
           setEnrichStatus(
-            `Gata: ${totalProcessed} verificate, ${totalInactive} inactive marcate. Toate firmele sunt verificate ANAF.`,
+            `Gata: ${totalProcessed.toLocaleString("ro-RO")} verificate · ${totalWrongProfile.toLocaleString("ro-RO")} eliminate (alt profil decât alimentar/bar/tutun) · ${totalInactive.toLocaleString("ro-RO")} inactive. Lista de prospecți e curată.`,
           );
           return;
         }
         setEnrichStatus(
-          `${totalProcessed} verificate până acum, ${json.remaining} rămase...`,
+          `${totalProcessed.toLocaleString("ro-RO")} verificate · ${totalWrongProfile.toLocaleString("ro-RO")} alt profil eliminate · ${json.remaining.toLocaleString("ro-RO")} rămase...`,
         );
       }
       setEnrichStatus(
-        `${totalProcessed} verificate — mai apasă o dată pentru restul.`,
+        `${totalProcessed.toLocaleString("ro-RO")} verificate — mai apasă o dată pentru restul.`,
       );
     } catch (e) {
       setEnrichStatus(
@@ -170,10 +172,14 @@ export default function ProspectsImport({
           (merge și fișierul mare pe toată țara, ~400 MB)
         </li>
         <li>
-          Încarcă-l mai jos — se procesează direct în browser, nu pleacă
-          nicăieri; doar firmele din SV+BT ajung în baza ta
+          Încarcă-l mai jos — se procesează direct în browser; doar firmele
+          din SV+BT ajung în baza ta
         </li>
-        <li>Apasă „Verifică ANAF" ca să elimini firmele radiate/inactive</li>
+        <li>
+          Apasă „Verifică ANAF" — aduce codul CAEN al fiecărei firme și
+          păstrează DOAR alimentare/baruri/tutungerii active (fișierul MF nu
+          conține profilul firmei, ANAF da)
+        </li>
       </ol>
 
       <label className="mt-4 flex cursor-pointer flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed border-slate-300 px-4 py-8 text-center transition hover:border-indigo-400 hover:bg-indigo-50/30">

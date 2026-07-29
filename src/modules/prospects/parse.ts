@@ -59,7 +59,7 @@ const COLUMN_ALIASES: Record<keyof Omit<RawFirmRow, "stare">, string[]> & {
   adresa: ["adresa", "adresa completa", "adr", "domiciliul fiscal", "sediu", "strada"],
   localitate: ["localitate", "oras", "comuna", "loc"],
   judet: ["judet", "jud", "cod judet"],
-  caen: ["caen", "cod caen", "obiect de activitate", "cod activitate", "act"],
+  caen: ["caen", "cod caen", "obiect de activitate", "cod activitate"],
   stare: ["stare", "stare firma", "stare inregistrare", "status", "stare fiscala"],
 };
 
@@ -91,13 +91,19 @@ export function mapColumnsByHeader(
   const norm = headerCells.map(normalizeHeader);
   const map: Record<string, number> = {};
   for (const [field, aliases] of Object.entries(COLUMN_ALIASES)) {
-    const idx = norm.findIndex(
-      (h) =>
-        h.length > 0 &&
-        aliases.some(
-          (a) => h === a || (h.length >= 3 && (h.includes(a) || a.includes(h))),
-        ),
-    );
+    // Pasul 1: potrivire EXACTĂ — "judet" preferă coloana "JUDET",
+    // nu "JUDET_COMERT" aflată mai în stânga.
+    let idx = norm.findIndex((h) => h.length > 0 && aliases.includes(h));
+    // Pasul 2: fuzzy (substring) doar dacă nu există potrivire exactă
+    if (idx < 0) {
+      idx = norm.findIndex(
+        (h) =>
+          h.length >= 3 &&
+          aliases.some(
+            (a) => a.length >= 3 && (h.includes(a) || a.includes(h)),
+          ),
+      );
+    }
     if (idx >= 0) map[field] = idx;
   }
   // Minim necesar: cui + denumire

@@ -97,8 +97,25 @@ export async function streamImportFirms(
     };
   }
 
+  // Detecție encoding: fișierele MF vechi sunt Windows-1250 (diacritice
+  // românești legacy), nu UTF-8. Decodăm un eșantion ca UTF-8 și numărăm
+  // caracterele de înlocuire (U+FFFD) — dacă apar, comutăm pe windows-1250.
+  let encoding = "utf-8";
+  try {
+    const sample = await blob
+      .slice(0, Math.min(262144, blob.size))
+      .arrayBuffer();
+    const utf8Test = new TextDecoder("utf-8").decode(sample);
+    const badChars = (utf8Test.match(/�/g) ?? []).length;
+    if (badChars > 2) {
+      encoding = "windows-1250";
+    }
+  } catch {
+    // rămânem pe utf-8
+  }
+
   const reader = blob.stream().getReader();
-  const decoder = new TextDecoder("utf-8");
+  const decoder = new TextDecoder(encoding);
 
   let carry = "";
   let bytesRead = 0;
