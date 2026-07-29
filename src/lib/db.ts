@@ -47,6 +47,28 @@ export async function ensureSchema(): Promise<void> {
       agent_rates JSONB DEFAULT '{}'::jsonb,
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
+    -- Prospecți: firmele potențial-client din județele țintă.
+    -- org_id e nullable acum (F1); devine NOT NULL la multi-tenant (F2).
+    CREATE TABLE IF NOT EXISTS prospects (
+      cui TEXT PRIMARY KEY,
+      org_id TEXT,
+      denumire TEXT NOT NULL,
+      adresa TEXT DEFAULT '',
+      localitate TEXT DEFAULT '',
+      judet TEXT DEFAULT '',
+      caen TEXT DEFAULT '',
+      caen_desc TEXT DEFAULT '',
+      tva BOOLEAN,
+      activ BOOLEAN,
+      status TEXT NOT NULL DEFAULT 'nou',
+      note TEXT DEFAULT '',
+      assigned_agent TEXT DEFAULT '',
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS prospects_judet ON prospects(judet);
+    CREATE INDEX IF NOT EXISTS prospects_status ON prospects(status);
+    CREATE INDEX IF NOT EXISTS prospects_caen ON prospects(caen);
+    CREATE INDEX IF NOT EXISTS prospects_localitate ON prospects(localitate);
   `);
   schemaReady = true;
 }

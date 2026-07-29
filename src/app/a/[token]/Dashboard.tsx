@@ -68,6 +68,7 @@ import {
 import { generateSampleData } from "@/lib/sample-data";
 import { downloadCSV } from "@/lib/csv-export";
 import AIInsights from "./AIInsights";
+import Prospects from "./Prospects";
 
 const PALETTE = [
   "#6366f1",
@@ -1070,6 +1071,17 @@ export default function Dashboard({
               </section>
             </>
           )}
+
+          <section id="prospecti" className="scroll-mt fade-in">
+            <SectionTitle
+              icon={<Building2 className="h-5 w-5" />}
+              title="Prospecți"
+              subtitle="Firme potențial-client din Suceava și Botoșani — alimentare, baruri, tutungerii"
+            />
+            <div className="mt-4">
+              <Prospects token={token} agents={agents} />
+            </div>
+          </section>
         </main>
       </div>
     </div>
@@ -1113,6 +1125,7 @@ function Sidebar({
   const links = [
     { href: "#overview", label: "Privire ansamblu", icon: BarChart3 },
     { href: "#ai", label: "AI Insights", icon: Bot },
+    { href: "#prospecti", label: "Prospecți", icon: Building2 },
     { href: "#evolutie", label: "Evoluție", icon: LineChartIcon },
     { href: "#distribuire", label: "Distribuție", icon: PieChartIcon },
     { href: "#matrice", label: "Matrice brand", icon: Grid3X3 },
@@ -1153,21 +1166,25 @@ function Sidebar({
           </button>
         </div>
         <nav className="flex-1 space-y-1 overflow-y-auto px-3 py-4">
-          {links.map((l) => (
-            <a
-              key={l.href}
-              href={l.href}
-              onClick={onCloseMobile}
-              className={`flex items-center gap-3 rounded-md px-3 py-2.5 text-sm font-medium transition ${
-                hasData
-                  ? "text-slate-700 hover:bg-slate-100"
-                  : "pointer-events-none text-slate-400"
-              }`}
-            >
-              <l.icon className="h-4 w-4" />
-              {l.label}
-            </a>
-          ))}
+          {links.map((l) => {
+            // Prospecții sunt independenți de upload-ul XLS — mereu accesibili
+            const enabled = hasData || l.href === "#prospecti";
+            return (
+              <a
+                key={l.href}
+                href={l.href}
+                onClick={onCloseMobile}
+                className={`flex items-center gap-3 rounded-md px-3 py-2.5 text-sm font-medium transition ${
+                  enabled
+                    ? "text-slate-700 hover:bg-slate-100"
+                    : "pointer-events-none text-slate-400"
+                }`}
+              >
+                <l.icon className="h-4 w-4" />
+                {l.label}
+              </a>
+            );
+          })}
         </nav>
         <div className="border-t border-slate-200 p-4 text-xs text-slate-500">
           <p>Sales analytics</p>

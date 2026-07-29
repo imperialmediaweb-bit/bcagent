@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import ProspectsImport from "./ProspectsImport";
 
 interface IssueResponse {
   token: string;
@@ -293,6 +294,8 @@ export default function AdminPage() {
           </ul>
         </div>
       )}
+
+      <ProspectsImport adminSecret={adminSecret} />
 
       <p className="mt-6 text-xs text-slate-500">
         Pagina asta nu îți afișează panoul de agent — doar generează linkuri.
