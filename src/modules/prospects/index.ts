@@ -29,3 +29,5 @@ export {
 } from "./parse";
 export { queryAnafBatch, ANAF_BATCH_SIZE } from "./anaf";
 export type { AnafFirmInfo } from "./anaf";
+export { streamImportFirms } from "./stream";
+export type { StreamImportOptions, StreamImportResult } from "./stream";
