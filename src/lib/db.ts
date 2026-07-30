@@ -81,6 +81,22 @@ export async function ensureSchema(): Promise<void> {
     -- Coada de verificare ANAF (activ IS NULL) — index parțial, foarte mic
     CREATE INDEX IF NOT EXISTS prospects_pending_anaf ON prospects(cui)
       WHERE activ IS NULL;
+    -- Cache de geocodare per localitate (Nominatim, 1 req/s) — o localitate
+    -- se geocodează O dată, apoi harta o citește instant de aici.
+    CREATE TABLE IF NOT EXISTS geo_localitati (
+      judet TEXT NOT NULL,
+      localitate TEXT NOT NULL,
+      lat DOUBLE PRECISION,
+      lng DOUBLE PRECISION,
+      failed BOOLEAN NOT NULL DEFAULT FALSE,
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      PRIMARY KEY (judet, localitate)
+    );
+    -- Potrivire nume client (XLS) ↔ denumire firmă (MF): ambele părți se
+    -- normalizează identic, iar indexul face egalitatea instantă la 1,3M rânduri.
+    CREATE INDEX IF NOT EXISTS prospects_denumire_norm ON prospects (
+      btrim(upper(regexp_replace(denumire, '[^a-zA-Z0-9]+', ' ', 'g')))
+    );
     -- Progres procesare incrementală a fișierelor mari din R2 (dataset MF).
     CREATE TABLE IF NOT EXISTS sync_state (
       key TEXT PRIMARY KEY,

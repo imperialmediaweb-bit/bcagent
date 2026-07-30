@@ -18,6 +18,7 @@ import {
   Grid3X3,
   LineChart as LineChartIcon,
   LogOut,
+  Map as MapIcon,
   PieChart as PieChartIcon,
   Sparkles,
   Trophy,
@@ -69,6 +70,9 @@ import { generateSampleData } from "@/lib/sample-data";
 import { downloadCSV } from "@/lib/csv-export";
 import AIInsights from "./AIInsights";
 import Prospects from "./Prospects";
+import SmartPanel from "./SmartPanel";
+import MapPanel from "./MapPanel";
+import { smartAnalysis } from "@/modules/analytics/smart";
 
 const PALETTE = [
   "#6366f1",
@@ -508,6 +512,11 @@ export default function Dashboard({
 
   const agents = useMemo(() => distinctValues(rows, "agent"), [rows]);
   const producers = useMemo(() => distinctValues(rows, "producer"), [rows]);
+  const allClients = useMemo(() => distinctValues(rows, "client"), [rows]);
+  const smart = useMemo(
+    () => smartAnalysis(filtered, metric),
+    [filtered, metric],
+  );
 
   const aiSummary = useMemo(() => {
     if (filtered.length === 0) return null;
@@ -581,6 +590,34 @@ export default function Dashboard({
           note: a.note,
         })),
       },
+      // Analiza smart pre-calculată — AI-ul comentează, nu recalculează.
+      smart: smart
+        ? {
+            scoruriAgenti: smart.scores.map((s) => ({
+              agent: s.agent,
+              scor: s.score,
+              componente: s.components,
+              tendinta: s.trend,
+              tendintaPct: s.trendPct,
+            })),
+            alerteTendinte: smart.alerts.map((a) => a.note),
+            clientiAdormiti: smart.dormant.slice(0, 10).map((d) => ({
+              client: d.client,
+              agent: d.agent,
+              zileTacere: d.daysSince,
+              cadentaZile: d.expectedEveryDays,
+              istoric: metric === "value" ? d.value : d.volume,
+            })),
+            oportunitatiCos: smart.basket.slice(0, 10).map((b) => ({
+              client: b.client,
+              agent: b.agent,
+              are: b.has,
+              lipseste: b.missing,
+              adoptiePct: b.adoptionPct,
+              potentialLunar: b.estMetric,
+            })),
+          }
+        : null,
     };
   }, [
     filtered,
@@ -593,6 +630,7 @@ export default function Dashboard({
     ts.points,
     matrix,
     anomalies,
+    smart,
   ]);
 
   const hasData = rows.length > 0;
@@ -773,6 +811,30 @@ export default function Dashboard({
                   </div>
                 </section>
               )}
+
+              {smart && (
+                <section id="smart" className="scroll-mt fade-in">
+                  <SectionTitle
+                    icon={<Sparkles className="h-5 w-5" />}
+                    title="Analiză Smart"
+                    subtitle="Scor per agent, tendințe periculoase, clienți de reactivat și cross-sell — calculate instant din datele tale"
+                  />
+                  <div className="mt-4">
+                    <SmartPanel rows={filtered} metric={metric} />
+                  </div>
+                </section>
+              )}
+
+              <section id="harta" className="scroll-mt fade-in">
+                <SectionTitle
+                  icon={<MapIcon className="h-5 w-5" />}
+                  title="Harta pieței"
+                  subtitle="Unde ai clienți vs. unde există firme neacoperite (pete albe) — pe baza celor 1,3M firme active"
+                />
+                <div className="mt-4">
+                  <MapPanel token={token} clients={allClients} />
+                </div>
+              </section>
 
               <FiltersBar
                 showFilters={showFilters}
@@ -1125,6 +1187,8 @@ function Sidebar({
   const links = [
     { href: "#overview", label: "Privire ansamblu", icon: BarChart3 },
     { href: "#ai", label: "AI Insights", icon: Bot },
+    { href: "#smart", label: "Analiză Smart", icon: Sparkles },
+    { href: "#harta", label: "Harta pieței", icon: MapIcon },
     { href: "#prospecti", label: "Prospecți", icon: Building2 },
     { href: "#evolutie", label: "Evoluție", icon: LineChartIcon },
     { href: "#distribuire", label: "Distribuție", icon: PieChartIcon },

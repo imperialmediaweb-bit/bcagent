@@ -18,6 +18,7 @@ function safeMarkdown(text: string): string {
 }
 import {
   Bot,
+  CalendarClock,
   Loader2,
   RefreshCcw,
   Send,
@@ -84,9 +85,9 @@ interface ChatMessage {
 }
 
 const SUGGESTED_QUESTIONS = [
+  "Ce clienți risc să pierd și ce fac cu ei?",
   "Cine e cel mai slab agent și pe ce brand?",
-  "Ce branduri ar trebui să împinge mai mult fiecare agent?",
-  "Sunt clienți care reprezintă un risc de dependență?",
+  "Ce branduri ar trebui să împingă fiecare agent la ce clienți?",
   "Care e cea mai mare oportunitate de creștere?",
 ];
 
@@ -108,7 +109,7 @@ export default function AIInsights({
   const [chatError, setChatError] = useState<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
 
-  async function generateInsights() {
+  async function generateInsights(mode?: "briefing") {
     if (insightsLoading) return;
     setInsightsLoading(true);
     setInsights("");
@@ -117,7 +118,7 @@ export default function AIInsights({
       const res = await fetch("/api/insights", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ token, summary }),
+        body: JSON.stringify({ token, summary, mode }),
       });
       if (!res.ok || !res.body) {
         const errText = await res.text().catch(() => "");
@@ -255,19 +256,30 @@ export default function AIInsights({
               </p>
             </div>
           </div>
-          <button
-            type="button"
-            onClick={generateInsights}
-            disabled={insightsLoading}
-            className="inline-flex items-center gap-1.5 rounded-md bg-indigo-600 px-3 py-1.5 text-xs font-medium text-white shadow-sm transition hover:bg-indigo-700 disabled:opacity-60"
-          >
-            {insightsLoading ? (
-              <Loader2 className="h-3.5 w-3.5 animate-spin" />
-            ) : (
-              <Sparkles className="h-3.5 w-3.5" />
-            )}
-            {insights ? "Regenerează" : "Generează"}
-          </button>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={() => generateInsights("briefing")}
+              disabled={insightsLoading}
+              className="inline-flex items-center gap-1.5 rounded-md border border-indigo-200 bg-indigo-50 px-3 py-1.5 text-xs font-medium text-indigo-700 transition hover:bg-indigo-100 disabled:opacity-60"
+            >
+              <CalendarClock className="h-3.5 w-3.5" />
+              Briefing
+            </button>
+            <button
+              type="button"
+              onClick={() => generateInsights()}
+              disabled={insightsLoading}
+              className="inline-flex items-center gap-1.5 rounded-md bg-indigo-600 px-3 py-1.5 text-xs font-medium text-white shadow-sm transition hover:bg-indigo-700 disabled:opacity-60"
+            >
+              {insightsLoading ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <Sparkles className="h-3.5 w-3.5" />
+              )}
+              {insights ? "Regenerează" : "Generează"}
+            </button>
+          </div>
         </div>
 
         <div className="mt-4 flex-1">

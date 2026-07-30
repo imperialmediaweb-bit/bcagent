@@ -38,9 +38,13 @@ export async function POST(req: Request) {
     );
   }
 
-  let body: { token?: string; summary?: unknown };
+  let body: { token?: string; summary?: unknown; mode?: string };
   try {
-    body = (await req.json()) as { token?: string; summary?: unknown };
+    body = (await req.json()) as {
+      token?: string;
+      summary?: unknown;
+      mode?: string;
+    };
   } catch {
     return Response.json({ error: "Invalid JSON" }, { status: 400 });
   }
@@ -60,13 +64,24 @@ export async function POST(req: Request) {
     );
   }
 
+  const instructions =
+    body.mode === "briefing"
+      ? `Scrie BRIEFINGUL SĂPTĂMÂNAL pentru șeful firmei de distribuție, în markdown:
+
+## Briefing
+Exact 5 fraze scurte: ce a mers, ce a scăzut, vedeta perioadei, cel mai mare risc, cea mai mare oportunitate. Folosește cifre concrete din date (mai ales din secțiunea "smart": scoruri, alerte, clienți adormiți, oportunități de coș).
+
+## 3 acțiuni pentru săptămâna asta
+Exact 3 acțiuni concrete, fiecare cu numele agentului responsabil și clientul/brandul vizat. Fără generalități — doar lucruri care se pot face luni dimineața.`
+      : `Generează o analiză concisă în format markdown (## Privire generală / ## Observații / ## Recomandări), maxim 200 cuvinte total. Dacă există secțiunea "smart" în date (scoruri, alerte, clienți adormiți, cross-sell), folosește-o — acolo e miezul. Mergi direct la concluzii, fără preambul.`;
+
   const userPrompt = `Date agregate pentru agentul **${payload.agentName}** (ID: ${payload.agentId}):
 
 \`\`\`json
 ${JSON.stringify(body.summary, null, 2)}
 \`\`\`
 
-Generează o analiză concisă în format markdown (## Privire generală / ## Observații / ## Recomandări), maxim 200 cuvinte total. Mergi direct la concluzii, fără preambul.`;
+${instructions}`;
 
   const encoder = new TextEncoder();
   const readable = new ReadableStream({
