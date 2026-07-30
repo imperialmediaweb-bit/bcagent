@@ -7,6 +7,7 @@ import ReportIssue from "@/app/ReportIssue";
 import {
   Building2,
   ClipboardList,
+  FileText,
   LayoutDashboard,
   LogOut,
   Menu,
@@ -23,6 +24,7 @@ import {
 
 const NAV = [
   { href: "/agentie", label: "Dashboard", icon: LayoutDashboard },
+  { href: "/agentie/raport", label: "Raportul săpt.", icon: FileText },
   { href: "/agentie/vanzari", label: "Vânzări", icon: TrendingUp },
   { href: "/agentie/comenzi", label: "Comenzi", icon: ShoppingCart },
   { href: "/agentie/targete", label: "Targeturi", icon: Target },
