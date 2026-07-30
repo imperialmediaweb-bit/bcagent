@@ -49,10 +49,19 @@ export async function GET(req: Request) {
   const url = new URL(req.url);
   const judet = url.searchParams.get("judet") ?? "";
   const localitate = url.searchParams.get("localitate") ?? "";
-  const caen = url.searchParams.get("caen") ?? "";
+  // `caen` = prefix (47 → tot comerțul cu amănuntul; 4711 → exact)
+  const caen = (url.searchParams.get("caen") ?? "").replace(/\D/g, "").slice(0, 4);
+  // `caenIn` = listă de coduri/prefixe separate prin virgulă (presetări domeniu)
+  const caenIn = (url.searchParams.get("caenIn") ?? "")
+    .split(",")
+    .map((s) => s.replace(/\D/g, "").slice(0, 4))
+    .filter((s) => s.length >= 2)
+    .slice(0, 40);
   const status = url.searchParams.get("status") ?? "";
   const search = url.searchParams.get("search") ?? "";
   const agent = url.searchParams.get("agent") ?? "";
+  const onlyActive = url.searchParams.get("onlyActive") === "1";
+  const onlyTva = url.searchParams.get("onlyTva") === "1";
   const limit = Math.min(
     500,
     Math.max(1, parseInt(url.searchParams.get("limit") ?? "100", 10) || 100),
@@ -64,27 +73,35 @@ export async function GET(req: Request) {
 
   try {
     await ensureSchema();
+
+    // Filtrul e construit o singură dată și refolosit la listă + count.
+    // caen/caenIn funcționează pe PREFIX: "47" prinde tot 47xx, "4711" exact.
+    const caenPattern = caen ? `${caen}%` : "";
+    const caenInPatterns = caenIn.map((c) => `${c}%`);
+    // Fragment construit proaspăt la fiecare folosire (postgres.js nu
+    // garantează reutilizarea aceluiași fragment în două interogări).
+    const buildWhere = () => db`
+      WHERE (${judet} = '' OR judet = ${judet})
+        AND (${localitate} = '' OR localitate ILIKE ${"%" + localitate + "%"})
+        AND (${caenPattern} = '' OR caen LIKE ${caenPattern})
+        AND (${caenInPatterns.length === 0} OR caen LIKE ANY(${caenInPatterns}))
+        AND (${status} = '' OR status = ${status})
+        AND (${agent} = '' OR assigned_agent = ${agent})
+        AND (${!onlyActive} OR activ IS TRUE)
+        AND (${!onlyTva} OR tva IS TRUE)
+        AND (${search} = '' OR denumire ILIKE ${"%" + search + "%"} OR cui LIKE ${search + "%"} OR adresa ILIKE ${"%" + search + "%"})
+    `;
+
     const rows = await db<ProspectRow[]>`
       SELECT cui, denumire, adresa, localitate, judet, caen, caen_desc,
              tva, activ, status, note, assigned_agent, updated_at
       FROM prospects
-      WHERE (${judet} = '' OR judet = ${judet})
-        AND (${localitate} = '' OR localitate ILIKE ${"%" + localitate + "%"})
-        AND (${caen} = '' OR caen = ${caen})
-        AND (${status} = '' OR status = ${status})
-        AND (${agent} = '' OR assigned_agent = ${agent})
-        AND (${search} = '' OR denumire ILIKE ${"%" + search + "%"} OR cui LIKE ${"%" + search + "%"} OR adresa ILIKE ${"%" + search + "%"})
+      ${buildWhere()}
       ORDER BY denumire ASC
       LIMIT ${limit} OFFSET ${offset}
     `;
     const [{ count }] = await db<[{ count: string }]>`
-      SELECT COUNT(*)::text AS count FROM prospects
-      WHERE (${judet} = '' OR judet = ${judet})
-        AND (${localitate} = '' OR localitate ILIKE ${"%" + localitate + "%"})
-        AND (${caen} = '' OR caen = ${caen})
-        AND (${status} = '' OR status = ${status})
-        AND (${agent} = '' OR assigned_agent = ${agent})
-        AND (${search} = '' OR denumire ILIKE ${"%" + search + "%"} OR cui LIKE ${"%" + search + "%"} OR adresa ILIKE ${"%" + search + "%"})
+      SELECT COUNT(*)::text AS count FROM prospects ${buildWhere()}
     `;
     const [funnel] = await db<
       [{ total: string; contactati: string; clienti: string }]

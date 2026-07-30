@@ -49,6 +49,10 @@ async function main() {
   const t0 = Date.now();
   const result = await streamImportFirms(blob, {
     batchSize: 1500,
+    // Filtrele sunt acum EXPLICITE — implicit se importă tot (platformă
+    // multi-domeniu). Testul verifică comportamentul cu filtre active.
+    counties: ["SV", "BT"],
+    caens: ["4711", "5630", "4726"],
     onProgress: () => {
       progressCalls++;
     },
@@ -121,6 +125,8 @@ async function main() {
   ]);
   const smallRows: RawFirmRow[] = [];
   const rSmall = await streamImportFirms(small, {
+    counties: ["SV", "BT"],
+    caens: ["4711", "5630"],
     onBatch: async (rows) => {
       smallRows.push(...rows);
     },
@@ -136,6 +142,20 @@ async function main() {
     onBatch: async () => {},
   });
   check("fișier gol → eroare explicativă, no crash", !!rEmpty.error);
+
+  // Comportament IMPLICIT (fără filtre) = importă tot ce e activ
+  let noFilterCount = 0;
+  const rNoFilter = await streamImportFirms(blob, {
+    onBatch: async (rows) => {
+      noFilterCount += rows.length;
+    },
+  });
+  const activeRows = ROWS - Math.floor((ROWS - 1) / 97) - 1;
+  check(
+    "implicit (fără filtre) = toate firmele active, toate județele/domeniile",
+    rNoFilter.matched === noFilterCount && noFilterCount > expectedMatch * 2,
+    `(${noFilterCount.toLocaleString()} din ~${activeRows.toLocaleString()} active)`,
+  );
 
   console.log("\n" + "=".repeat(60));
   console.log(ok ? "✅ STREAMING LOCAL CORECT" : "❌ TESTE EȘUATE");

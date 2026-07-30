@@ -14,8 +14,12 @@ export {
   TARGET_CAEN,
   CORE_CAEN,
   TARGET_COUNTIES,
+  CAEN_DIVISIONS,
+  COUNTY_LIST,
   isTargetCaen,
   caenDescription,
+  caenLabel,
+  countyName,
   normalizeCaen,
   normalizeCounty,
 } from "./caen";

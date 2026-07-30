@@ -70,6 +70,7 @@ async function main() {
 
   const rows: RawFirmRow[] = [];
   const result = await streamImportFirms(blob, {
+    counties: ["SV", "BT"],
     onBatch: async (r) => {
       rows.push(...r);
     },

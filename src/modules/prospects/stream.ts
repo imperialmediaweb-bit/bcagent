@@ -1,6 +1,6 @@
 import type { RawFirmRow } from "./types";
 import { detectParserConfig, isActiveByState, parseFirmLine } from "./parse";
-import { isTargetCaen, normalizeCaen, TARGET_COUNTIES } from "./caen";
+import { normalizeCaen } from "./caen";
 
 /**
  * Procesare streaming a unui fișier MF de ORICE mărime, direct în browser
@@ -37,8 +37,19 @@ export interface StreamDiagnostic {
 export interface StreamImportOptions {
   /** Câte potriviri se acumulează înainte de a chema onBatch. Default 1500. */
   batchSize?: number;
-  /** Județele acceptate. Default TARGET_COUNTIES (SV, BT). */
+  /**
+   * Județele acceptate. `undefined` sau listă goală = TOATE județele
+   * (platforma servește agenți din toată țara).
+   */
   counties?: string[];
+  /**
+   * Coduri CAEN acceptate (4 cifre). `undefined` = orice domeniu.
+   * Notă: fișierul MF NU conține CAEN — filtrul are efect doar pe fișiere
+   * care includ coloana; profilul real vine de la ANAF, ulterior.
+   */
+  caens?: string[];
+  /** Exclude firmele radiate/lichidate din fișier. Default true. */
+  skipInactive?: boolean;
   /** Progres: bytes citiți / total, linii procesate, potriviri. */
   onProgress?: (
     bytesRead: number,
@@ -75,7 +86,12 @@ export async function streamImportFirms(
   options: StreamImportOptions,
 ): Promise<StreamImportResult> {
   const batchSize = options.batchSize ?? 1500;
-  const counties = options.counties ?? TARGET_COUNTIES;
+  // Listă goală / lipsă = fără filtru (toate județele, toate domeniile)
+  const counties =
+    options.counties && options.counties.length > 0 ? options.counties : null;
+  const caens =
+    options.caens && options.caens.length > 0 ? options.caens : null;
+  const skipInactive = options.skipInactive !== false;
 
   // Detecție binar pe primii 8 bytes
   const head = new Uint8Array(await blob.slice(0, 8).arrayBuffer());
@@ -178,10 +194,11 @@ export async function streamImportFirms(
     const caenNorm = normalizeCaen(row.caen);
     const kKey = caenNorm || "(gol)";
     caenHist.set(kKey, (caenHist.get(kKey) ?? 0) + 1);
-    // Filtre în ordinea costului: județ → CAEN → stare
-    if (!row.judet || !counties.includes(row.judet)) return;
-    if (caenNorm && !isTargetCaen(caenNorm)) return;
-    if (!isActiveByState(row.stare)) return;
+    // Filtre în ordinea costului: județ → CAEN → stare.
+    // Fără filtre configurate, TOT ce e parsabil intră în bază.
+    if (counties && (!row.judet || !counties.includes(row.judet))) return;
+    if (caens && caenNorm && !caens.includes(caenNorm)) return;
+    if (skipInactive && !isActiveByState(row.stare)) return;
     matched++;
     buffer.push({ ...row, caen: caenNorm });
   };

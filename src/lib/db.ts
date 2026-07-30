@@ -69,6 +69,11 @@ export async function ensureSchema(): Promise<void> {
     CREATE INDEX IF NOT EXISTS prospects_status ON prospects(status);
     CREATE INDEX IF NOT EXISTS prospects_caen ON prospects(caen);
     CREATE INDEX IF NOT EXISTS prospects_localitate ON prospects(localitate);
+    -- Index compus pentru filtrarea uzuală (județ + domeniu) la 1M+ rânduri
+    CREATE INDEX IF NOT EXISTS prospects_judet_caen ON prospects(judet, caen);
+    -- Coada de verificare ANAF (activ IS NULL) — index parțial, foarte mic
+    CREATE INDEX IF NOT EXISTS prospects_pending_anaf ON prospects(cui)
+      WHERE activ IS NULL;
     -- Progres procesare incrementală a fișierelor mari din R2 (dataset MF).
     CREATE TABLE IF NOT EXISTS sync_state (
       key TEXT PRIMARY KEY,
@@ -84,5 +89,23 @@ export async function ensureSchema(): Promise<void> {
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
   `);
+
+  // Căutare rapidă după nume la 1M+ rânduri (ILIKE '%x%' fără index e lent).
+  // pg_trgm poate lipsi pe unele instanțe — eșecul nu blochează aplicația.
+  try {
+    await db.unsafe(`
+      CREATE EXTENSION IF NOT EXISTS pg_trgm;
+      CREATE INDEX IF NOT EXISTS prospects_denumire_trgm
+        ON prospects USING gin (denumire gin_trgm_ops);
+      CREATE INDEX IF NOT EXISTS prospects_localitate_trgm
+        ON prospects USING gin (localitate gin_trgm_ops);
+    `);
+  } catch (e) {
+    console.warn(
+      "[db] pg_trgm indisponibil — căutarea după nume va fi mai lentă:",
+      e instanceof Error ? e.message : e,
+    );
+  }
+
   schemaReady = true;
 }

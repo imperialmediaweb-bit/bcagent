@@ -45,6 +45,8 @@ async function main() {
   }
   const rows: RawFirmRow[] = [];
   const result = await streamImportFirms(new Blob([lines.join("\n")]), {
+    counties: ["SV", "BT"],
+    caens: ["4711", "5630"],
     onBatch: async (r) => {
       rows.push(...r);
     },
