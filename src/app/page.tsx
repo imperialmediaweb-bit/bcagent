@@ -301,8 +301,8 @@ export default function HomePage() {
         .route-anim { stroke-dasharray: 14 10; animation: dashmove 6s linear infinite; }
         @keyframes drive { 0% { offset-distance: 0%; } 100% { offset-distance: 100%; } }
         .truck { offset-path: path('M 20 150 C 120 40, 240 240, 360 120 S 560 60, 660 160'); animation: drive 9s ease-in-out infinite alternate; }
-        @keyframes inkshift { 0%,100% { background-position: 0% 50%; } 50% { background-position: 100% 50%; } }
-        .inkshift { background: linear-gradient(90deg, #ff4d00, #ffb800, #0b5d3b, #ff4d00); background-size: 300% 100%; animation: inkshift 7s ease infinite; -webkit-background-clip: text; background-clip: text; color: transparent; }
+        @keyframes inkshift { to { background-position: -200% 50%; } }
+        .inkshift { background: linear-gradient(90deg, #00c2ff, #6a5cff, #ff2daa, #ff6a00, #ffd23f, #00c2ff); background-size: 200% 100%; animation: inkshift 6s linear infinite; -webkit-background-clip: text; background-clip: text; color: transparent; }
         @keyframes wobble { 0%,100% { transform: rotate(-3deg); } 50% { transform: rotate(2deg); } }
         .wobble { animation: wobble 5s ease-in-out infinite; transform-origin: top center; }
         @keyframes floaty2 { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-12px); } }
@@ -400,10 +400,10 @@ export default function HomePage() {
             </Reveal>
             <Reveal delay={200}>
               <p className="mt-6 max-w-lg text-lg leading-relaxed text-[#161412]/75">
-                Harta cu <strong>1,3 milioane de firme</strong>, comenzi care
-                zboară din teren la depozit și un <strong>antrenor AI</strong>{" "}
-                pentru fiecare agent. Caietele, Drive-ul și telefoanele date —
-                înlocuite de un singur link.
+                Concurentul tău încă își sună agenții să-i întrebe pe unde
+                umblă. Tu vezi tot: <strong>1,3 milioane de firme</strong> pe
+                hartă, comenzile care zboară din teren direct la depozit și un{" "}
+                <strong>antrenor AI</strong> în buzunarul fiecărui agent.
               </p>
             </Reveal>
             <Reveal delay={300}>
@@ -422,6 +422,9 @@ export default function HomePage() {
                   Am deja cont <ArrowUpRight className="h-4 w-4" />
                 </Link>
               </div>
+              <p className="mt-4 text-sm font-semibold text-[#161412]/50">
+                Pornit în 10 minute · fără card · primul agent pe teren azi
+              </p>
             </Reveal>
           </div>
 
