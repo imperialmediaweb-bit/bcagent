@@ -325,11 +325,19 @@ const PLANS = [
 /* ─────────────────────────────── pagina ───────────────────────────── */
 
 export default function HomePage() {
-  // PWA instalat: sare direct în panoul agentului vizitat ultima dată.
+  // Redirect automat DOAR în aplicația instalată (PWA standalone) — acolo
+  // agentul vrea direct panoul lui. În browser normal landing-ul rămâne
+  // vizibil, cu un banner „Continuă unde ai rămas" dacă există un panou.
+  const [lastLink, setLastLink] = useState<string | null>(null);
   useEffect(() => {
     try {
       const last = localStorage.getItem("bcagent:lastLink");
-      if (last && last.startsWith("/a/")) window.location.replace(last);
+      if (!last || !last.startsWith("/a/")) return;
+      const standalone =
+        window.matchMedia("(display-mode: standalone)").matches ||
+        (navigator as unknown as { standalone?: boolean }).standalone === true;
+      if (standalone) window.location.replace(last);
+      else setLastLink(last);
     } catch {
       // fără localStorage — rămânem pe landing
     }
@@ -896,6 +904,33 @@ export default function HomePage() {
           </Link>
         </div>
       </footer>
+
+      {lastLink && (
+        <div className="fixed bottom-4 left-1/2 z-[1400] w-[calc(100%-2rem)] max-w-md -translate-x-1/2">
+          <div
+            className="flex items-center justify-between gap-3 rounded-2xl border-2 border-[#161412] bg-[#ffd23f] px-4 py-3"
+            style={{ boxShadow: "4px 4px 0 #161412" }}
+          >
+            <p className="text-sm font-bold">Ai un panou deschis pe acest telefon.</p>
+            <div className="flex shrink-0 items-center gap-2">
+              <a
+                href={lastLink}
+                className="rounded-lg border-2 border-[#161412] bg-[#161412] px-3 py-1.5 text-sm font-black text-white"
+              >
+                Continuă →
+              </a>
+              <button
+                type="button"
+                onClick={() => setLastLink(null)}
+                aria-label="Închide"
+                className="text-lg font-black text-[#161412]/50 hover:text-[#161412]"
+              >
+                ✕
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
