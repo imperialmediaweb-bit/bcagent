@@ -85,6 +85,15 @@ export default function CoachPanel({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [listening, setListening] = useState(false);
+  // Cum răspunde Antrenorul: doar scris (implicit) sau scris + citit cu voce.
+  const [voiceReply, setVoiceReply] = useState(false);
+  useEffect(() => {
+    try {
+      setVoiceReply(localStorage.getItem("bcagent:coach-voice") === "1");
+    } catch {
+      // fără localStorage — rămâne pe scris
+    }
+  }, []);
   const recRef = useRef<SpeechRecognitionLike | null>(null);
   const fileRef = useRef<HTMLInputElement | null>(null);
   const scrollRef = useRef<HTMLDivElement | null>(null);
@@ -140,6 +149,8 @@ export default function CoachPanel({
           return copy;
         });
       }
+      // Răspunsul rămâne mereu SCRIS în chat; vocea e doar în plus, la cerere.
+      if (voiceReply && acc) speak(acc);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
       setMessages((m) => m.slice(0, -1));
@@ -246,6 +257,29 @@ export default function CoachPanel({
             }`}
           >
             🎭 Simulare client
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              const next = !voiceReply;
+              setVoiceReply(next);
+              if (!next && typeof window !== "undefined") {
+                window.speechSynthesis?.cancel();
+              }
+              try {
+                localStorage.setItem("bcagent:coach-voice", next ? "1" : "0");
+              } catch {
+                // fără persistență — merge doar pe sesiunea curentă
+              }
+            }}
+            className={`rounded-full px-2.5 py-1 text-xs font-medium ${
+              voiceReply
+                ? "bg-emerald-100 text-emerald-800"
+                : "text-slate-500 hover:bg-slate-100"
+            }`}
+            title="Răspunsul rămâne mereu scris; cu asta pornită îl și citește cu voce"
+          >
+            {voiceReply ? "🔊 și voce" : "✍ doar scris"}
           </button>
           {messages.length > 0 && (
             <button

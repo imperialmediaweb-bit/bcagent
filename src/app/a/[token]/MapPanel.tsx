@@ -25,6 +25,7 @@ import {
   countyName,
 } from "@/modules/prospects";
 import OrderModal from "./OrderModal";
+import MicButton from "./MicButton";
 
 const fmt = (n: number) =>
   new Intl.NumberFormat("ro-RO", { maximumFractionDigits: 0 }).format(n);
@@ -1064,12 +1065,18 @@ function VisitButtons({
           </button>
         ))}
       </div>
-      <input
-        value={note}
-        onChange={(e) => setNote(e.target.value)}
-        placeholder="Notă (opțional): revin marți, cere ofertă..."
-        className="mt-1.5 w-full rounded-md border border-slate-200 bg-white px-2 py-1.5 text-xs focus:border-indigo-400 focus:outline-none"
-      />
+      <div className="mt-1.5 flex items-center gap-1.5">
+        <input
+          value={note}
+          onChange={(e) => setNote(e.target.value)}
+          placeholder="Notă: zici sau scrii — rămâne salvată la client"
+          className="min-w-0 flex-1 rounded-md border border-slate-200 bg-white px-2 py-1.5 text-xs focus:border-indigo-400 focus:outline-none"
+        />
+        <MicButton
+          size={3}
+          onText={(t) => setNote((n) => (n ? `${n} ${t}` : t))}
+        />
+      </div>
       <button
         type="button"
         onClick={onCancel}

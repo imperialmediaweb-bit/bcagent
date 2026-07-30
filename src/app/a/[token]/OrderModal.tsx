@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Plus, ShoppingCart, Trash2 } from "lucide-react";
+import MicButton from "./MicButton";
 
 /**
  * Comanda din teren: agentul o bate la client în 30 de secunde.
@@ -226,12 +227,15 @@ export default function OrderModal({
           <Plus className="h-4 w-4" /> Mai adaugă un produs
         </button>
 
-        <input
-          value={note}
-          onChange={(e) => setNote(e.target.value)}
-          placeholder="Notă (opțional): livrare joi, plata la termen..."
-          className="mt-3 w-full rounded-md border border-slate-200 px-3 py-2 text-sm focus:border-emerald-400 focus:outline-none"
-        />
+        <div className="mt-3 flex items-center gap-1.5">
+          <input
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+            placeholder="Notă (opțional): livrare joi, plata la termen..."
+            className="min-w-0 flex-1 rounded-md border border-slate-200 px-3 py-2 text-sm focus:border-emerald-400 focus:outline-none"
+          />
+          <MicButton onText={(t) => setNote((n) => (n ? `${n} ${t}` : t))} />
+        </div>
 
         {total !== null && validLines.length > 0 && (
           <p className="mt-2 text-right text-sm font-semibold text-slate-800">
