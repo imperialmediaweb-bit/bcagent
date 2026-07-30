@@ -2,21 +2,26 @@ import { ensureSchema, getDB, isDBEnabled } from "@/lib/db";
 import { clientIP, rateLimit } from "@/lib/rate-limit";
 import { signToken } from "@/lib/signed-token";
 import {
+  DEMO_MANAGER_EMAIL,
+  DEMO_ORG_NAME,
+  DEMO_OWNER_EMAIL,
   ORG_SESSION_TTL_SECONDS,
+  ensurePlatformSchema,
+  seedDemoOrg,
   setOrgSessionCookie,
 } from "@/modules/platform";
 
 export const runtime = "nodejs";
-
-const DEMO_ORG = "Demo Distribuție SRL";
+export const maxDuration = 60;
 
 /**
  * „Vezi DEMO" de pe pagina de login — intră instant în firma demo:
  *   ?rol=patron  → contul de patron (vede tot, inclusiv salarii)
  *   ?rol=manager → contul de manager (implicit)
  *   ?rol=agent   → panoul de teren al unui agent (link semnat, 24h)
- * Firma demo se creează/reface de admin din /platform/setari.
- * GET cu redirect — merge dintr-un simplu link.
+ * Dacă firma demo nu există încă, se creează AUTOMAT la prima apăsare
+ * (același seed ca butonul din /platform/setari). GET cu redirect —
+ * merge dintr-un simplu link.
  */
 export async function GET(req: Request) {
   if (!isDBEnabled()) {
@@ -37,25 +42,31 @@ export async function GET(req: Request) {
 
   try {
     await ensureSchema();
+    await ensurePlatformSchema();
+
+    // Firma demo nu există? O construim pe loc (idempotent, ~2s).
+    const orgExists = await db<Array<{ id: string }>>`
+      SELECT id FROM organizations WHERE name = ${DEMO_ORG_NAME} LIMIT 1
+    `;
+    if (orgExists.length === 0) {
+      await seedDemoOrg(url.origin);
+    }
 
     if (rol === "agent") {
       const secret = process.env.TOKEN_SECRET;
       if (!secret) {
-        return Response.json({ error: "Demo indisponibil" }, { status: 503 });
+        return Response.json({ error: "TOKEN_SECRET lipsește" }, { status: 503 });
       }
       const agents = await db<Array<{ agent_id: string; name: string }>>`
         SELECT a.agent_id, a.name
         FROM org_agents a
         JOIN organizations o ON o.id = a.org_id
-        WHERE o.name = ${DEMO_ORG} AND a.active
+        WHERE o.name = ${DEMO_ORG_NAME} AND a.active
         ORDER BY a.agent_id
         LIMIT 1
       `;
       if (agents.length === 0) {
-        return Response.json(
-          { error: "Firma demo nu există încă — se creează din /platform/setari." },
-          { status: 404 },
-        );
+        return Response.json({ error: "Firma demo nu are agenți" }, { status: 404 });
       }
       const token = await signToken(
         {
@@ -68,22 +79,18 @@ export async function GET(req: Request) {
       return Response.redirect(new URL(`/a/${token}`, req.url), 302);
     }
 
-    const email =
-      rol === "patron" ? "demo@bcagent.ro" : "manager.demo@bcagent.ro";
+    const email = rol === "patron" ? DEMO_OWNER_EMAIL : DEMO_MANAGER_EMAIL;
     const rows = await db<
       Array<{ id: string; org_id: string; email: string; name: string; role: string }>
     >`
       SELECT u.id, u.org_id, u.email, u.name, u.role
       FROM org_users u
       JOIN organizations o ON o.id = u.org_id
-      WHERE o.name = ${DEMO_ORG} AND u.email = ${email} AND u.active
+      WHERE o.name = ${DEMO_ORG_NAME} AND u.email = ${email} AND u.active
       LIMIT 1
     `;
     if (rows.length === 0) {
-      return Response.json(
-        { error: "Firma demo nu există încă — se creează din /platform/setari." },
-        { status: 404 },
-      );
+      return Response.json({ error: "Contul demo lipsește" }, { status: 404 });
     }
     const u = rows[0];
     await setOrgSessionCookie({
@@ -97,6 +104,7 @@ export async function GET(req: Request) {
     return Response.redirect(new URL("/agentie", req.url), 302);
   } catch (e) {
     console.error("[demo-login]", e);
-    return Response.json({ error: "Eroare la demo" }, { status: 500 });
+    const msg = e instanceof Error ? e.message : "necunoscută";
+    return Response.json({ error: `Eroare la demo: ${msg}` }, { status: 500 });
   }
 }

@@ -29,6 +29,13 @@ export {
 } from "./session";
 export { ensurePlatformSchema } from "./schema";
 export {
+  seedDemoOrg,
+  DEMO_ORG_NAME,
+  DEMO_OWNER_EMAIL,
+  DEMO_MANAGER_EMAIL,
+} from "./demo-seed";
+export type { DemoSeedResult } from "./demo-seed";
+export {
   signOrgSession,
   verifyOrgSession,
   setOrgSessionCookie,
