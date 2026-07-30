@@ -42,8 +42,12 @@ Răspunsul conține `url` — trimite-l agentului. Linkul are forma `/a/<token>`
    Opțional:
    ```
    OPENAI_MODEL            = gpt-4o     # sau gpt-4o-mini, gpt-4.1
-   ANTHROPIC_API_KEY       = sk-ant-... # dacă vrei și Claude
-   AI_PROVIDER             = openai     # forțează unul anume
+   ANTHROPIC_API_KEY       = sk-ant-... # Claude — implicit pentru Antrenor (coach)
+   GEMINI_API_KEY          = ...        # Gemini — implicit pentru pozele de la raft
+   AI_PROVIDER             = openai     # forțează unul anume global
+   AI_PROVIDER_ANALIZA     = openai     # sau per sarcină: rapoarte/insights
+   AI_PROVIDER_COACH       = anthropic  #   antrenorul de vânzări (logică)
+   AI_PROVIDER_VISION      = gemini     #   analiza pozelor de la stand
    SESSION_SECRET          = <random>   # sesiuni super-admin (fallback: TOKEN_SECRET)
    PLATFORM_ADMIN_EMAIL    = adresa@ta.ro       # bootstrap /platform
    PLATFORM_ADMIN_PASSWORD = <parolă lungă>

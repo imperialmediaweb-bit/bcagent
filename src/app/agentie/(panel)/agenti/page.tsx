@@ -42,6 +42,7 @@ export default function AgentiPage() {
   const [showNew, setShowNew] = useState(false);
   const [awayFor, setAwayFor] = useState<AgentRow | null>(null);
   const [salaryFor, setSalaryFor] = useState<AgentRow | null>(null);
+  const [evalFor, setEvalFor] = useState<AgentRow | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -142,6 +143,9 @@ export default function AgentiPage() {
                 </dl>
 
                 <div className="mt-3 flex flex-wrap gap-2">
+                  <Button variant="secondary" onClick={() => setEvalFor(a)}>
+                    🎓 Evaluare AI
+                  </Button>
                   <Button variant="secondary" onClick={() => setAwayFor(a)}>
                     🏖 Concediu
                   </Button>
@@ -214,7 +218,89 @@ export default function AgentiPage() {
         onClose={() => setSalaryFor(null)}
         onDone={load}
       />
+      <EvalModal agent={evalFor} onClose={() => setEvalFor(null)} />
     </div>
+  );
+}
+
+/** Evaluarea AI a agentului: analiza logică din datele lui reale. */
+function EvalModal({
+  agent,
+  onClose,
+}: {
+  agent: { agentId: string; name: string } | null;
+  onClose: () => void;
+}) {
+  const [text, setText] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!agent) return;
+    setText("");
+    setError(null);
+    setBusy(true);
+    const controller = new AbortController();
+    (async () => {
+      try {
+        const res = await fetch("/api/agentie/coach", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          signal: controller.signal,
+          body: JSON.stringify({ agentId: agent.agentId }),
+        });
+        if (!res.ok || !res.body) {
+          const data = (await res.json().catch(() => null)) as {
+            error?: string;
+          } | null;
+          setError(data?.error ?? `Eroare ${res.status}`);
+          return;
+        }
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+        let acc = "";
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          acc += decoder.decode(value, { stream: true });
+          setText(acc);
+        }
+      } catch (e) {
+        if ((e as { name?: string })?.name !== "AbortError") {
+          setError(e instanceof Error ? e.message : String(e));
+        }
+      } finally {
+        setBusy(false);
+      }
+    })();
+    return () => controller.abort();
+  }, [agent]);
+
+  return (
+    <Modal
+      open={!!agent}
+      onClose={onClose}
+      title={`🎓 Evaluare AI — ${agent?.name ?? ""}`}
+      wide
+    >
+      {error && <Alert>{error}</Alert>}
+      {busy && !text && (
+        <p className="flex items-center gap-2 text-sm text-slate-500">
+          <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-slate-300 border-t-transparent" />
+          Analizez vizitele, conversiile, comenzile și targetul...
+        </p>
+      )}
+      {text && (
+        <div className="prose-ai whitespace-pre-wrap text-sm text-slate-700">
+          {text}
+        </div>
+      )}
+      <div className="mt-4 flex justify-end">
+        <Button variant="secondary" onClick={onClose}>
+          Închide
+        </Button>
+      </div>
+    </Modal>
   );
 }
 

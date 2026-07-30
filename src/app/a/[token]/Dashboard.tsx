@@ -74,6 +74,7 @@ import SmartPanel from "./SmartPanel";
 import MapPanel from "./MapPanel";
 import ImportClients from "./ImportClients";
 import { TargetPanel, ExpensesPanel } from "./AgentExtras";
+import CoachPanel from "./CoachPanel";
 import { smartAnalysis } from "@/modules/analytics/smart";
 
 const PALETTE = [
@@ -874,6 +875,17 @@ export default function Dashboard({
                 </div>
               </section>
 
+              <section id="antrenor" className="scroll-mt fade-in">
+                <SectionTitle
+                  icon={<Bot className="h-5 w-5" />}
+                  title="Antrenorul meu"
+                  subtitle="Coach AI care îți știe cifrele: sfaturi la obiecții, poze la stand, simulare de client, planul tău de dezvoltare"
+                />
+                <div className="mt-4">
+                  <CoachPanel token={token} summary={aiSummary} enabled={aiEnabled} />
+                </div>
+              </section>
+
               <section id="obiective" className="scroll-mt fade-in">
                 <SectionTitle
                   icon={<Trophy className="h-5 w-5" />}
@@ -1242,6 +1254,7 @@ function Sidebar({
     { href: "#ai", label: "AI Insights", icon: Bot },
     { href: "#smart", label: "Analiză Smart", icon: Sparkles },
     { href: "#harta", label: "Harta pieței", icon: MapIcon },
+    { href: "#antrenor", label: "Antrenorul meu", icon: Bot },
     { href: "#obiective", label: "Target & decont", icon: Trophy },
     { href: "#prospecti", label: "Prospecți", icon: Building2 },
     { href: "#evolutie", label: "Evoluție", icon: LineChartIcon },
