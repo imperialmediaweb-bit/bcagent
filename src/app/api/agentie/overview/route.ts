@@ -1,4 +1,4 @@
-import { isDBEnabled, getDB } from "@/lib/db";
+import { ensureSchema, isDBEnabled, getDB } from "@/lib/db";
 import { getOrg, listOrgAgents, requireOrgUser } from "@/modules/platform";
 
 export const runtime = "nodejs";
@@ -19,6 +19,7 @@ export async function GET() {
   if (!db) return Response.json({ enabled: false }, { status: 503 });
 
   try {
+    await ensureSchema();
     const [org, agents] = await Promise.all([getOrg(orgId), listOrgAgents(orgId)]);
     if (!org) return Response.json({ error: "Organizația nu există" }, { status: 404 });
     const agentIds = agents.map((a) => a.agentId);

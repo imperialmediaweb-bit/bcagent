@@ -1,4 +1,4 @@
-import { isDBEnabled, getDB } from "@/lib/db";
+import { ensureSchema, isDBEnabled, getDB } from "@/lib/db";
 import { audit, listOrgAgents, requireOrgUser } from "@/modules/platform";
 
 export const runtime = "nodejs";
@@ -17,6 +17,7 @@ export async function POST(req: Request) {
 
   let body: { fromAgent?: string; toAgent?: string; deactivate?: boolean };
   try {
+    await ensureSchema();
     body = await req.json();
   } catch {
     return Response.json({ error: "Invalid JSON" }, { status: 400 });
@@ -33,6 +34,7 @@ export async function POST(req: Request) {
   const db = getDB();
   if (!db) return Response.json({ enabled: false }, { status: 503 });
   try {
+    await ensureSchema();
     const orgId = auth.session.orgId;
     // Ambii agenți trebuie să fie ai organizației — nu muți portofolii străine.
     const agents = await listOrgAgents(orgId);

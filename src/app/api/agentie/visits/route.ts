@@ -1,4 +1,4 @@
-import { isDBEnabled, getDB } from "@/lib/db";
+import { ensureSchema, isDBEnabled, getDB } from "@/lib/db";
 import { listOrgAgents, requireOrgUser } from "@/modules/platform";
 
 export const runtime = "nodejs";
@@ -26,6 +26,7 @@ export async function GET(req: Request) {
   const offset = Math.max(0, parseInt(url.searchParams.get("offset") ?? "0", 10) || 0);
 
   try {
+    await ensureSchema();
     const agents = await listOrgAgents(auth.session.orgId);
     const ids = agents.map((a) => a.agentId);
     // Filtrul de agent trebuie să fie DIN organizație — altfel ignorat.

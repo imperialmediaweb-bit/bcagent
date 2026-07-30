@@ -28,7 +28,12 @@ export default function OrderModal({
   onSent,
 }: {
   token: string;
-  firm: { cui: string; denumire: string; localitate: string } | null;
+  firm: {
+    cui: string;
+    denumire: string;
+    localitate: string;
+    soldCents?: number | null;
+  } | null;
   onClose: () => void;
   onSent: (msg: string) => void;
 }) {
@@ -147,6 +152,16 @@ export default function OrderModal({
             ✕
           </button>
         </div>
+
+        {firm.soldCents !== undefined &&
+          firm.soldCents !== null &&
+          firm.soldCents > 0 && (
+            <p className="mb-3 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm font-medium text-rose-700">
+              ⚠ Clientul are restanță de plată:{" "}
+              {(firm.soldCents / 100).toLocaleString("ro-RO")} RON — verifică
+              înainte să iei comanda nouă.
+            </p>
+          )}
 
         <div className="space-y-2">
           {lines.map((l, i) => (

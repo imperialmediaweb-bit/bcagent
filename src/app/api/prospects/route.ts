@@ -36,6 +36,7 @@ interface ProspectRow {
   telefon: string;
   email: string;
   contact: string;
+  sold_cents: string | null;
   updated_at: Date;
 }
 
@@ -107,6 +108,7 @@ export async function GET(req: Request) {
              COALESCE(telefon, '') AS telefon,
              COALESCE(email, '') AS email,
              COALESCE(contact, '') AS contact,
+             sold_cents::text AS sold_cents,
              updated_at
       FROM prospects
       ${buildWhere()}
@@ -148,6 +150,7 @@ export async function GET(req: Request) {
         telefon: r.telefon,
         email: r.email,
         contact: r.contact,
+        soldCents: r.sold_cents ? parseInt(r.sold_cents, 10) : null,
         updatedAt: r.updated_at.toISOString(),
       })),
     });

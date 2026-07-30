@@ -1,4 +1,4 @@
-import { isDBEnabled, getDB } from "@/lib/db";
+import { ensureSchema, isDBEnabled, getDB } from "@/lib/db";
 import { signToken } from "@/lib/signed-token";
 import {
   addOrgAgent,
@@ -23,6 +23,7 @@ export async function GET() {
   if (!db) return Response.json({ enabled: false }, { status: 503 });
 
   try {
+    await ensureSchema();
     const agents = await listOrgAgents(auth.session.orgId);
     const ids = agents.map((a) => a.agentId);
     const names = agents.map((a) => a.name);
@@ -77,6 +78,7 @@ export async function POST(req: Request) {
 
   let body: { agentId?: string; agentName?: string; ttlDays?: number };
   try {
+    await ensureSchema();
     body = await req.json();
   } catch {
     return Response.json({ error: "Invalid JSON" }, { status: 400 });
@@ -89,6 +91,7 @@ export async function POST(req: Request) {
   const ttlDays = Math.min(365, Math.max(1, Number(body.ttlDays) || 30));
 
   try {
+    await ensureSchema();
     const orgId = auth.session.orgId;
     const org = await getOrg(orgId);
     if (!org) return Response.json({ error: "Organizația nu există" }, { status: 404 });
@@ -144,6 +147,7 @@ export async function PATCH(req: Request) {
     commissionPct?: number | null;
   };
   try {
+    await ensureSchema();
     body = await req.json();
   } catch {
     return Response.json({ error: "Invalid JSON" }, { status: 400 });
@@ -154,6 +158,7 @@ export async function PATCH(req: Request) {
   const db = getDB();
   if (!db) return Response.json({ enabled: false }, { status: 503 });
   try {
+    await ensureSchema();
     const orgId = auth.session.orgId;
 
     if (typeof body.active === "boolean") {

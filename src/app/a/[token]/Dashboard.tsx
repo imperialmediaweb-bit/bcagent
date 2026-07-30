@@ -73,6 +73,7 @@ import Prospects from "./Prospects";
 import SmartPanel from "./SmartPanel";
 import MapPanel from "./MapPanel";
 import ImportClients from "./ImportClients";
+import { TargetPanel, ExpensesPanel } from "./AgentExtras";
 import { smartAnalysis } from "@/modules/analytics/smart";
 
 const PALETTE = [
@@ -873,6 +874,18 @@ export default function Dashboard({
                 </div>
               </section>
 
+              <section id="obiective" className="scroll-mt fade-in">
+                <SectionTitle
+                  icon={<Trophy className="h-5 w-5" />}
+                  title="Target & decont"
+                  subtitle="Progresul tău față de targetul lunii, clasamentul echipei și decontul de cheltuieli"
+                />
+                <div className="mt-4 grid gap-6 lg:grid-cols-2">
+                  <TargetPanel token={token} />
+                  <ExpensesPanel token={token} />
+                </div>
+              </section>
+
               <FiltersBar
                 showFilters={showFilters}
                 onToggle={() => setShowFilters((v) => !v)}
@@ -1229,6 +1242,7 @@ function Sidebar({
     { href: "#ai", label: "AI Insights", icon: Bot },
     { href: "#smart", label: "Analiză Smart", icon: Sparkles },
     { href: "#harta", label: "Harta pieței", icon: MapIcon },
+    { href: "#obiective", label: "Target & decont", icon: Trophy },
     { href: "#prospecti", label: "Prospecți", icon: Building2 },
     { href: "#evolutie", label: "Evoluție", icon: LineChartIcon },
     { href: "#distribuire", label: "Distribuție", icon: PieChartIcon },

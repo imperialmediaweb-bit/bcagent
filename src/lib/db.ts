@@ -104,6 +104,33 @@ export async function ensureSchema(): Promise<void> {
     );
     CREATE INDEX IF NOT EXISTS visits_agent ON visits(agent_id, visited_at DESC);
     CREATE INDEX IF NOT EXISTS visits_cui ON visits(cui, visited_at DESC);
+    -- Targeturi lunare per agent (setate de agenție; realizatul se
+    -- calculează din vânzările încărcate).
+    CREATE TABLE IF NOT EXISTS targets (
+      org_id TEXT NOT NULL,
+      agent_name TEXT NOT NULL,
+      month TEXT NOT NULL,
+      target_value REAL NOT NULL DEFAULT 0,
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      PRIMARY KEY (org_id, agent_name, month)
+    );
+    -- Decontul agenților: motorină, diurnă etc. — aprobat de manager.
+    CREATE TABLE IF NOT EXISTS expenses (
+      id TEXT PRIMARY KEY,
+      agent_id TEXT NOT NULL,
+      agent_name TEXT NOT NULL DEFAULT '',
+      spent_on DATE NOT NULL,
+      category TEXT NOT NULL DEFAULT 'alte',
+      amount_cents INTEGER NOT NULL,
+      note TEXT NOT NULL DEFAULT '',
+      status TEXT NOT NULL DEFAULT 'in_asteptare',
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS expenses_agent ON expenses(agent_id, spent_on DESC);
+    -- Solduri/restanțe clienți (importate din SAGA) — direct pe firmă.
+    ALTER TABLE prospects ADD COLUMN IF NOT EXISTS sold_cents BIGINT;
+    ALTER TABLE prospects ADD COLUMN IF NOT EXISTS sold_updated_at TIMESTAMPTZ;
     -- Comenzile luate din teren: agentul le bate pe telefon la client,
     -- depozitul le vede instant, contabila le exportă pentru SAGA.
     CREATE TABLE IF NOT EXISTS orders (

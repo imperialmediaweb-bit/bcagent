@@ -1,4 +1,4 @@
-import { isDBEnabled, getDB } from "@/lib/db";
+import { ensureSchema, isDBEnabled, getDB } from "@/lib/db";
 import { audit, listOrgAgents, requireOrgUser } from "@/modules/platform";
 
 export const runtime = "nodejs";
@@ -51,6 +51,7 @@ export async function GET(req: Request) {
   const wantCsv = url.searchParams.get("export") === "csv";
 
   try {
+    await ensureSchema();
     const agents = await listOrgAgents(auth.session.orgId);
     const ids = agents.map((a) => a.agentId);
     const scoped = agentId && ids.includes(agentId) ? [agentId] : ids;
@@ -143,6 +144,7 @@ export async function PATCH(req: Request) {
 
   let body: { id?: string; status?: string };
   try {
+    await ensureSchema();
     body = await req.json();
   } catch {
     return Response.json({ error: "Invalid JSON" }, { status: 400 });
@@ -156,6 +158,7 @@ export async function PATCH(req: Request) {
   const db = getDB();
   if (!db) return Response.json({ enabled: false }, { status: 503 });
   try {
+    await ensureSchema();
     // Doar comenzile agenților propriei organizații.
     const agents = await listOrgAgents(auth.session.orgId);
     const ids = agents.map((a) => a.agentId);

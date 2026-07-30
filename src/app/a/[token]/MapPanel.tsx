@@ -54,6 +54,7 @@ interface Firm {
   caen: string;
   status: string;
   telefon: string;
+  soldCents: number | null;
 }
 
 interface Stop {
@@ -954,6 +955,11 @@ function LocalityFirms({
                       {f.status === "respins" && (
                         <span className="shrink-0 rounded-full bg-rose-50 px-1.5 py-0.5 text-[10px] font-medium text-rose-600 ring-1 ring-inset ring-rose-200">
                           nu vrea
+                        </span>
+                      )}
+                      {f.soldCents !== null && f.soldCents > 0 && (
+                        <span className="shrink-0 rounded-full bg-rose-600 px-1.5 py-0.5 text-[10px] font-semibold text-white">
+                          restanță {fmt(f.soldCents / 100)} RON
                         </span>
                       )}
                     </p>
