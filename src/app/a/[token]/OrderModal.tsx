@@ -42,6 +42,26 @@ export default function OrderModal({
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // VAN SALES: la firmele de van agentul vinde marfa pe loc, din mașină —
+  // preferința rămâne salvată, nu o alege la fiecare client.
+  const [tip, setTip] = useState<"comanda" | "van">("comanda");
+  const [plata, setPlata] = useState<"numerar" | "card" | "termen">("numerar");
+  useEffect(() => {
+    try {
+      const t = localStorage.getItem("bcagent:order-tip");
+      if (t === "van" || t === "comanda") setTip(t);
+    } catch {
+      // fără localStorage — rămâne comanda
+    }
+  }, []);
+  function switchTip(t: "comanda" | "van") {
+    setTip(t);
+    try {
+      localStorage.setItem("bcagent:order-tip", t);
+    } catch {
+      // nimic
+    }
+  }
 
   // Draft local: dacă pică semnalul în magazin, comanda nu se pierde.
   useEffect(() => {
@@ -103,6 +123,8 @@ export default function OrderModal({
           denumire: firm!.denumire,
           localitate: firm!.localitate,
           note,
+          tip,
+          plata: tip === "van" ? plata : "",
           lines: validLines.map((l) => ({
             produs: l.produs.trim(),
             cantitate: parseFloat(l.cantitate),
@@ -121,7 +143,11 @@ export default function OrderModal({
       } catch {
         // nimic
       }
-      onSent(`Comandă trimisă la depozit ✓ (${validLines.length} produse)`);
+      onSent(
+        tip === "van"
+          ? `Vânzare din mașină salvată ✓ — încasat ${plata}, stocul din dubă s-a scăzut`
+          : `Comandă trimisă la depozit ✓ (${validLines.length} produse)`,
+      );
       onClose();
     } catch {
       setError("Fără semnal — comanda rămâne salvată local, reîncearcă.");
@@ -138,7 +164,7 @@ export default function OrderModal({
           <div className="min-w-0">
             <h3 className="flex items-center gap-2 text-base font-semibold text-slate-900">
               <ShoppingCart className="h-4 w-4 text-emerald-600" />
-              Comandă nouă
+              {tip === "van" ? "Vânzare din mașină" : "Comandă nouă"}
             </h3>
             <p className="truncate text-xs text-slate-500">
               {firm.denumire} · {firm.localitate}
@@ -151,6 +177,31 @@ export default function OrderModal({
             aria-label="Închide"
           >
             ✕
+          </button>
+        </div>
+
+        <div className="mb-3 grid grid-cols-2 gap-1.5 rounded-xl bg-slate-100 p-1">
+          <button
+            type="button"
+            onClick={() => switchTip("comanda")}
+            className={`rounded-lg px-2 py-2 text-sm font-semibold transition ${
+              tip === "comanda"
+                ? "bg-white text-slate-900 shadow-sm"
+                : "text-slate-500"
+            }`}
+          >
+            📦 Comandă la depozit
+          </button>
+          <button
+            type="button"
+            onClick={() => switchTip("van")}
+            className={`rounded-lg px-2 py-2 text-sm font-semibold transition ${
+              tip === "van"
+                ? "bg-white text-slate-900 shadow-sm"
+                : "text-slate-500"
+            }`}
+          >
+            🚐 Vând pe loc (van)
           </button>
         </div>
 
@@ -237,9 +288,35 @@ export default function OrderModal({
           <MicButton onText={(t) => setNote((n) => (n ? `${n} ${t}` : t))} />
         </div>
 
+        {tip === "van" && (
+          <div className="mt-3 flex items-center gap-1.5">
+            <span className="text-xs font-medium text-slate-500">Încasat:</span>
+            {(["numerar", "card", "termen"] as const).map((p) => (
+              <button
+                key={p}
+                type="button"
+                onClick={() => setPlata(p)}
+                className={`rounded-full px-3 py-1.5 text-xs font-semibold ring-1 ring-inset transition ${
+                  plata === p
+                    ? "bg-emerald-600 text-white ring-emerald-600"
+                    : "bg-white text-slate-600 ring-slate-200"
+                }`}
+              >
+                {p === "numerar" ? "💵 numerar" : p === "card" ? "💳 card" : "📆 la termen"}
+              </button>
+            ))}
+          </div>
+        )}
+
         {total !== null && validLines.length > 0 && (
           <p className="mt-2 text-right text-sm font-semibold text-slate-800">
             Total: {total.toLocaleString("ro-RO", { maximumFractionDigits: 2 })} RON
+          </p>
+        )}
+        {tip === "van" && validLines.length > 0 && total === null && (
+          <p className="mt-2 rounded-md bg-amber-50 px-3 py-2 text-xs font-medium text-amber-700">
+            La vânzarea pe loc pune prețul pe fiecare produs — e suma pe care
+            o încasezi acum.
           </p>
         )}
 
@@ -251,13 +328,19 @@ export default function OrderModal({
 
         <button
           type="button"
-          disabled={busy || validLines.length === 0}
+          disabled={
+            busy ||
+            validLines.length === 0 ||
+            (tip === "van" && total === null)
+          }
           onClick={send}
           className="mt-4 w-full rounded-lg bg-emerald-600 px-4 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-700 disabled:opacity-50"
         >
           {busy
-            ? "Se trimite..."
-            : `Trimite comanda la depozit (${validLines.length} produse)`}
+            ? "Se salvează..."
+            : tip === "van"
+              ? `Încasează ${total !== null ? total.toLocaleString("ro-RO", { maximumFractionDigits: 2 }) + " RON " : ""}și salvează`
+              : `Trimite comanda la depozit (${validLines.length} produse)`}
         </button>
       </div>
     </div>

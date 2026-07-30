@@ -164,6 +164,20 @@ export async function ensureSchema(): Promise<void> {
     );
     CREATE INDEX IF NOT EXISTS orders_agent ON orders(agent_id, created_at DESC);
     CREATE INDEX IF NOT EXISTS orders_status ON orders(status, created_at DESC);
+    -- VAN SALES: agentul vinde marfa pe loc, din mașină (tip='van',
+    -- status direct 'livrata') și încasează (plata: numerar/card/termen).
+    ALTER TABLE orders ADD COLUMN IF NOT EXISTS tip TEXT NOT NULL DEFAULT 'comanda';
+    ALTER TABLE orders ADD COLUMN IF NOT EXISTS plata TEXT NOT NULL DEFAULT '';
+    -- Stocul din mașina fiecărui agent: se încarcă dimineața, scade la
+    -- fiecare vânzare van, se descarcă la retur.
+    CREATE TABLE IF NOT EXISTS van_stock (
+      agent_id TEXT NOT NULL,
+      produs TEXT NOT NULL,
+      um TEXT NOT NULL DEFAULT 'buc',
+      cantitate REAL NOT NULL DEFAULT 0,
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      PRIMARY KEY (agent_id, produs)
+    );
     -- Cache de geocodare per localitate (Nominatim, 1 req/s) — o localitate
     -- se geocodează O dată, apoi harta o citește instant de aici.
     CREATE TABLE IF NOT EXISTS geo_localitati (

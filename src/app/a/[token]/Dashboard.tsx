@@ -76,6 +76,7 @@ import ImportClients from "./ImportClients";
 import { TargetPanel, ExpensesPanel } from "./AgentExtras";
 import CoachPanel from "./CoachPanel";
 import DayPanel from "./DayPanel";
+import VanPanel from "./VanPanel";
 import ReportIssue from "@/app/ReportIssue";
 import { smartAnalysis } from "@/modules/analytics/smart";
 
@@ -716,6 +717,7 @@ export default function Dashboard({
 
         <main className="mx-auto max-w-7xl space-y-8 px-4 py-8 sm:px-6 lg:px-8">
           <DayPanel token={token} />
+          <VanPanel token={token} />
           <Hero
             agentName={agentName}
             hasData={hasData}

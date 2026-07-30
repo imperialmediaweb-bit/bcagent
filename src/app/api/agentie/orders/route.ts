@@ -30,6 +30,8 @@ interface OrderRow {
   status: string;
   total_value: number | null;
   created_at: Date;
+  tip: string;
+  plata: string;
 }
 
 export async function GET(req: Request) {
@@ -43,6 +45,7 @@ export async function GET(req: Request) {
 
   const url = new URL(req.url);
   const status = url.searchParams.get("status") ?? "";
+  const tip = url.searchParams.get("tip") ?? "";
   const agentId = url.searchParams.get("agent") ?? "";
   const days = Math.min(
     365,
@@ -60,6 +63,7 @@ export async function GET(req: Request) {
       SELECT * FROM orders
       WHERE agent_id = ANY(${scoped.length ? scoped : [""]})
         AND (${status} = '' OR status = ${status})
+        AND (${tip} = '' OR tip = ${tip})
         AND created_at >= NOW() - (${days} || ' days')::interval
       ORDER BY created_at DESC
       LIMIT ${wantCsv ? 5000 : 300}
@@ -69,7 +73,7 @@ export async function GET(req: Request) {
       // O linie CSV per produs — formatul pe care îl înghite orice
       // gestiune (SAGA import / Excel): separator ; și BOM pentru diacritice.
       const head =
-        "Data;Ora;Agent;Client;CUI;Localitate;Produs;Cantitate;UM;Pret;Valoare;Status;Nota\n";
+        "Data;Ora;Agent;Client;CUI;Localitate;Produs;Cantitate;UM;Pret;Valoare;Status;Tip;Plata;Nota\n";
       const body = rows
         .flatMap((r) =>
           (r.lines ?? []).map((l) =>
@@ -86,6 +90,8 @@ export async function GET(req: Request) {
               l.pret ?? "",
               l.pret !== null ? (l.cantitate * l.pret).toFixed(2) : "",
               r.status,
+              r.tip === "van" ? "van (pe loc)" : "comanda",
+              r.plata,
               r.note.replace(/[\r\n;]+/g, " "),
             ]
               .map((v) => String(v).replace(/;/g, ","))
@@ -126,6 +132,8 @@ export async function GET(req: Request) {
         status: r.status,
         totalValue: r.total_value,
         createdAt: r.created_at.toISOString(),
+        tip: r.tip,
+        plata: r.plata,
       })),
     });
   } catch (e) {

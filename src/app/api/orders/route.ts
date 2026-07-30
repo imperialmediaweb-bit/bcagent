@@ -56,6 +56,8 @@ export async function POST(req: Request) {
     localitate?: string;
     lines?: unknown;
     note?: string;
+    tip?: string;
+    plata?: string;
   };
   try {
     body = await req.json();
@@ -79,7 +81,26 @@ export async function POST(req: Request) {
     return Response.json({ error: "Numele clientului lipsește" }, { status: 400 });
   }
 
+  // VAN SALES: vânzare pe loc, din mașină — marfa se predă și se
+  // încasează la client, deci comanda intră direct „livrata" și scade
+  // stocul din dubă.
+  const isVan = body.tip === "van";
+  const plata = ["numerar", "card", "termen"].includes(String(body.plata))
+    ? String(body.plata)
+    : "";
+  if (isVan && !plata) {
+    return Response.json(
+      { error: "Alege cum s-a încasat: numerar, card sau termen" },
+      { status: 400 },
+    );
+  }
   const hasPrices = lines.every((l) => l.pret !== null);
+  if (isVan && !hasPrices) {
+    return Response.json(
+      { error: "La vânzarea din mașină pune prețul pe fiecare produs" },
+      { status: 400 },
+    );
+  }
   const total = hasPrices
     ? lines.reduce((s, l) => s + l.cantitate * (l.pret ?? 0), 0)
     : null;
@@ -91,13 +112,29 @@ export async function POST(req: Request) {
     const id = `ord_${crypto.randomUUID().replace(/-/g, "").slice(0, 16)}`;
     await db`
       INSERT INTO orders (id, agent_id, agent_name, cui, denumire, localitate,
-                          lines, note, total_value)
+                          lines, note, total_value, tip, plata, status)
       VALUES (${id}, ${payload.agentId}, ${payload.agentName},
               ${String(body.cui ?? "").replace(/\D/g, "").slice(0, 12)},
               ${denumire}, ${String(body.localitate ?? "").slice(0, 120)},
               ${db.json(lines as unknown as Parameters<typeof db.json>[0])},
-              ${String(body.note ?? "").slice(0, 1000)}, ${total})
+              ${String(body.note ?? "").slice(0, 1000)}, ${total},
+              ${isVan ? "van" : "comanda"}, ${plata},
+              ${isVan ? "livrata" : "noua"})
     `;
+    if (isVan) {
+      // Scădem stocul din mașină (potrivire pe nume, indiferent de
+      // majuscule/spații). Dacă produsul nu e în stoc, vânzarea NU se
+      // blochează — agentul știe mai bine ce are în dubă decât aplicația.
+      for (const l of lines) {
+        await db`
+          UPDATE van_stock
+          SET cantitate = GREATEST(0, cantitate - ${l.cantitate}),
+              updated_at = NOW()
+          WHERE agent_id = ${payload.agentId}
+            AND lower(btrim(produs)) = ${l.produs.toLowerCase().trim()}
+        `;
+      }
+    }
     return Response.json({ ok: true, id, total });
   } catch (e) {
     console.error("[orders POST]", e);
@@ -126,9 +163,12 @@ export async function GET(req: Request) {
         status: string;
         total_value: number | null;
         created_at: Date;
+        tip: string;
+        plata: string;
       }>
     >`
-      SELECT id, cui, denumire, lines, note, status, total_value, created_at
+      SELECT id, cui, denumire, lines, note, status, total_value, created_at,
+             tip, plata
       FROM orders WHERE agent_id = ${payload.agentId}
       ORDER BY created_at DESC LIMIT 50
     `;
@@ -148,6 +188,8 @@ export async function GET(req: Request) {
         status: r.status,
         totalValue: r.total_value,
         createdAt: r.created_at.toISOString(),
+        tip: r.tip,
+        plata: r.plata,
       })),
     });
   } catch (e) {

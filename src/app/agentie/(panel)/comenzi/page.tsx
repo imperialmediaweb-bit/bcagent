@@ -31,6 +31,17 @@ interface Order {
   status: string;
   totalValue: number | null;
   createdAt: string;
+  tip: string;
+  plata: string;
+}
+
+interface VanInfo {
+  agentId: string;
+  agentName: string;
+  stock: Array<{ produs: string; um: string; cantitate: number }>;
+  salesToday: number;
+  totalToday: number;
+  numerarToday: number;
 }
 
 const STATUS_META: Record<
@@ -55,7 +66,9 @@ export default function ComenziPage() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [counts, setCounts] = useState<Record<string, number>>({});
   const [status, setStatus] = useState("");
+  const [tip, setTip] = useState("");
   const [days, setDays] = useState(30);
+  const [vans, setVans] = useState<VanInfo[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -63,16 +76,18 @@ export default function ComenziPage() {
     setLoading(true);
     try {
       const d = await api<{ orders: Order[]; counts: Record<string, number> }>(
-        `/api/agentie/orders?status=${status}&days=${days}`,
+        `/api/agentie/orders?status=${status}&tip=${tip}&days=${days}`,
       );
       setOrders(d.orders);
       setCounts(d.counts);
+      const v = await api<{ vans: VanInfo[] }>("/api/agentie/van");
+      setVans(v.vans);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
       setLoading(false);
     }
-  }, [status, days]);
+  }, [status, tip, days]);
 
   useEffect(() => {
     load();
@@ -139,6 +154,17 @@ export default function ComenziPage() {
             {meta.label} ({counts[key] ?? 0})
           </button>
         ))}
+        <button
+          type="button"
+          onClick={() => setTip(tip === "van" ? "" : "van")}
+          className={`rounded-full px-3 py-1.5 text-sm font-medium ring-1 ring-inset ${
+            tip === "van"
+              ? "bg-slate-900 text-white ring-slate-900"
+              : "bg-violet-50 text-violet-700 ring-violet-200 hover:opacity-80"
+          }`}
+        >
+          🚐 doar van
+        </button>
         <select
           value={days}
           onChange={(e) => setDays(parseInt(e.target.value))}
@@ -152,6 +178,56 @@ export default function ComenziPage() {
       </div>
 
       {error && <Alert>{error}</Alert>}
+
+      {vans.some((v) => v.salesToday > 0 || v.stock.length > 0) && (
+        <Card className="p-4">
+          <h2 className="mb-2 flex items-center gap-2 text-sm font-semibold text-slate-800">
+            🚐 Dubele azi — van sales
+          </h2>
+          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+            {vans.map((v) => (
+              <details
+                key={v.agentId}
+                className="rounded-xl border border-slate-200 bg-slate-50 p-3"
+              >
+                <summary className="cursor-pointer list-none">
+                  <p className="text-sm font-semibold text-slate-900">
+                    {v.agentName}
+                  </p>
+                  <p className="mt-0.5 text-xs text-slate-500">
+                    {v.salesToday} vânzări pe loc ·{" "}
+                    {formatNumber(Math.round(v.totalToday))} RON
+                    {v.numerarToday > 0 && (
+                      <span className="ml-1 rounded-full bg-emerald-100 px-2 py-0.5 font-semibold text-emerald-700">
+                        💵 {formatNumber(Math.round(v.numerarToday))} RON de predat
+                      </span>
+                    )}
+                  </p>
+                  <p className="mt-0.5 text-xs text-slate-400">
+                    {v.stock.length > 0
+                      ? `${v.stock.length} produse în dubă — apasă pentru stoc`
+                      : "duba goală"}
+                  </p>
+                </summary>
+                {v.stock.length > 0 && (
+                  <ul className="mt-2 space-y-0.5 border-t border-slate-200 pt-2 text-xs">
+                    {v.stock.map((s) => (
+                      <li key={s.produs} className="flex justify-between gap-2">
+                        <span className="min-w-0 truncate text-slate-600">
+                          {s.produs}
+                        </span>
+                        <span className="shrink-0 font-medium text-slate-800">
+                          {s.cantitate} {s.um}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </details>
+            ))}
+          </div>
+        </Card>
+      )}
 
       {loading ? (
         <div className="h-40 animate-pulse rounded-2xl bg-slate-200/60" />
@@ -173,6 +249,11 @@ export default function ComenziPage() {
                       >
                         {meta.label}
                       </span>
+                      {o.tip === "van" && (
+                        <span className="rounded-full bg-violet-50 px-2 py-0.5 text-xs font-medium text-violet-700 ring-1 ring-inset ring-violet-200">
+                          🚐 pe loc{o.plata ? ` · ${o.plata}` : ""}
+                        </span>
+                      )}
                     </p>
                     <p className="mt-0.5 text-xs text-slate-500">
                       {o.agentName} · {o.localitate || "—"} ·{" "}

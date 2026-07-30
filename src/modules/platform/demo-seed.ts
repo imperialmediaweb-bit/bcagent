@@ -75,6 +75,7 @@ export async function seedDemoOrg(origin: string): Promise<DemoSeedResult> {
   await db`DELETE FROM orders WHERE agent_id = ANY(${agentIds})`;
   await db`DELETE FROM routes WHERE agent_id = ANY(${agentIds})`;
   await db`DELETE FROM expenses WHERE agent_id = ANY(${agentIds})`;
+  await db`DELETE FROM van_stock WHERE agent_id = ANY(${agentIds})`;
   await db`DELETE FROM prospects WHERE cui LIKE '999000%'`;
 
   // 2) Organizația + conturile.
@@ -189,16 +190,19 @@ export async function seedDemoOrg(origin: string): Promise<DemoSeedResult> {
     `;
   }
 
-  // 8) Comenzi: noi (azi), pregătite, livrate.
-  const orderPlan: Array<[number, number, string]> = [
-    [0, 0, "noua"],
-    [0, 1, "noua"],
-    [1, 2, "pregatita"],
-    [2, 0, "livrata"],
-    [3, 1, "livrata"],
+  // 8) Comenzi: noi (azi), pregătite, livrate + vânzări VAN pe loc.
+  const orderPlan: Array<[number, number, string, string, string]> = [
+    [0, 0, "noua", "comanda", ""],
+    [0, 1, "noua", "comanda", ""],
+    [1, 2, "pregatita", "comanda", ""],
+    [2, 0, "livrata", "comanda", ""],
+    [3, 1, "livrata", "comanda", ""],
+    [0, 0, "livrata", "van", "numerar"],
+    [0, 1, "livrata", "van", "card"],
+    [0, 2, "livrata", "van", "numerar"],
   ];
   for (let i = 0; i < orderPlan.length; i++) {
-    const [daysAgo, ai, status] = orderPlan[i];
+    const [daysAgo, ai, status, tip, plata] = orderPlan[i];
     const c = CLIENTS[(ai + i * 2) % CLIENTS.length];
     const lines = [
       { produs: "Kent Blue", cantitate: 5 + i, um: "cartus", pret: 262 },
@@ -207,13 +211,32 @@ export async function seedDemoOrg(origin: string): Promise<DemoSeedResult> {
     const total = lines.reduce((s, l) => s + l.cantitate * l.pret, 0);
     await db`
       INSERT INTO orders (id, agent_id, agent_name, cui, denumire, localitate,
-                          lines, note, status, total_value, created_at)
+                          lines, note, status, total_value, created_at, tip, plata)
       VALUES (${"demo-o-" + i}, ${AGENTS[ai].id}, ${AGENTS[ai].name},
               ${c[0]}, ${c[1]}, ${c[2]},
               ${db.json(lines as unknown as Parameters<typeof db.json>[0])},
               ${i === 0 ? "livrare vineri dimineața" : ""}, ${status}, ${total},
-              ${new Date(Date.now() - daysAgo * 86400_000 - 7200_000)})
+              ${new Date(Date.now() - daysAgo * 86400_000 - 7200_000)},
+              ${tip}, ${plata})
     `;
+  }
+
+  // 8b) Marfa din dube — fiecare agent pleacă încărcat de dimineață.
+  const vanStock: Array<[string, string, number]> = [
+    ["Kent Blue", "cartus", 24],
+    ["Marlboro Red", "cartus", 18],
+    ["Camel Yellow", "cartus", 12],
+    ["Pall Mall Albastru", "cartus", 15],
+  ];
+  for (const a of AGENTS) {
+    for (const [produs, um, cant] of vanStock) {
+      await db`
+        INSERT INTO van_stock (agent_id, produs, um, cantitate, updated_at)
+        VALUES (${a.id}, ${produs}, ${um}, ${cant}, NOW())
+        ON CONFLICT (agent_id, produs)
+        DO UPDATE SET cantitate = EXCLUDED.cantitate, updated_at = NOW()
+      `;
+    }
   }
 
   // 9) Rute pe ZIUA CURENTĂ (ca „Ziua mea" să arate viu) + deconturi.
