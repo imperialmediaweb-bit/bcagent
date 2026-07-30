@@ -37,6 +37,16 @@ interface SalesData {
   }>;
   brands: string[];
   topClients: Array<{ client: string; agent: string; total: number }>;
+  appSales?: {
+    months: string[];
+    agents: Array<{
+      name: string;
+      total: number;
+      van: number;
+      sales: number;
+      monthly: number[];
+    }>;
+  };
 }
 
 const PALETTE = [
@@ -258,8 +268,51 @@ export default function VanzariPage() {
         </select>
       </header>
 
+      {data.appSales && data.appSales.agents.length > 0 && (
+        <Card>
+          <h2 className="text-sm font-semibold text-slate-800">
+            🧾 Vânzări prin aplicație — facturi fotografiate & comenzi livrate
+          </h2>
+          <p className="mt-0.5 text-xs text-slate-500">
+            Ce au înregistrat agenții direct pe telefon (poză la factură, van
+            sales, comenzi). Sursă separată de rapoartele SAGA de mai jos — nu
+            se adună între ele, ca să nu numeri aceeași vânzare de două ori.
+          </p>
+          <div className="mt-3 overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-slate-200 text-left text-xs uppercase tracking-wide text-slate-400">
+                  <th className="py-2 pr-3">Agent</th>
+                  <th className="py-2 pr-3 text-right">Vânzări</th>
+                  <th className="py-2 pr-3 text-right">Total RON</th>
+                  <th className="py-2 pr-3 text-right">din care van 🚐</th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.appSales.agents.map((a) => (
+                  <tr key={a.name} className="border-b border-slate-100">
+                    <td className="py-2 pr-3 font-medium text-slate-800">
+                      {a.name}
+                    </td>
+                    <td className="py-2 pr-3 text-right text-slate-600">
+                      {a.sales}
+                    </td>
+                    <td className="py-2 pr-3 text-right font-semibold text-slate-900">
+                      {formatNumber(a.total)}
+                    </td>
+                    <td className="py-2 pr-3 text-right text-violet-700">
+                      {a.van > 0 ? formatNumber(a.van) : "—"}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </Card>
+      )}
+
       {data.agents.length === 0 ? (
-        <EmptyState text="Nicio vânzare în perioada asta — încarcă XLS-urile de vânzări din panoul de agent al șefului." />
+        <EmptyState text="Nicio vânzare în perioada asta — încarcă XLS-urile de vânzări (SAGA) sau lasă agenții să-și înregistreze vânzările din telefon: apar automat mai sus." />
       ) : (
         <>
           <Card>
