@@ -129,13 +129,32 @@ export default function AgentieLogin() {
           </form>
         </div>
 
-        <a
-          href="/api/agentie/demo-login"
-          className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl border-2 border-[#161412] bg-[#ffd23f] py-3 text-[15px] font-black text-[#161412] transition hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none"
+        <div
+          className="mt-4 rounded-xl border-2 border-[#161412] bg-[#ffd23f] p-3.5"
           style={{ boxShadow: "4px 4px 0 #161412" }}
         >
-          🎬 Vezi DEMO — fără cont
-        </a>
+          <p className="text-center text-[13px] font-black uppercase tracking-wider text-[#161412]">
+            🎬 Vezi DEMO — fără cont
+          </p>
+          <div className="mt-2.5 grid grid-cols-3 gap-2">
+            {(
+              [
+                ["patron", "Patron"],
+                ["manager", "Manager"],
+                ["agent", "Agent"],
+              ] as const
+            ).map(([rol, label]) => (
+              <a
+                key={rol}
+                href={`/api/agentie/demo-login?rol=${rol}`}
+                className="rounded-lg border-2 border-[#161412] bg-white py-2.5 text-center text-[14px] font-black text-[#161412] transition hover:translate-x-[1px] hover:translate-y-[1px] hover:shadow-none"
+                style={{ boxShadow: "3px 3px 0 #161412" }}
+              >
+                {label}
+              </a>
+            ))}
+          </div>
+        </div>
 
         <p className="mt-5 text-center text-xs font-semibold text-[#161412]/45">
           Contul îl primești de la administratorul platformei.
