@@ -37,12 +37,18 @@ Răspunsul conține `url` — trimite-l agentului. Linkul are forma `/a/<token>`
    TOKEN_SECRET       = <string random lung, 32+ chars>
    ADMIN_SECRET       = <alt random pentru emitere tokenuri>
    OPENAI_API_KEY     = sk-...
+   DATABASE_URL       = <Postgres Railway — persistență + panoul /platform>
    ```
    Opțional:
    ```
-   OPENAI_MODEL       = gpt-4o     # sau gpt-4o-mini, gpt-4.1
-   ANTHROPIC_API_KEY  = sk-ant-... # dacă vrei și Claude
-   AI_PROVIDER        = openai     # forțează unul anume
+   OPENAI_MODEL            = gpt-4o     # sau gpt-4o-mini, gpt-4.1
+   ANTHROPIC_API_KEY       = sk-ant-... # dacă vrei și Claude
+   AI_PROVIDER             = openai     # forțează unul anume
+   SESSION_SECRET          = <random>   # sesiuni super-admin (fallback: TOKEN_SECRET)
+   PLATFORM_ADMIN_EMAIL    = adresa@ta.ro       # bootstrap /platform
+   PLATFORM_ADMIN_PASSWORD = <parolă lungă>
+   STRIPE_SECRET_KEY       = sk_live_...        # plăți
+   STRIPE_WEBHOOK_SECRET   = whsec_...
    ```
 4. **Settings → Networking → Generate Domain** — primești un URL `*.up.railway.app`. Pentru domeniu propriu, add Custom Domain și setează CNAME.
 5. **Deploy.** Primul build durează 2-4 min (pnpm install + next build).
@@ -63,6 +69,58 @@ curl -X POST https://YOUR-APP.up.railway.app/api/issue-token \
 ```
 
 Răspunsul îți dă linkul pe care îl dai agentului.
+
+## Panoul de super-administrator (`/platform`)
+
+Nivelul 1 din arhitectura SaaS: tu vezi toate firmele de distribuție, abonamentele și facturile.
+
+**Primul login** — pune în variabilele de mediu:
+
+```
+PLATFORM_ADMIN_EMAIL    = adresa@ta.ro
+PLATFORM_ADMIN_PASSWORD = <parolă lungă>
+SESSION_SECRET          = <openssl rand -hex 32>   # opțional; altfel folosește TOKEN_SECRET
+```
+
+Deschide `/platform/login` și autentifică-te cu ele — contul se creează la primul
+login și se stochează hash-uit (PBKDF2-SHA256, 120k iterații). Variabilele nu mai
+contează după aceea; parola se schimbă din **Setări**. Bootstrap-ul funcționează
+o singură dată: dacă există deja un admin, credențialele din env sunt ignorate.
+
+Sesiunea e un cookie httpOnly semnat HMAC, valabil 12 ore. Login-ul e limitat la
+10 încercări / 5 minute per IP.
+
+### Ce face panoul
+
+| Secțiune | Funcții |
+|---|---|
+| Dashboard | MRR, organizații pe status, utilizatori/agenți, prospecți, încasat vs. de încasat, evoluție lunară |
+| Organizații | listă cu căutare + filtre, creare cu cont de owner (parolă generată), editare, suspendare/reactivare, ștergere, limită de agenți |
+| Detaliu organizație | date firmă, conturi (creare/reset parolă/dezactivare/ștergere), agenți + emitere magic link cu respectarea limitei de plan, facturi, acțiuni Stripe |
+| Planuri | CRUD planuri, preț, interval, limită agenți, funcționalități incluse, mapare pe Stripe Price ID + verificare live a prețului |
+| Facturi | listă cu filtre, schimbare status, factură manuală (transfer bancar), link PDF Stripe, export CSV |
+| Jurnal | audit: cine, ce acțiune, pe ce țintă, când |
+| Setări | schimbare parolă, starea tuturor integrărilor |
+
+### Stripe (plăți + facturi)
+
+Platforma merge și fără Stripe (facturare manuală). Pentru plăți online:
+
+1. Stripe → **Products**: un produs cu preț **recurent lunar** per plan.
+2. Copiază `price_...` în `/platform/planuri` pentru fiecare plan.
+3. Stripe → **Developers → Webhooks** → endpoint `https://<domeniu>/api/stripe/webhook`,
+   evenimente: `checkout.session.completed`, `customer.subscription.*`, `invoice.*`.
+4. Variabile:
+   ```
+   STRIPE_SECRET_KEY     = sk_live_... / sk_test_...
+   STRIPE_WEBHOOK_SECRET = whsec_...
+   ```
+
+Din pagina organizației generezi **linkul de plată** (checkout) sau deschizi
+**portalul de facturare** al clientului. Webhook-ul sincronizează automat statusul
+abonamentului (`active` → activ, `unpaid` → suspendat, `canceled` → anulat) și
+toate facturile cu link către PDF. Evenimentele sunt idempotente — retry-urile
+Stripe nu produc dubluri.
 
 ## Auto-detect coloane XLS
 
