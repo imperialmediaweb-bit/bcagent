@@ -7,6 +7,7 @@ import {
   listOrgAgents,
   requireOrgUser,
   setOrgAgentAway,
+  setOrgAgentSalary,
 } from "@/modules/platform";
 
 export const runtime = "nodejs";
@@ -47,6 +48,7 @@ export async function GET() {
     );
 
     return Response.json({
+      myRole: auth.session.role,
       agents: agents.map((a) => ({
         ...a,
         visitsToday: parseInt(byId[a.agentId]?.azi ?? "0", 10),
@@ -117,7 +119,14 @@ export async function POST(req: Request) {
   }
 }
 
-/** Blocare/deblocare instant + concediu („away until"). */
+function isDate(v: string): boolean {
+  return /^\d{4}-\d{2}-\d{2}$/.test(v);
+}
+
+/**
+ * Blocare/deblocare instant, concediu (perioadă, cu detecție de suprapunere
+ * între agenți) și salarizare (doar owner).
+ */
 export async function PATCH(req: Request) {
   if (!isDBEnabled()) {
     return Response.json({ error: "DATABASE_URL lipsește" }, { status: 503 });
@@ -125,7 +134,15 @@ export async function PATCH(req: Request) {
   const auth = await requireOrgUser();
   if ("response" in auth) return auth.response;
 
-  let body: { agentRowId?: string; active?: boolean; awayUntil?: string | null };
+  let body: {
+    agentRowId?: string;
+    active?: boolean;
+    awayFrom?: string | null;
+    awayUntil?: string | null;
+    force?: boolean;
+    salaryCents?: number | null;
+    commissionPct?: number | null;
+  };
   try {
     body = await req.json();
   } catch {
@@ -138,6 +155,7 @@ export async function PATCH(req: Request) {
   if (!db) return Response.json({ enabled: false }, { status: 503 });
   try {
     const orgId = auth.session.orgId;
+
     if (typeof body.active === "boolean") {
       await db`
         UPDATE org_agents SET active = ${body.active}
@@ -150,17 +168,78 @@ export async function PATCH(req: Request) {
         { orgId },
       );
     }
-    if (body.awayUntil !== undefined) {
-      const v = body.awayUntil ? String(body.awayUntil).slice(0, 10) : null;
-      if (v && !/^\d{4}-\d{2}-\d{2}$/.test(v)) {
+
+    if (body.awayUntil !== undefined || body.awayFrom !== undefined) {
+      const until = body.awayUntil ? String(body.awayUntil).slice(0, 10) : null;
+      const from = body.awayFrom
+        ? String(body.awayFrom).slice(0, 10)
+        : until
+          ? new Date().toISOString().slice(0, 10)
+          : null;
+      if ((until && !isDate(until)) || (from && !isDate(from))) {
         return Response.json({ error: "Dată invalidă" }, { status: 400 });
       }
-      await setOrgAgentAway(orgId, rowId, v);
+      if (from && until && from > until) {
+        return Response.json(
+          { error: "Începutul concediului e după sfârșit" },
+          { status: 400 },
+        );
+      }
+
+      // Suprapunere cu concediile ALTOR agenți activi → avertizăm (409);
+      // managerul poate forța cu force:true dacă își asumă zona descoperită.
+      if (from && until && !body.force) {
+        const agents = await listOrgAgents(orgId);
+        const overlapping = agents.filter(
+          (a) =>
+            a.id !== rowId &&
+            a.active &&
+            a.awayFrom &&
+            a.awayUntil &&
+            a.awayFrom <= until &&
+            a.awayUntil >= from,
+        );
+        if (overlapping.length > 0) {
+          return Response.json(
+            {
+              error: `Se suprapune cu concediul: ${overlapping
+                .map((a) => `${a.name} (${a.awayFrom} → ${a.awayUntil})`)
+                .join(", ")}`,
+              overlapping: overlapping.map((a) => a.name),
+            },
+            { status: 409 },
+          );
+        }
+      }
+
+      await setOrgAgentAway(orgId, rowId, from, until);
       await audit(auth.session.email, "agent.concediu", rowId, {
         orgId,
-        awayUntil: v,
+        awayFrom: from,
+        awayUntil: until,
+        forced: !!body.force,
       });
     }
+
+    if (body.salaryCents !== undefined || body.commissionPct !== undefined) {
+      if (auth.session.role !== "owner") {
+        return Response.json(
+          { error: "Doar patronul poate seta salariile" },
+          { status: 403 },
+        );
+      }
+      const salary =
+        body.salaryCents === null
+          ? null
+          : Math.min(10_000_000_00, Math.max(0, Math.round(Number(body.salaryCents) || 0)));
+      const pct =
+        body.commissionPct === null
+          ? null
+          : Math.min(100, Math.max(0, Number(body.commissionPct) || 0));
+      await setOrgAgentSalary(orgId, rowId, salary, pct);
+      await audit(auth.session.email, "agent.salariu", rowId, { orgId });
+    }
+
     return Response.json({ ok: true });
   } catch (e) {
     console.error("[agentie agents PATCH]", e);

@@ -67,6 +67,7 @@ export {
   platformMetrics,
   setInvoiceStatus,
   setOrgAgentAway,
+  setOrgAgentSalary,
   setOrgUserActive,
   setOrgUserPassword,
   touchAdminLogin,

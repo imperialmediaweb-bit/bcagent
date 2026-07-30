@@ -141,6 +141,16 @@ export default function Dashboard({
   const STORAGE_KEY = `bcagent:data:${agentId}`;
   const [storageMode, setStorageMode] = useState<"db" | "local">("local");
 
+  // PWA: ținem minte ultimul panou deschis — aplicația instalată pornește
+  // direct aici în loc de landing.
+  useEffect(() => {
+    try {
+      localStorage.setItem("bcagent:lastLink", `/a/${token}`);
+    } catch {
+      // fără localStorage nu e critic
+    }
+  }, [token]);
+
   // Restore date la mount: încarcă PARALEL din localStorage și DB,
   // apoi îmbinăm. Dacă DB e gol și localStorage are date → migrare auto.
   useEffect(() => {

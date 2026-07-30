@@ -1,6 +1,22 @@
+"use client";
+
 import Link from "next/link";
+import { useEffect } from "react";
 
 export default function HomePage() {
+  // PWA instalat pornește de la "/": dacă device-ul are un panou vizitat
+  // (link de agent salvat), sărim direct acolo — agentul nu vede landing-ul.
+  useEffect(() => {
+    try {
+      const last = localStorage.getItem("bcagent:lastLink");
+      if (last && last.startsWith("/a/")) {
+        window.location.replace(last);
+      }
+    } catch {
+      // localStorage indisponibil — rămânem pe landing
+    }
+  }, []);
+
   return (
     <main className="mx-auto max-w-2xl px-6 py-16">
       <h1 className="text-3xl font-semibold tracking-tight">BC Agent</h1>

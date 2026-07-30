@@ -32,6 +32,7 @@ interface Overview {
     agentId: string;
     name: string;
     active: boolean;
+    awayFrom: string | null;
     awayUntil: string | null;
     visitsWeek: number;
   }>;
@@ -83,7 +84,10 @@ export default function AgentieDashboard() {
 
   const conversii = data.results30["client"] ?? 0;
   const inConcediu = data.agents.filter(
-    (a) => a.awayUntil && a.awayUntil >= todayISO(),
+    (a) =>
+      a.awayUntil &&
+      a.awayUntil >= todayISO() &&
+      (!a.awayFrom || a.awayFrom <= todayISO()),
   );
 
   return (
@@ -173,7 +177,10 @@ export default function AgentieDashboard() {
                 .sort((a, b) => b.visitsWeek - a.visitsWeek)
                 .map((a) => {
                   const max = Math.max(...data.agents.map((x) => x.visitsWeek), 1);
-                  const away = a.awayUntil && a.awayUntil >= todayISO();
+                  const away =
+                    a.awayUntil &&
+                    a.awayUntil >= todayISO() &&
+                    (!a.awayFrom || a.awayFrom <= todayISO());
                   return (
                     <li key={a.id}>
                       <div className="flex items-center justify-between text-sm">

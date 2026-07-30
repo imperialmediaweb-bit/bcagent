@@ -20,7 +20,10 @@ interface AgentRow {
   agentId: string;
   name: string;
   active: boolean;
+  awayFrom: string | null;
   awayUntil: string | null;
+  salaryCents: number | null;
+  commissionPct: number | null;
   visitsToday: number;
   visitsWeek: number;
   visits30: number;
@@ -33,15 +36,20 @@ function todayISO(): string {
 
 export default function AgentiPage() {
   const [agents, setAgents] = useState<AgentRow[]>([]);
+  const [myRole, setMyRole] = useState("manager");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showNew, setShowNew] = useState(false);
   const [awayFor, setAwayFor] = useState<AgentRow | null>(null);
+  const [salaryFor, setSalaryFor] = useState<AgentRow | null>(null);
 
   const load = useCallback(async () => {
     try {
-      const d = await api<{ agents: AgentRow[] }>("/api/agentie/agents");
+      const d = await api<{ agents: AgentRow[]; myRole: string }>(
+        "/api/agentie/agents",
+      );
       setAgents(d.agents);
+      setMyRole(d.myRole);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -90,7 +98,12 @@ export default function AgentiPage() {
       ) : (
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
           {agents.map((a) => {
-            const away = a.awayUntil && a.awayUntil >= todayISO();
+            const today = todayISO();
+            const awayNow =
+              a.awayUntil &&
+              a.awayUntil >= today &&
+              (!a.awayFrom || a.awayFrom <= today);
+            const awayPlanned = a.awayFrom && a.awayFrom > today;
             return (
               <Card key={a.id} className={a.active ? "" : "opacity-60"}>
                 <div className="flex items-start justify-between gap-2">
@@ -102,7 +115,8 @@ export default function AgentiPage() {
                   </div>
                   <div className="flex flex-col items-end gap-1">
                     {!a.active && <Badge status="anulat">blocat</Badge>}
-                    {away && <Badge status="trial">🏖 concediu</Badge>}
+                    {awayNow && <Badge status="trial">🏖 în concediu</Badge>}
+                    {awayPlanned && <Badge status="draft">🗓 concediu programat</Badge>}
                   </div>
                 </div>
 
@@ -131,6 +145,11 @@ export default function AgentiPage() {
                   <Button variant="secondary" onClick={() => setAwayFor(a)}>
                     🏖 Concediu
                   </Button>
+                  {myRole === "owner" && (
+                    <Button variant="secondary" onClick={() => setSalaryFor(a)}>
+                      💰 Salariu
+                    </Button>
+                  )}
                   <Button
                     variant={a.active ? "secondary" : "primary"}
                     onClick={() => toggle(a)}
@@ -143,16 +162,39 @@ export default function AgentiPage() {
                     {a.active ? "⏸ Blochează" : "▶ Deblochează"}
                   </Button>
                 </div>
-                {away && (
+                {a.awayUntil && (
                   <p className="mt-2 text-xs text-sky-600">
-                    În concediu până la{" "}
-                    {new Date(a.awayUntil!).toLocaleDateString("ro-RO")}
+                    Concediu: {a.awayFrom ? new Date(a.awayFrom).toLocaleDateString("ro-RO") : "?"}{" "}
+                    → {new Date(a.awayUntil).toLocaleDateString("ro-RO")}
+                  </p>
+                )}
+                {myRole === "owner" && a.salaryCents !== null && (
+                  <p className="mt-1 text-xs text-slate-500">
+                    💰 {(a.salaryCents / 100).toLocaleString("ro-RO")} RON/lună
+                    {a.commissionPct ? ` + ${a.commissionPct}% comision` : ""}
                   </p>
                 )}
               </Card>
             );
           })}
         </div>
+      )}
+
+      {myRole === "owner" && agents.some((a) => a.salaryCents !== null) && (
+        <Card className="p-4">
+          <p className="text-sm text-slate-600">
+            💰 Cost lunar echipă (salarii de bază):{" "}
+            <strong className="text-slate-900">
+              {(
+                agents.reduce((s, a) => s + (a.active ? a.salaryCents ?? 0 : 0), 0) /
+                100
+              ).toLocaleString("ro-RO")}{" "}
+              RON
+            </strong>{" "}
+            · {agents.filter((a) => a.active && a.salaryCents !== null).length}{" "}
+            agenți cu salariu setat
+          </p>
+        </Card>
       )}
 
       {agents.length >= 2 && <Transfer agents={agents} onDone={load} />}
@@ -165,6 +207,11 @@ export default function AgentiPage() {
       <AwayModal
         agent={awayFor}
         onClose={() => setAwayFor(null)}
+        onDone={load}
+      />
+      <SalaryModal
+        agent={salaryFor}
+        onClose={() => setSalaryFor(null)}
         onDone={load}
       />
     </div>
@@ -282,28 +329,165 @@ function AwayModal({
   agent: {
     id: string;
     name: string;
+    awayFrom: string | null;
     awayUntil: string | null;
   } | null;
   onClose: () => void;
   onDone: () => Promise<void>;
 }) {
+  const [from, setFrom] = useState("");
   const [until, setUntil] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [overlap, setOverlap] = useState<string | null>(null);
 
   useEffect(() => {
+    setFrom(agent?.awayFrom ?? new Date().toISOString().slice(0, 10));
     setUntil(agent?.awayUntil ?? "");
     setError(null);
+    setOverlap(null);
   }, [agent]);
 
-  async function save(value: string | null) {
+  async function save(clear: boolean, force = false) {
     if (!agent) return;
     setBusy(true);
     setError(null);
     try {
       await api("/api/agentie/agents", {
         method: "PATCH",
-        json: { agentRowId: agent.id, awayUntil: value },
+        json: {
+          agentRowId: agent.id,
+          awayFrom: clear ? null : from,
+          awayUntil: clear ? null : until,
+          force,
+        },
+      });
+      await onDone();
+      onClose();
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      // 409 = suprapunere cu alt concediu — cerem confirmare explicită.
+      if (msg.startsWith("Se suprapune")) {
+        setOverlap(msg);
+      } else {
+        setError(msg);
+      }
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Modal open={!!agent} onClose={onClose} title={`Concediu — ${agent?.name ?? ""}`}>
+      <div className="space-y-4">
+        <div className="grid gap-4 sm:grid-cols-2">
+          <Field label="De la">
+            <input
+              type="date"
+              value={from}
+              onChange={(e) => {
+                setFrom(e.target.value);
+                setOverlap(null);
+              }}
+              className={inputClass}
+            />
+          </Field>
+          <Field label="Până la (inclusiv)">
+            <input
+              type="date"
+              value={until}
+              onChange={(e) => {
+                setUntil(e.target.value);
+                setOverlap(null);
+              }}
+              className={inputClass}
+            />
+          </Field>
+        </div>
+        {error && <Alert>{error}</Alert>}
+        {overlap && (
+          <div className="space-y-2">
+            <Alert>
+              ⚠ {overlap} — zona rămâne descoperită în perioada asta.
+            </Alert>
+            <Button
+              variant="danger"
+              disabled={busy}
+              onClick={() => save(false, true)}
+              className="w-full"
+            >
+              Înțeleg, salvează oricum
+            </Button>
+          </div>
+        )}
+        <div className="flex justify-between gap-2">
+          {agent?.awayUntil && (
+            <Button variant="ghost" disabled={busy} onClick={() => save(true)}>
+              S-a întors — șterge concediul
+            </Button>
+          )}
+          <div className="ml-auto flex gap-2">
+            <Button variant="secondary" onClick={onClose}>
+              Renunță
+            </Button>
+            <Button
+              disabled={busy || !until || !from}
+              onClick={() => save(false)}
+            >
+              Salvează
+            </Button>
+          </div>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
+function SalaryModal({
+  agent,
+  onClose,
+  onDone,
+}: {
+  agent: {
+    id: string;
+    name: string;
+    salaryCents: number | null;
+    commissionPct: number | null;
+  } | null;
+  onClose: () => void;
+  onDone: () => Promise<void>;
+}) {
+  const [salary, setSalary] = useState("");
+  const [pct, setPct] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    setSalary(
+      agent?.salaryCents !== null && agent?.salaryCents !== undefined
+        ? String(agent.salaryCents / 100)
+        : "",
+    );
+    setPct(
+      agent?.commissionPct !== null && agent?.commissionPct !== undefined
+        ? String(agent.commissionPct)
+        : "",
+    );
+    setError(null);
+  }, [agent]);
+
+  async function save() {
+    if (!agent) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await api("/api/agentie/agents", {
+        method: "PATCH",
+        json: {
+          agentRowId: agent.id,
+          salaryCents: salary === "" ? null : Math.round(parseFloat(salary) * 100),
+          commissionPct: pct === "" ? null : parseFloat(pct),
+        },
       });
       await onDone();
       onClose();
@@ -315,31 +499,45 @@ function AwayModal({
   }
 
   return (
-    <Modal open={!!agent} onClose={onClose} title={`Concediu — ${agent?.name ?? ""}`}>
+    <Modal open={!!agent} onClose={onClose} title={`Salariu — ${agent?.name ?? ""}`}>
       <div className="space-y-4">
-        <Field label="În concediu până la (inclusiv)">
-          <input
-            type="date"
-            value={until}
-            onChange={(e) => setUntil(e.target.value)}
-            className={inputClass}
-          />
-        </Field>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <Field label="Salariu de bază (RON/lună)">
+            <input
+              type="number"
+              min={0}
+              step="1"
+              value={salary}
+              onChange={(e) => setSalary(e.target.value)}
+              className={inputClass}
+              placeholder="3500"
+            />
+          </Field>
+          <Field label="Comision (%)">
+            <input
+              type="number"
+              min={0}
+              max={100}
+              step="0.1"
+              value={pct}
+              onChange={(e) => setPct(e.target.value)}
+              className={inputClass}
+              placeholder="5"
+            />
+          </Field>
+        </div>
+        <p className="text-xs text-slate-500">
+          Vizibil doar pentru patron. Comisionul se leagă de calculatorul din
+          rapoartele de vânzări.
+        </p>
         {error && <Alert>{error}</Alert>}
-        <div className="flex justify-between gap-2">
-          {agent?.awayUntil && (
-            <Button variant="ghost" disabled={busy} onClick={() => save(null)}>
-              S-a întors — șterge concediul
-            </Button>
-          )}
-          <div className="ml-auto flex gap-2">
-            <Button variant="secondary" onClick={onClose}>
-              Renunță
-            </Button>
-            <Button disabled={busy || !until} onClick={() => save(until)}>
-              Salvează
-            </Button>
-          </div>
+        <div className="flex justify-end gap-2">
+          <Button variant="secondary" onClick={onClose}>
+            Renunță
+          </Button>
+          <Button disabled={busy} onClick={save}>
+            {busy ? "Se salvează..." : "Salvează"}
+          </Button>
         </div>
       </div>
     </Modal>

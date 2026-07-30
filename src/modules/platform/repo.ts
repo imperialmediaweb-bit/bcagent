@@ -464,15 +464,18 @@ export async function deleteOrgUser(id: string): Promise<void> {
 
 /* ────────────────────────── agenți organizație ────────────────────── */
 
-export async function listOrgAgents(orgId: string): Promise<
-  Array<{
-    id: string;
-    agentId: string;
-    name: string;
-    active: boolean;
-    awayUntil: string | null;
-  }>
-> {
+export interface OrgAgentRow {
+  id: string;
+  agentId: string;
+  name: string;
+  active: boolean;
+  awayFrom: string | null;
+  awayUntil: string | null;
+  salaryCents: number | null;
+  commissionPct: number | null;
+}
+
+export async function listOrgAgents(orgId: string): Promise<OrgAgentRow[]> {
   await ensurePlatformSchema();
   const rows = await db()<
     Array<{
@@ -480,10 +483,15 @@ export async function listOrgAgents(orgId: string): Promise<
       agent_id: string;
       name: string;
       active: boolean;
+      away_from: Date | null;
       away_until: Date | null;
+      salary_cents: number | null;
+      commission_pct: number | null;
     }>
   >`
-    SELECT id, agent_id, name, active, away_until FROM org_agents
+    SELECT id, agent_id, name, active, away_from, away_until,
+           salary_cents, commission_pct
+    FROM org_agents
     WHERE org_id = ${orgId} ORDER BY created_at ASC
   `;
   return rows.map((r) => ({
@@ -491,18 +499,38 @@ export async function listOrgAgents(orgId: string): Promise<
     agentId: r.agent_id,
     name: r.name,
     active: r.active,
+    awayFrom: r.away_from ? iso(r.away_from)!.slice(0, 10) : null,
     awayUntil: r.away_until ? iso(r.away_until)!.slice(0, 10) : null,
+    salaryCents: r.salary_cents,
+    commissionPct: r.commission_pct,
   }));
 }
 
-/** Concediu: setează / șterge data până la care agentul lipsește. */
+/** Concediu: setează / șterge perioada în care agentul lipsește. */
 export async function setOrgAgentAway(
   orgId: string,
   agentRowId: string,
+  awayFrom: string | null,
   awayUntil: string | null,
 ): Promise<void> {
   await db()`
-    UPDATE org_agents SET away_until = ${awayUntil ? new Date(awayUntil) : null}
+    UPDATE org_agents
+    SET away_from = ${awayFrom ? new Date(awayFrom) : null},
+        away_until = ${awayUntil ? new Date(awayUntil) : null}
+    WHERE id = ${agentRowId} AND org_id = ${orgId}
+  `;
+}
+
+/** Salarizare: salariu de bază + procent de comision. */
+export async function setOrgAgentSalary(
+  orgId: string,
+  agentRowId: string,
+  salaryCents: number | null,
+  commissionPct: number | null,
+): Promise<void> {
+  await db()`
+    UPDATE org_agents
+    SET salary_cents = ${salaryCents}, commission_pct = ${commissionPct}
     WHERE id = ${agentRowId} AND org_id = ${orgId}
   `;
 }

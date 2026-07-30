@@ -87,8 +87,13 @@ export async function ensurePlatformSchema(): Promise<void> {
     );
     CREATE UNIQUE INDEX IF NOT EXISTS org_agents_org_agent
       ON org_agents(org_id, agent_id);
-    -- Concedii: managerul marchează agentul „în concediu până la...".
+    -- Concedii: perioadă completă (de la – până la), cu detecție de
+    -- suprapunere între agenți la setare.
     ALTER TABLE org_agents ADD COLUMN IF NOT EXISTS away_until DATE;
+    ALTER TABLE org_agents ADD COLUMN IF NOT EXISTS away_from DATE;
+    -- Salarizare: salariu de bază (bani) + procent comision, per agent.
+    ALTER TABLE org_agents ADD COLUMN IF NOT EXISTS salary_cents INTEGER;
+    ALTER TABLE org_agents ADD COLUMN IF NOT EXISTS commission_pct REAL;
 
     CREATE TABLE IF NOT EXISTS invoices (
       id TEXT PRIMARY KEY,

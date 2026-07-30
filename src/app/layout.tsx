@@ -4,6 +4,16 @@ import type { Metadata, Viewport } from "next";
 export const metadata: Metadata = {
   title: "BC Agent — Sales Analytics",
   description: "Rapoarte de vânzări și eficiență pentru agenți",
+  manifest: "/manifest.webmanifest",
+  icons: {
+    icon: [{ url: "/icon-192.png", sizes: "192x192", type: "image/png" }],
+    apple: "/apple-touch-icon.png",
+  },
+  appleWebApp: {
+    capable: true,
+    title: "BC Agent",
+    statusBarStyle: "default",
+  },
 };
 
 export const viewport: Viewport = {
