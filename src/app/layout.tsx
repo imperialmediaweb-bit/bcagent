@@ -1,5 +1,18 @@
 import "./globals.css";
 import type { Metadata, Viewport } from "next";
+import { Syne, Space_Grotesk } from "next/font/google";
+
+// Tipografie cu identitate: Syne (display, unic) + Space Grotesk (corp).
+const syne = Syne({
+  subsets: ["latin"],
+  weight: ["700", "800"],
+  variable: "--font-display",
+});
+const grotesk = Space_Grotesk({
+  subsets: ["latin"],
+  weight: ["400", "500", "700"],
+  variable: "--font-body",
+});
 
 export const metadata: Metadata = {
   title: "BC Agent — Sales Analytics",
@@ -25,7 +38,7 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="ro">
+    <html lang="ro" className={`${syne.variable} ${grotesk.variable}`}>
       <body className="min-h-screen bg-neutral-50 text-neutral-900 antialiased">
         {children}
       </body>
