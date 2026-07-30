@@ -22,6 +22,46 @@ export async function GET(_req: Request, ctx: Ctx) {
   return Response.json({ agents: await listOrgAgents(id) });
 }
 
+/** Activează / dezactivează un agent — dezactivarea blochează linkul instant. */
+export async function PATCH(req: Request, ctx: Ctx) {
+  if (!isDBEnabled()) {
+    return Response.json({ error: "DATABASE_URL lipsește" }, { status: 503 });
+  }
+  const auth = await requireAdmin();
+  if ("response" in auth) return auth.response;
+  const { id } = await ctx.params;
+
+  let body: { agentRowId?: string; active?: boolean };
+  try {
+    body = await req.json();
+  } catch {
+    return Response.json({ error: "Invalid JSON" }, { status: 400 });
+  }
+  const rowId = String(body.agentRowId ?? "");
+  if (!rowId || typeof body.active !== "boolean") {
+    return Response.json({ error: "agentRowId/active lipsesc" }, { status: 400 });
+  }
+  try {
+    const { getDB } = await import("@/lib/db");
+    const db = getDB();
+    if (!db) return Response.json({ enabled: false }, { status: 503 });
+    await db`
+      UPDATE org_agents SET active = ${body.active}
+      WHERE id = ${rowId} AND org_id = ${id}
+    `;
+    await audit(
+      auth.session.email,
+      body.active ? "agent.activate" : "agent.deactivate",
+      rowId,
+      { orgId: id },
+    );
+    return Response.json({ ok: true });
+  } catch (e) {
+    console.error("[org agents PATCH]", e);
+    return Response.json({ error: "Eroare la actualizare" }, { status: 500 });
+  }
+}
+
 /**
  * Adaugă un agent organizației și emite linkul magic.
  * Respectă limita de agenți din planul organizației.

@@ -72,6 +72,7 @@ import AIInsights from "./AIInsights";
 import Prospects from "./Prospects";
 import SmartPanel from "./SmartPanel";
 import MapPanel from "./MapPanel";
+import ImportClients from "./ImportClients";
 import { smartAnalysis } from "@/modules/analytics/smart";
 
 const PALETTE = [
@@ -513,6 +514,32 @@ export default function Dashboard({
   const agents = useMemo(() => distinctValues(rows, "agent"), [rows]);
   const producers = useMemo(() => distinctValues(rows, "producer"), [rows]);
   const allClients = useMemo(() => distinctValues(rows, "client"), [rows]);
+  // Fiecare client + agentul care îi vinde cel mai mult (pentru importul
+  // clienților existenți: alocarea se face automat pe agentul real).
+  const clientAgents = useMemo(() => {
+    const byClient = new Map<string, Map<string, number>>();
+    for (const r of rows) {
+      if (!r.client) continue;
+      let m = byClient.get(r.client);
+      if (!m) {
+        m = new Map();
+        byClient.set(r.client, m);
+      }
+      const v = r.value !== 0 ? r.value : r.volume;
+      m.set(r.agent, (m.get(r.agent) ?? 0) + v);
+    }
+    return Array.from(byClient.entries()).map(([name, agents]) => {
+      let agent = "";
+      let best = -Infinity;
+      for (const [a, v] of agents) {
+        if (v > best) {
+          best = v;
+          agent = a;
+        }
+      }
+      return { name, agent };
+    });
+  }, [rows]);
   const smart = useMemo(
     () => smartAnalysis(filtered, metric),
     [filtered, metric],
@@ -1141,6 +1168,9 @@ export default function Dashboard({
               subtitle="Firme potențial-client din Suceava și Botoșani — alimentare, baruri, tutungerii"
             />
             <div className="mt-4">
+              {hasData && (
+                <ImportClients token={token} clientAgents={clientAgents} />
+              )}
               <Prospects token={token} agents={agents} />
             </div>
           </section>

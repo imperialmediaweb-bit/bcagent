@@ -22,6 +22,25 @@ export const TARGET_CAEN: Record<string, string> = {
 /** Grupele CAEN principale pentru presetul FMCG. */
 export const CORE_CAEN = ["4711", "4719", "4725", "4726", "5610", "5630"];
 
+/** Presetări rapide de domeniu — refolosite în Prospecți și pe hartă. */
+export const DOMAIN_PRESETS: Array<{
+  id: string;
+  label: string;
+  caens: string[];
+}> = [
+  { id: "fmcg", label: "Alimentare / baruri / tutun", caens: CORE_CAEN },
+  { id: "retail", label: "Comerț cu amănuntul (tot)", caens: ["47"] },
+  { id: "wholesale", label: "Comerț cu ridicata", caens: ["46"] },
+  { id: "horeca", label: "HoReCa (hotel/restaurant)", caens: ["55", "56"] },
+  { id: "auto", label: "Auto (comerț/service)", caens: ["45"] },
+  { id: "constructii", label: "Construcții", caens: ["41", "42", "43"] },
+  { id: "transport", label: "Transport / depozitare", caens: ["49", "52", "53"] },
+  { id: "productie", label: "Producție alimentară", caens: ["10", "11"] },
+  { id: "farma", label: "Farmacii / sănătate", caens: ["21", "86"] },
+  { id: "it", label: "IT / servicii digitale", caens: ["62", "63"] },
+  { id: "agro", label: "Agricultură", caens: ["01", "02", "03"] },
+];
+
 /**
  * Diviziunile CAEN (primele 2 cifre) — etichete scurte pentru ORICE cod,
  * ca lista să fie lizibilă indiferent de domeniu.

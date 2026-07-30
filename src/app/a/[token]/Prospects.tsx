@@ -25,6 +25,7 @@ import {
   CAEN_DIVISIONS,
   COUNTY_LIST,
   CORE_CAEN,
+  DOMAIN_PRESETS,
   TARGET_CAEN,
 } from "@/modules/prospects";
 
@@ -62,20 +63,7 @@ const STATUS_LABELS: Record<string, { label: string; cls: string }> = {
   respins: { label: "Respins", cls: "bg-rose-50 text-rose-700" },
 };
 
-/** Presetări rapide de domeniu — agentul alege ce vinde. */
-const DOMAIN_PRESETS: Array<{ id: string; label: string; caens: string[] }> = [
-  { id: "fmcg", label: "Alimentare / baruri / tutun", caens: CORE_CAEN },
-  { id: "retail", label: "Comerț cu amănuntul (tot)", caens: ["47"] },
-  { id: "wholesale", label: "Comerț cu ridicata", caens: ["46"] },
-  { id: "horeca", label: "HoReCa (hotel/restaurant)", caens: ["55", "56"] },
-  { id: "auto", label: "Auto (comerț/service)", caens: ["45"] },
-  { id: "constructii", label: "Construcții", caens: ["41", "42", "43"] },
-  { id: "transport", label: "Transport / depozitare", caens: ["49", "52", "53"] },
-  { id: "productie", label: "Producție alimentară", caens: ["10", "11"] },
-  { id: "farma", label: "Farmacii / sănătate", caens: ["21", "86"] },
-  { id: "it", label: "IT / servicii digitale", caens: ["62", "63"] },
-  { id: "agro", label: "Agricultură", caens: ["01", "02", "03"] },
-];
+// Presetările de domeniu vin din modul — aceleași și pe hartă.
 
 const PAGE_SIZE = 50;
 

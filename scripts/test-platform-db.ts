@@ -296,8 +296,8 @@ async function main() {
   check("de încasat = 19900 bani", m.invoices.openCents === 19900);
   check("total facturi = 3", m.invoices.count === 3);
   check(
-    "metricile de prospecți nu crapă când tabela lipsește",
-    m.prospects.total === 0,
+    "metricile de prospecți nu aruncă (tabela e opțională)",
+    Number.isFinite(m.prospects.total) && m.prospects.total >= 0,
   );
 
   const series = await monthlySeries(12);

@@ -620,6 +620,19 @@ function AgentsCard({
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
+  async function toggleAgent(agentRowId: string, active: boolean) {
+    setError(null);
+    try {
+      await api(`/api/platform/orgs/${orgId}/agents`, {
+        method: "PATCH",
+        json: { agentRowId, active },
+      });
+      await onChanged();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    }
+  }
+
   async function issue(e: React.FormEvent) {
     e.preventDefault();
     setBusy(true);
@@ -655,6 +668,12 @@ function AgentsCard({
         </Button>
       </div>
 
+      {error && !open && (
+        <div className="mb-3">
+          <Alert>{error}</Alert>
+        </div>
+      )}
+
       {agents.length === 0 ? (
         <EmptyState text="Niciun agent înregistrat pentru firma asta." />
       ) : (
@@ -665,10 +684,27 @@ function AgentsCard({
                 <p className="truncate text-sm font-medium text-slate-800">{a.name}</p>
                 <p className="truncate font-mono text-xs text-slate-500">{a.agentId}</p>
               </div>
-              {!a.active && <Badge status="anulat">inactiv</Badge>}
+              <div className="flex items-center gap-2">
+                {!a.active && <Badge status="anulat">blocat</Badge>}
+                <Button
+                  variant="ghost"
+                  title={
+                    a.active
+                      ? "Blochează accesul instant (linkul moare)"
+                      : "Redeschide accesul"
+                  }
+                  onClick={() => toggleAgent(a.id, !a.active)}
+                >
+                  {a.active ? "⏸" : "▶"}
+                </Button>
+              </div>
             </li>
           ))}
         </ul>
+      )}
+
+      {agents.length >= 2 && (
+        <TransferBox orgId={orgId} agents={agents} onDone={onChanged} />
       )}
 
       <Modal open={open} onClose={() => setOpen(false)} title="Link magic pentru agent">
@@ -722,6 +758,106 @@ function AgentsCard({
         )}
       </Modal>
     </Card>
+  );
+}
+
+/** Predarea portofoliului: X pleacă → clienții și prospecții lui trec la Y. */
+function TransferBox({
+  orgId,
+  agents,
+  onDone,
+}: {
+  orgId: string;
+  agents: Array<{ id: string; agentId: string; name: string; active: boolean }>;
+  onDone: () => Promise<void>;
+}) {
+  const [fromAgent, setFromAgent] = useState("");
+  const [toAgent, setToAgent] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<{ kind: "error" | "success"; text: string } | null>(
+    null,
+  );
+
+  async function transfer() {
+    if (!fromAgent || !toAgent || fromAgent === toAgent) return;
+    if (
+      !confirm(
+        `Transferi TOT portofoliul (clienți + prospecți) de la ${fromAgent} la ${toAgent} și blochezi accesul lui ${fromAgent}?`,
+      )
+    )
+      return;
+    setBusy(true);
+    setMsg(null);
+    try {
+      const res = await api<{ moved: number }>(
+        `/api/platform/orgs/${orgId}/transfer`,
+        { method: "POST", json: { fromAgent, toAgent } },
+      );
+      setMsg({
+        kind: "success",
+        text: `${res.moved} firme transferate la ${toAgent}. Accesul lui ${fromAgent} e blocat.`,
+      });
+      setFromAgent("");
+      setToAgent("");
+      await onDone();
+    } catch (e) {
+      setMsg({ kind: "error", text: e instanceof Error ? e.message : String(e) });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50/50 p-3">
+      <p className="text-xs font-semibold uppercase tracking-wide text-amber-800">
+        Pleacă un agent? Predă portofoliul
+      </p>
+      <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-center">
+        <select
+          value={fromAgent}
+          onChange={(e) => setFromAgent(e.target.value)}
+          className={`${inputClass} mt-0 flex-1`}
+        >
+          <option value="">Cine predă...</option>
+          {agents.map((a) => (
+            <option key={a.id} value={a.name}>
+              {a.name}
+            </option>
+          ))}
+        </select>
+        <span className="hidden text-slate-400 sm:block">→</span>
+        <select
+          value={toAgent}
+          onChange={(e) => setToAgent(e.target.value)}
+          className={`${inputClass} mt-0 flex-1`}
+        >
+          <option value="">Cine preia...</option>
+          {agents
+            .filter((a) => a.active && a.name !== fromAgent)
+            .map((a) => (
+              <option key={a.id} value={a.name}>
+                {a.name}
+              </option>
+            ))}
+        </select>
+        <Button
+          variant="secondary"
+          disabled={busy || !fromAgent || !toAgent || fromAgent === toAgent}
+          onClick={transfer}
+        >
+          {busy ? "Se transferă..." : "Transferă"}
+        </Button>
+      </div>
+      {msg && (
+        <div className="mt-2">
+          <Alert kind={msg.kind}>{msg.text}</Alert>
+        </div>
+      )}
+      <p className="mt-2 text-xs text-amber-700">
+        Istoricul vizitelor și vânzărilor rămâne pe numele agentului vechi —
+        doar portofoliul viitor se mută.
+      </p>
+    </div>
   );
 }
 

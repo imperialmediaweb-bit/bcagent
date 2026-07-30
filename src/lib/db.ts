@@ -81,6 +81,29 @@ export async function ensureSchema(): Promise<void> {
     -- Coada de verificare ANAF (activ IS NULL) — index parțial, foarte mic
     CREATE INDEX IF NOT EXISTS prospects_pending_anaf ON prospects(cui)
       WHERE activ IS NULL;
+    -- Rutele agenților: șabloane pe zile (Luni — Rădăuți) cu opriri ordonate.
+    CREATE TABLE IF NOT EXISTS routes (
+      id TEXT PRIMARY KEY,
+      agent_id TEXT NOT NULL,
+      name TEXT NOT NULL,
+      day TEXT NOT NULL DEFAULT '',
+      stops JSONB NOT NULL DEFAULT '[]'::jsonb,
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS routes_agent ON routes(agent_id);
+    -- Jurnalul vizitelor din teren: cine, când, la ce firmă, cu ce rezultat.
+    CREATE TABLE IF NOT EXISTS visits (
+      id BIGSERIAL PRIMARY KEY,
+      agent_id TEXT NOT NULL,
+      agent_name TEXT NOT NULL DEFAULT '',
+      cui TEXT NOT NULL,
+      denumire TEXT NOT NULL DEFAULT '',
+      result TEXT NOT NULL,
+      note TEXT NOT NULL DEFAULT '',
+      visited_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS visits_agent ON visits(agent_id, visited_at DESC);
+    CREATE INDEX IF NOT EXISTS visits_cui ON visits(cui, visited_at DESC);
     -- Cache de geocodare per localitate (Nominatim, 1 req/s) — o localitate
     -- se geocodează O dată, apoi harta o citește instant de aici.
     CREATE TABLE IF NOT EXISTS geo_localitati (

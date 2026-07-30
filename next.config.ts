@@ -2,6 +2,10 @@ import type { NextConfig } from "next";
 
 const config: NextConfig = {
   poweredByHeader: false,
+  // jsdom (tras de isomorphic-dompurify) citește fișiere interne cu fs la
+  // runtime — bundlat de webpack, calea se rupe (ENOENT default-stylesheet.css).
+  // Rămân externe și se încarcă din node_modules.
+  serverExternalPackages: ["isomorphic-dompurify", "jsdom"],
   async headers() {
     return [
       {
