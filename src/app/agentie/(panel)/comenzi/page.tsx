@@ -33,6 +33,7 @@ interface Order {
   createdAt: string;
   tip: string;
   plata: string;
+  hasFoto: boolean;
 }
 
 interface VanInfo {
@@ -71,6 +72,16 @@ export default function ComenziPage() {
   const [vans, setVans] = useState<VanInfo[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [fotoView, setFotoView] = useState<string | null>(null);
+
+  async function openFoto(id: string) {
+    try {
+      const d = await api<{ foto: string }>(`/api/agentie/orders?foto=${id}`);
+      setFotoView(d.foto);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    }
+  }
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -179,6 +190,20 @@ export default function ComenziPage() {
 
       {error && <Alert>{error}</Alert>}
 
+      {fotoView && (
+        <div
+          className="fixed inset-0 z-[1300] flex items-center justify-center bg-slate-900/70 p-4"
+          onClick={() => setFotoView(null)}
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={fotoView}
+            alt="Factura fotografiată de agent"
+            className="max-h-[90vh] max-w-full rounded-xl shadow-2xl"
+          />
+        </div>
+      )}
+
       {vans.some((v) => v.salesToday > 0 || v.stock.length > 0) && (
         <Card className="p-4">
           <h2 className="mb-2 flex items-center gap-2 text-sm font-semibold text-slate-800">
@@ -253,6 +278,15 @@ export default function ComenziPage() {
                         <span className="rounded-full bg-violet-50 px-2 py-0.5 text-xs font-medium text-violet-700 ring-1 ring-inset ring-violet-200">
                           🚐 pe loc{o.plata ? ` · ${o.plata}` : ""}
                         </span>
+                      )}
+                      {o.hasFoto && (
+                        <button
+                          type="button"
+                          onClick={() => openFoto(o.id)}
+                          className="rounded-full bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-700 ring-1 ring-inset ring-amber-200 hover:bg-amber-100"
+                        >
+                          📎 vezi factura
+                        </button>
                       )}
                     </p>
                     <p className="mt-0.5 text-xs text-slate-500">

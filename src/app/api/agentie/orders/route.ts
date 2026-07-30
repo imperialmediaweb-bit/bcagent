@@ -32,6 +32,7 @@ interface OrderRow {
   created_at: Date;
   tip: string;
   plata: string;
+  has_foto: boolean;
 }
 
 export async function GET(req: Request) {
@@ -59,8 +60,27 @@ export async function GET(req: Request) {
     const ids = agents.map((a) => a.agentId);
     const scoped = agentId && ids.includes(agentId) ? [agentId] : ids;
 
+    // Poza facturii unei singure comenzi (se cere doar la click, nu în listă).
+    const fotoId = url.searchParams.get("foto") ?? "";
+    if (fotoId) {
+      const fr = await db<Array<{ foto: string }>>`
+        SELECT foto FROM orders
+        WHERE id = ${fotoId} AND agent_id = ANY(${ids.length ? ids : [""]})
+        LIMIT 1
+      `;
+      if (fr.length === 0 || !fr[0].foto) {
+        return Response.json({ error: "Fără poză" }, { status: 404 });
+      }
+      return Response.json({ foto: fr[0].foto });
+    }
+
+    // Fără coloana foto în listă (base64 greu) — doar flag; poza se cere
+    // separat cu ?foto=<id>.
     const rows = await db<OrderRow[]>`
-      SELECT * FROM orders
+      SELECT id, agent_id, agent_name, cui, denumire, localitate, lines,
+             note, status, total_value, created_at, tip, plata,
+             (foto != '') AS has_foto
+      FROM orders
       WHERE agent_id = ANY(${scoped.length ? scoped : [""]})
         AND (${status} = '' OR status = ${status})
         AND (${tip} = '' OR tip = ${tip})
@@ -134,6 +154,7 @@ export async function GET(req: Request) {
         createdAt: r.created_at.toISOString(),
         tip: r.tip,
         plata: r.plata,
+        hasFoto: r.has_foto,
       })),
     });
   } catch (e) {

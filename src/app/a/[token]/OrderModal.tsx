@@ -1,8 +1,22 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { Plus, ShoppingCart, Trash2 } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { Camera, Loader2, Plus, ShoppingCart, Trash2 } from "lucide-react";
 import MicButton from "./MicButton";
+
+/** Micșorează poza pe telefon înainte de trimitere (max 1280px, JPEG). */
+async function downscaleImage(
+  file: File,
+): Promise<{ data: string; mime: string; dataUrl: string }> {
+  const bitmap = await createImageBitmap(file);
+  const scale = Math.min(1, 1280 / Math.max(bitmap.width, bitmap.height));
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.round(bitmap.width * scale);
+  canvas.height = Math.round(bitmap.height * scale);
+  canvas.getContext("2d")!.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+  const dataUrl = canvas.toDataURL("image/jpeg", 0.82);
+  return { data: dataUrl.split(",")[1], mime: "image/jpeg", dataUrl };
+}
 
 /**
  * Comanda din teren: agentul o bate la client în 30 de secunde.
@@ -46,6 +60,59 @@ export default function OrderModal({
   // preferința rămâne salvată, nu o alege la fiecare client.
   const [tip, setTip] = useState<"comanda" | "van">("comanda");
   const [plata, setPlata] = useState<"numerar" | "card" | "termen">("numerar");
+  // POZĂ LA FACTURĂ: AI-ul o citește și completează liniile singur.
+  const [scanning, setScanning] = useState(false);
+  const [foto, setFoto] = useState<string | null>(null);
+  const [scanInfo, setScanInfo] = useState<string | null>(null);
+  const fileRef = useRef<HTMLInputElement | null>(null);
+
+  async function scanFactura(file: File) {
+    setScanning(true);
+    setError(null);
+    setScanInfo(null);
+    try {
+      const img = await downscaleImage(file);
+      const res = await fetch("/api/factura-scan", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          token,
+          image: { data: img.data, mime: img.mime },
+        }),
+      });
+      const d = (await res.json()) as {
+        error?: string;
+        lines?: Array<{
+          produs: string;
+          cantitate: number;
+          um: string;
+          pret: number | null;
+        }>;
+        observatii?: string | null;
+      };
+      if (!res.ok || !d.lines) {
+        setError(d.error ?? `Eroare ${res.status}`);
+        return;
+      }
+      setLines(
+        d.lines.map((l) => ({
+          produs: l.produs,
+          cantitate: String(l.cantitate),
+          um: l.um,
+          pret: l.pret === null ? "" : String(l.pret),
+        })),
+      );
+      setFoto(img.dataUrl);
+      setScanInfo(
+        `Am citit ${d.lines.length} produse din poză — verifică-le și salvează.` +
+          (d.observatii ? ` Atenție: ${d.observatii}` : ""),
+      );
+    } catch {
+      setError("Nu am putut citi poza — încearcă din nou.");
+    } finally {
+      setScanning(false);
+    }
+  }
   useEffect(() => {
     try {
       const t = localStorage.getItem("bcagent:order-tip");
@@ -125,6 +192,7 @@ export default function OrderModal({
           note,
           tip,
           plata: tip === "van" ? plata : "",
+          foto: foto ?? "",
           lines: validLines.map((l) => ({
             produs: l.produs.trim(),
             cantitate: parseFloat(l.cantitate),
@@ -270,13 +338,57 @@ export default function OrderModal({
           ))}
         </div>
 
-        <button
-          type="button"
-          onClick={() => setLines((ls) => [...ls, { ...EMPTY_LINE }])}
-          className="mt-2 inline-flex items-center gap-1 text-sm font-medium text-emerald-600 hover:text-emerald-700"
-        >
-          <Plus className="h-4 w-4" /> Mai adaugă un produs
-        </button>
+        <div className="mt-2 flex items-center justify-between gap-2">
+          <button
+            type="button"
+            onClick={() => setLines((ls) => [...ls, { ...EMPTY_LINE }])}
+            className="inline-flex items-center gap-1 text-sm font-medium text-emerald-600 hover:text-emerald-700"
+          >
+            <Plus className="h-4 w-4" /> Mai adaugă un produs
+          </button>
+          <button
+            type="button"
+            disabled={scanning}
+            onClick={() => fileRef.current?.click()}
+            className="inline-flex items-center gap-1.5 rounded-lg bg-violet-50 px-3 py-1.5 text-sm font-semibold text-violet-700 ring-1 ring-inset ring-violet-200 transition hover:bg-violet-100 disabled:opacity-50"
+          >
+            {scanning ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin" /> Citesc factura...
+              </>
+            ) : (
+              <>
+                <Camera className="h-4 w-4" /> Poză la factură
+              </>
+            )}
+          </button>
+          <input
+            ref={fileRef}
+            type="file"
+            accept="image/*"
+            capture="environment"
+            className="hidden"
+            onChange={(e) => {
+              const f = e.target.files?.[0];
+              if (f) scanFactura(f);
+              e.target.value = "";
+            }}
+          />
+        </div>
+
+        {scanInfo && (
+          <p className="mt-2 rounded-md bg-violet-50 px-3 py-2 text-sm text-violet-700">
+            📷 {scanInfo}
+          </p>
+        )}
+        {foto && (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={foto}
+            alt="Factura fotografiată"
+            className="mt-2 max-h-32 rounded-lg border border-slate-200"
+          />
+        )}
 
         <div className="mt-3 flex items-center gap-1.5">
           <input

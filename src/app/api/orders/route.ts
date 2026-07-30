@@ -58,6 +58,7 @@ export async function POST(req: Request) {
     note?: string;
     tip?: string;
     plata?: string;
+    foto?: string;
   };
   try {
     body = await req.json();
@@ -104,6 +105,12 @@ export async function POST(req: Request) {
   const total = hasPrices
     ? lines.reduce((s, l) => s + l.cantitate * (l.pret ?? 0), 0)
     : null;
+  // Poza facturii (opțională): JPEG mic făcut pe telefon, ca dovadă.
+  const rawFoto = String(body.foto ?? "");
+  const foto =
+    rawFoto.startsWith("data:image/") && rawFoto.length <= 1_500_000
+      ? rawFoto
+      : "";
 
   const db = getDB();
   if (!db) return Response.json({ enabled: false }, { status: 503 });
@@ -112,14 +119,14 @@ export async function POST(req: Request) {
     const id = `ord_${crypto.randomUUID().replace(/-/g, "").slice(0, 16)}`;
     await db`
       INSERT INTO orders (id, agent_id, agent_name, cui, denumire, localitate,
-                          lines, note, total_value, tip, plata, status)
+                          lines, note, total_value, tip, plata, status, foto)
       VALUES (${id}, ${payload.agentId}, ${payload.agentName},
               ${String(body.cui ?? "").replace(/\D/g, "").slice(0, 12)},
               ${denumire}, ${String(body.localitate ?? "").slice(0, 120)},
               ${db.json(lines as unknown as Parameters<typeof db.json>[0])},
               ${String(body.note ?? "").slice(0, 1000)}, ${total},
               ${isVan ? "van" : "comanda"}, ${plata},
-              ${isVan ? "livrata" : "noua"})
+              ${isVan ? "livrata" : "noua"}, ${foto})
     `;
     if (isVan) {
       // Scădem stocul din mașină (potrivire pe nume, indiferent de

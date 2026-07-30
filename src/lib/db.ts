@@ -168,6 +168,8 @@ export async function ensureSchema(): Promise<void> {
     -- status direct 'livrata') și încasează (plata: numerar/card/termen).
     ALTER TABLE orders ADD COLUMN IF NOT EXISTS tip TEXT NOT NULL DEFAULT 'comanda';
     ALTER TABLE orders ADD COLUMN IF NOT EXISTS plata TEXT NOT NULL DEFAULT '';
+    -- Poza facturii/bonului (JPEG mic, data-URL) — dovada vânzării pe loc.
+    ALTER TABLE orders ADD COLUMN IF NOT EXISTS foto TEXT NOT NULL DEFAULT '';
     -- Stocul din mașina fiecărui agent: se încarcă dimineața, scade la
     -- fiecare vânzare van, se descarcă la retur.
     CREATE TABLE IF NOT EXISTS van_stock (
