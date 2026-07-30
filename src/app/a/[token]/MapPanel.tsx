@@ -88,6 +88,17 @@ const VISIT_RESULTS: Array<{ id: string; label: string; emoji: string }> = [
   { id: "inchis", label: "Închis / nu era nimeni", emoji: "🚪" },
 ];
 
+/** Ziua curentă în cheile noastre de rută — „azi e luni → Ruta Rădăuți". */
+const TODAY_KEY = [
+  "duminica",
+  "luni",
+  "marti",
+  "miercuri",
+  "joi",
+  "vineri",
+  "sambata",
+][new Date().getDay()];
+
 const DAY_LABELS: Record<string, string> = {
   luni: "Luni",
   marti: "Marți",
@@ -653,21 +664,28 @@ export default function MapPanel({
         </div>
       )}
 
-      {/* Rutele salvate */}
+      {/* Rutele salvate = programul săptămânii; ruta de azi sare în față */}
       {routes.length > 0 && (
         <div className="card p-4">
           <h4 className="flex items-center gap-2 text-sm font-semibold text-slate-800">
             <CalendarDays className="h-4 w-4 text-indigo-500" />
-            Rutele mele ({routes.length})
+            Programul meu ({routes.length} rute)
           </h4>
           <ul className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-            {routes.map((r) => (
+            {[...routes]
+              .sort((a, b) => {
+                const today = TODAY_KEY;
+                return (b.day === today ? 1 : 0) - (a.day === today ? 1 : 0);
+              })
+              .map((r) => (
               <li
                 key={r.id}
                 className={`rounded-lg border px-3 py-2 ${
                   activeRouteId === r.id
                     ? "border-indigo-300 bg-indigo-50"
-                    : "border-slate-200"
+                    : r.day === TODAY_KEY
+                      ? "border-emerald-300 bg-emerald-50/50"
+                      : "border-slate-200"
                 }`}
               >
                 <div className="flex items-center justify-between gap-2">
@@ -680,8 +698,13 @@ export default function MapPanel({
                     }}
                     className="min-w-0 flex-1 text-left"
                   >
-                    <p className="truncate text-sm font-medium text-slate-800">
-                      {r.name}
+                    <p className="flex items-center gap-1.5 truncate text-sm font-medium text-slate-800">
+                      <span className="truncate">{r.name}</span>
+                      {r.day === TODAY_KEY && (
+                        <span className="shrink-0 rounded-full bg-emerald-600 px-1.5 py-0.5 text-[10px] font-semibold text-white">
+                          AZI
+                        </span>
+                      )}
                     </p>
                     <p className="text-xs text-slate-500">
                       {DAY_LABELS[r.day] ?? r.day} · {r.stops.length} opriri
