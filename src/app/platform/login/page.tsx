@@ -1,9 +1,11 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { Alert, Button, Field, inputClass } from "../ui";
+import { ArrowRight, Loader2, ShieldCheck } from "lucide-react";
 
+/** Login super-admin — aceeași identitate de brand, accent negru. */
 export default function PlatformLogin() {
   const router = useRouter();
   const [email, setEmail] = useState("");
@@ -36,64 +38,100 @@ export default function PlatformLogin() {
   }
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-slate-50 px-4 py-12">
+    <main
+      className="flex min-h-screen items-center justify-center px-4 py-12"
+      style={{
+        background: "#f5efe4",
+        backgroundImage: "radial-gradient(#16141208 1.1px, transparent 1.1px)",
+        backgroundSize: "22px 22px",
+        fontFamily: "var(--font-body), system-ui, sans-serif",
+      }}
+    >
       <div className="w-full max-w-sm">
-        <div className="mb-6 flex flex-col items-center text-center">
-          <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-500 to-violet-500 text-white">
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth={2}
-              className="h-6 w-6"
-            >
-              <path d="M3 3v18h18" />
-              <path d="m7 14 4-4 4 4 4-6" />
-            </svg>
-          </div>
-          <h1 className="mt-3 text-xl font-semibold tracking-tight text-slate-900">
-            BC Agent — Platformă
+        <Link href="/" className="mb-8 flex items-center justify-center gap-2.5">
+          <span
+            className="flex h-11 w-11 items-center justify-center rounded-lg border-2 border-[#161412] bg-[#161412] text-xl font-black text-[#ffd23f]"
+            style={{ boxShadow: "4px 4px 0 #ff4d00" }}
+          >
+            B
+          </span>
+          <span
+            className="text-2xl font-extrabold tracking-tight text-[#161412]"
+            style={{ fontFamily: "var(--font-display), sans-serif" }}
+          >
+            BC AGENT
+          </span>
+        </Link>
+
+        <div
+          className="rounded-2xl border-2 border-[#161412] bg-white p-7"
+          style={{ boxShadow: "6px 6px 0 #161412" }}
+        >
+          <h1
+            className="flex items-center gap-2 text-xl font-extrabold text-[#161412]"
+            style={{ fontFamily: "var(--font-display), sans-serif" }}
+          >
+            <ShieldCheck className="h-5 w-5" />
+            Administrare platformă
           </h1>
-          <p className="text-sm text-slate-500">Panou super-administrator</p>
+          <p className="mt-1 text-sm font-medium text-[#161412]/60">
+            Doar pentru super-administrator
+          </p>
+
+          <form onSubmit={submit} className="mt-6 space-y-4">
+            <div>
+              <label className="block text-xs font-black uppercase tracking-widest text-[#161412]/50">
+                Email
+              </label>
+              <input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                required
+                autoComplete="username"
+                className="mt-1.5 block w-full rounded-lg border-2 border-[#161412] px-3.5 py-3 text-[16px] font-medium text-[#161412] outline-none transition focus:bg-[#fdf3d8]"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-black uppercase tracking-widest text-[#161412]/50">
+                Parolă
+              </label>
+              <input
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+                autoComplete="current-password"
+                className="mt-1.5 block w-full rounded-lg border-2 border-[#161412] px-3.5 py-3 text-[16px] font-medium text-[#161412] outline-none transition focus:bg-[#fdf3d8]"
+              />
+            </div>
+
+            {error && (
+              <p className="rounded-lg border-2 border-[#161412] bg-[#fbe7ec] px-3 py-2.5 text-sm font-semibold text-[#9f1239]">
+                {error}
+              </p>
+            )}
+
+            <button
+              type="submit"
+              disabled={loading}
+              className="flex w-full items-center justify-center gap-2 rounded-xl border-2 border-[#161412] bg-[#161412] py-3.5 text-[16px] font-black text-[#ffd23f] transition hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none disabled:opacity-60"
+              style={{ boxShadow: "4px 4px 0 #ff4d00" }}
+            >
+              {loading ? (
+                <Loader2 className="h-5 w-5 animate-spin" />
+              ) : (
+                <>
+                  Intră în administrare <ArrowRight className="h-5 w-5" />
+                </>
+              )}
+            </button>
+          </form>
         </div>
 
-        <form
-          onSubmit={submit}
-          className="space-y-4 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm"
-        >
-          <Field label="Email">
-            <input
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
-              autoComplete="username"
-              className={inputClass}
-              placeholder="admin@firma.ro"
-            />
-          </Field>
-          <Field label="Parolă">
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-              autoComplete="current-password"
-              className={inputClass}
-            />
-          </Field>
-
-          {error && <Alert>{error}</Alert>}
-
-          <Button type="submit" disabled={loading} className="w-full">
-            {loading ? "Se verifică..." : "Intră în panou"}
-          </Button>
-        </form>
-
-        <p className="mt-4 text-center text-xs text-slate-400">
-          Primul login se face cu PLATFORM_ADMIN_EMAIL și
-          PLATFORM_ADMIN_PASSWORD din variabilele de mediu.
+        <p className="mt-5 text-center text-xs font-semibold text-[#161412]/45">
+          Primul login: PLATFORM_ADMIN_EMAIL + PLATFORM_ADMIN_PASSWORD din
+          variabilele de mediu.
         </p>
       </div>
     </main>

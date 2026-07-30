@@ -76,6 +76,7 @@ import ImportClients from "./ImportClients";
 import { TargetPanel, ExpensesPanel } from "./AgentExtras";
 import CoachPanel from "./CoachPanel";
 import DayPanel from "./DayPanel";
+import ReportIssue from "@/app/ReportIssue";
 import { smartAnalysis } from "@/modules/analytics/smart";
 
 const PALETTE = [
@@ -700,6 +701,7 @@ export default function Dashboard({
         onCloseMobile={() => setMobileNavOpen(false)}
       />
 
+      <ReportIssue token={token} />
       <div className="lg:pl-60">
         <Topbar
           agentName={agentName}

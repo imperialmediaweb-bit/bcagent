@@ -1,6 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { parseXLSBuffer } from "@/lib/parse-xls";
+import { Trash2, Upload } from "lucide-react";
 import {
   Bar,
   BarChart,
@@ -42,20 +44,185 @@ const PALETTE = [
   "#ec4899", "#14b8a6", "#f97316",
 ];
 
+interface OrgBatch {
+  id: string;
+  fileName: string;
+  rowCount: number;
+  dateMin: string;
+  dateMax: string;
+  uploadedAt: string;
+}
+
+/**
+ * Upload de rapoarte direct din panoul agenției (owner SAU manager):
+ * XLS/XLSX/ODS/CSV — detecția de coloane e cea din panoul agentului,
+ * iar datele intră automat în Vânzări, Targeturi și Briefingul AI.
+ */
+function UploadCard({ onUploaded }: { onUploaded: () => void }) {
+  const [batches, setBatches] = useState<OrgBatch[]>([]);
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<{ kind: "error" | "success" | "info"; text: string } | null>(null);
+  const fileRef = useRef<HTMLInputElement | null>(null);
+
+  const loadBatches = useCallback(() => {
+    api<{ batches: OrgBatch[] }>("/api/agentie/upload")
+      .then((d) => setBatches(d.batches))
+      .catch(() => {});
+  }, []);
+  useEffect(loadBatches, [loadBatches]);
+
+  async function onFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    setBusy(true);
+    setMsg({ kind: "info", text: `Se citește ${file.name}...` });
+    try {
+      const parsed = await parseXLSBuffer(await file.arrayBuffer());
+      if (!parsed.rows.length) {
+        setMsg({
+          kind: "error",
+          text: "Nu am găsit rânduri valide — verifică dacă fișierul are coloanele Data / Agent / Client / Cantitate.",
+        });
+        return;
+      }
+      const res = await api<{
+        rows: number;
+        dateMin: string;
+        dateMax: string;
+        agentsUnknown: string[];
+      }>("/api/agentie/upload", {
+        method: "POST",
+        json: {
+          fileName: file.name,
+          rows: parsed.rows.map((r) => ({
+            date: r.date.toISOString(),
+            agent: r.agent,
+            producer: r.producer,
+            client: r.client,
+            volume: r.volume,
+            value: r.value,
+          })),
+        },
+      });
+      const warn =
+        res.agentsUnknown.length > 0
+          ? ` ⚠ Agenți din fișier fără cont în firmă: ${res.agentsUnknown.join(", ")} — adaugă-i din pagina Agenți cu EXACT numele ăsta ca să se lege rapoartele.`
+          : "";
+      setMsg({
+        kind: res.agentsUnknown.length ? "info" : "success",
+        text: `Import reușit: ${res.rows.toLocaleString("ro-RO")} rânduri (${res.dateMin} → ${res.dateMax}). Cifrele s-au actualizat automat în Vânzări, Targeturi și Briefing.${warn}`,
+      });
+      loadBatches();
+      onUploaded();
+    } catch (err) {
+      setMsg({
+        kind: "error",
+        text:
+          err instanceof Error
+            ? `Nu am putut încărca fișierul: ${err.message}`
+            : "Nu am putut încărca fișierul.",
+      });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function removeBatch(id: string) {
+    if (!confirm("Ștergi raportul? Cifrele lui dispar din analize.")) return;
+    try {
+      await api(`/api/agentie/upload?id=${id}`, { method: "DELETE" });
+      loadBatches();
+      onUploaded();
+    } catch (e) {
+      setMsg({ kind: "error", text: e instanceof Error ? e.message : String(e) });
+    }
+  }
+
+  return (
+    <Card>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h2 className="flex items-center gap-2 text-sm font-semibold text-slate-800">
+            <Upload className="h-4 w-4 text-emerald-600" />
+            Încarcă raport de vânzări (XLS, XLSX, ODS, CSV)
+          </h2>
+          <p className="mt-0.5 text-xs text-slate-500">
+            Coloanele se detectează automat (Data, Agent, Producător, Client,
+            Cantitate, Valoare). Cifrele intră instant în toate analizele.
+          </p>
+        </div>
+        <input
+          ref={fileRef}
+          type="file"
+          accept=".xls,.xlsx,.ods,.csv,.txt"
+          onChange={onFile}
+          className="hidden"
+        />
+        <button
+          type="button"
+          disabled={busy}
+          onClick={() => fileRef.current?.click()}
+          className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-emerald-700 disabled:opacity-60"
+        >
+          <Upload className="h-4 w-4" />
+          {busy ? "Se încarcă..." : "Alege fișierul"}
+        </button>
+      </div>
+      {msg && (
+        <div className="mt-3">
+          <Alert kind={msg.kind}>{msg.text}</Alert>
+        </div>
+      )}
+      {batches.length > 0 && (
+        <ul className="mt-3 divide-y divide-slate-100">
+          {batches.map((b) => (
+            <li key={b.id} className="flex items-center justify-between gap-2 py-2 text-sm">
+              <div className="min-w-0">
+                <p className="truncate font-medium text-slate-800">{b.fileName}</p>
+                <p className="text-xs text-slate-500">
+                  {b.rowCount.toLocaleString("ro-RO")} rânduri · {b.dateMin} →{" "}
+                  {b.dateMax} · urcat{" "}
+                  {new Date(b.uploadedAt).toLocaleDateString("ro-RO")}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => removeBatch(b.id)}
+                className="shrink-0 rounded-md p-1.5 text-slate-400 hover:text-rose-500"
+                title="Șterge raportul"
+              >
+                <Trash2 className="h-4 w-4" />
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </Card>
+  );
+}
+
 export default function VanzariPage() {
   const [months, setMonths] = useState(6);
   const [data, setData] = useState<SalesData | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
     setData(null);
     api<SalesData>(`/api/agentie/sales?months=${months}`)
       .then(setData)
       .catch((e) => setError(e instanceof Error ? e.message : String(e)));
-  }, [months]);
+  }, [months, reloadKey]);
 
   if (error) return <Alert>{error}</Alert>;
-  if (!data) return <div className="h-40 animate-pulse rounded-2xl bg-slate-200/60" />;
+  if (!data)
+    return (
+      <div className="space-y-5">
+        <UploadCard onUploaded={() => setReloadKey((k) => k + 1)} />
+        <div className="h-40 animate-pulse rounded-2xl bg-slate-200/60" />
+      </div>
+    );
 
   const chartData = data.months.map((m, i) => {
     const row: Record<string, string | number> = { luna: m.slice(5) + "." + m.slice(2, 4) };
@@ -66,6 +233,7 @@ export default function VanzariPage() {
 
   return (
     <div className="space-y-5">
+      <UploadCard onUploaded={() => setReloadKey((k) => k + 1)} />
       <header className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight text-slate-900">

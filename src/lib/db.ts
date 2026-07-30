@@ -81,6 +81,21 @@ export async function ensureSchema(): Promise<void> {
     -- Coada de verificare ANAF (activ IS NULL) — index parțial, foarte mic
     CREATE INDEX IF NOT EXISTS prospects_pending_anaf ON prospects(cui)
       WHERE activ IS NULL;
+    -- Problemele raportate din platformă (de agenți/manageri sau automat),
+    -- cu diagnosticul AI atașat — adminul le vede în /platform/probleme.
+    CREATE TABLE IF NOT EXISTS issues (
+      id TEXT PRIMARY KEY,
+      source TEXT NOT NULL DEFAULT 'user',
+      reporter TEXT NOT NULL DEFAULT '',
+      role TEXT NOT NULL DEFAULT '',
+      page TEXT NOT NULL DEFAULT '',
+      message TEXT NOT NULL,
+      context JSONB NOT NULL DEFAULT '{}'::jsonb,
+      ai_diagnosis TEXT NOT NULL DEFAULT '',
+      status TEXT NOT NULL DEFAULT 'noua',
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS issues_status ON issues(status, created_at DESC);
     -- Rutele agenților: șabloane pe zile (Luni — Rădăuți) cu opriri ordonate.
     CREATE TABLE IF NOT EXISTS routes (
       id TEXT PRIMARY KEY,

@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useState } from "react";
+import ReportIssue from "@/app/ReportIssue";
 import {
   Building2,
   ClipboardList,
@@ -145,6 +146,7 @@ export default function OrgShell({
       </aside>
 
       <main className="px-4 py-6 sm:px-6 lg:ml-60 lg:px-8">{children}</main>
+      <ReportIssue />
     </div>
   );
 }
