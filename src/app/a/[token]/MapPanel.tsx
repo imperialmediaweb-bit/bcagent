@@ -826,6 +826,7 @@ function LocalityFirms({
   const [loading, setLoading] = useState(true);
   const [visitFor, setVisitFor] = useState<Firm | null>(null);
   const [orderFor, setOrderFor] = useState<Firm | null>(null);
+  const [briefFor, setBriefFor] = useState<Firm | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -1006,6 +1007,14 @@ function LocalityFirms({
                   </a>
                   <button
                     type="button"
+                    onClick={() => setBriefFor(f)}
+                    className="inline-flex items-center gap-1 rounded-md bg-slate-100 px-2 py-1 text-xs font-medium text-slate-700 hover:bg-slate-200"
+                    title="Fișa clientului, făcută de AI din tot istoricul"
+                  >
+                    📋 Fișă
+                  </button>
+                  <button
+                    type="button"
                     onClick={() => setOrderFor(f)}
                     className="inline-flex items-center gap-1 rounded-md bg-emerald-50 px-2 py-1 text-xs font-medium text-emerald-700 hover:bg-emerald-100"
                   >
@@ -1038,6 +1047,101 @@ function LocalityFirms({
         onClose={() => setOrderFor(null)}
         onSent={showToast}
       />
+      <BriefModal token={token} firm={briefFor} onClose={() => setBriefFor(null)} />
+    </div>
+  );
+}
+
+/** Fișa clientului: AI-ul rezumă notele, vizitele și comenzile firmei. */
+function BriefModal({
+  token,
+  firm,
+  onClose,
+}: {
+  token: string;
+  firm: { cui: string; denumire: string } | null;
+  onClose: () => void;
+}) {
+  const [text, setText] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    if (!firm) return;
+    setText("");
+    setError(null);
+    setBusy(true);
+    const controller = new AbortController();
+    (async () => {
+      try {
+        const res = await fetch("/api/client-brief", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          signal: controller.signal,
+          body: JSON.stringify({ token, cui: firm.cui }),
+        });
+        if (!res.ok || !res.body) {
+          const data = (await res.json().catch(() => null)) as {
+            error?: string;
+          } | null;
+          setError(data?.error ?? `Eroare ${res.status}`);
+          return;
+        }
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+        let acc = "";
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          acc += decoder.decode(value, { stream: true });
+          setText(acc);
+        }
+      } catch (e) {
+        if ((e as { name?: string })?.name !== "AbortError") {
+          setError(e instanceof Error ? e.message : String(e));
+        }
+      } finally {
+        setBusy(false);
+      }
+    })();
+    return () => controller.abort();
+  }, [firm, token]);
+
+  if (!firm) return null;
+  return (
+    <div className="fixed inset-0 z-[1200] flex items-end justify-center bg-slate-900/40 sm:items-center">
+      <div className="absolute inset-0" onClick={onClose} aria-hidden="true" />
+      <div className="relative max-h-[92vh] w-full overflow-y-auto rounded-t-2xl bg-white p-5 shadow-xl sm:max-w-lg sm:rounded-2xl">
+        <div className="mb-3 flex items-center justify-between gap-2">
+          <h3 className="min-w-0 truncate text-base font-semibold text-slate-900">
+            📋 {firm.denumire}
+          </h3>
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-lg p-1 text-slate-400 hover:bg-slate-100"
+            aria-label="Închide"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+        {error && (
+          <p className="rounded-md bg-rose-50 px-3 py-2 text-sm text-rose-700">
+            {error}
+          </p>
+        )}
+        {busy && !text && (
+          <p className="flex items-center gap-2 text-sm text-slate-500">
+            <Loader2 className="h-4 w-4 animate-spin" />
+            Citesc notele, vizitele și comenzile...
+          </p>
+        )}
+        {text && (
+          <div className="whitespace-pre-wrap text-sm leading-relaxed text-slate-700">
+            {text}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
