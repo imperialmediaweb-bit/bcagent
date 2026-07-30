@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { CheckCircle2, Loader2, UserPlus } from "lucide-react";
+import { useRef, useState } from "react";
+import { CheckCircle2, FileUp, Loader2, UserPlus } from "lucide-react";
 
 interface MatchedClient {
   client: string;
@@ -21,12 +21,55 @@ interface MatchedClient {
 export default function ImportClients({
   token,
   clientAgents,
+  agentName,
 }: {
   token: string;
   /** Fiecare client din vânzări + agentul care îi vinde cel mai mult. */
   clientAgents: Array<{ name: string; agent: string }>;
+  /** Numele agentului logat — fișierul propriu se alocă lui. */
+  agentName?: string;
 }) {
   const [loading, setLoading] = useState(false);
+  const fileRef = useRef<HTMLInputElement | null>(null);
+
+  async function runFile(f: File) {
+    setLoading(true);
+    setError(null);
+    try {
+      const { parseClientsFile } = await import("@/lib/parse-xls");
+      const parsed = await parseClientsFile(await f.arrayBuffer());
+      if (parsed.clients.length === 0) {
+        setError(
+          "N-am găsit clienți în fișier — trebuie o coloană cu denumirea firmei.",
+        );
+        return;
+      }
+      const res = await fetch("/api/prospects/import-clients", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          token,
+          clients: parsed.clients.map((c) => ({
+            name: c.name,
+            cui: c.cui,
+            agent: c.agent || agentName || "",
+          })),
+        }),
+      });
+      const data = (await res.json()) as
+        | { matched: MatchedClient[]; unmatched: string[]; updated: number }
+        | { error: string };
+      if (!res.ok || "error" in data) {
+        setError("error" in data ? data.error : `Eroare ${res.status}`);
+        return;
+      }
+      setResult(data);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setLoading(false);
+    }
+  }
   const [result, setResult] = useState<{
     matched: MatchedClient[];
     unmatched: string[];
@@ -59,7 +102,7 @@ export default function ImportClients({
     }
   }
 
-  if (clientAgents.length === 0) return null;
+  if (clientAgents.length === 0 && !agentName) return null;
 
   return (
     <div className="card mb-4 p-4">
@@ -75,19 +118,43 @@ export default function ImportClients({
             alocați agentului care le vinde.
           </p>
         </div>
-        <button
-          type="button"
-          onClick={run}
-          disabled={loading}
-          className="inline-flex items-center gap-1.5 rounded-md bg-emerald-600 px-3 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-emerald-700 disabled:opacity-60"
-        >
-          {loading ? (
-            <Loader2 className="h-4 w-4 animate-spin" />
-          ) : (
-            <UserPlus className="h-4 w-4" />
+        <div className="flex flex-wrap items-center gap-2">
+          {clientAgents.length > 0 && (
+            <button
+              type="button"
+              onClick={run}
+              disabled={loading}
+              className="inline-flex items-center gap-1.5 rounded-md bg-emerald-600 px-3 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-emerald-700 disabled:opacity-60"
+            >
+              {loading ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <UserPlus className="h-4 w-4" />
+              )}
+              {loading ? "Se potrivesc..." : "Importă clienții"}
+            </button>
           )}
-          {loading ? "Se potrivesc..." : "Importă clienții"}
-        </button>
+          <button
+            type="button"
+            onClick={() => fileRef.current?.click()}
+            disabled={loading}
+            className="inline-flex items-center gap-1.5 rounded-md bg-white px-3 py-2 text-sm font-medium text-slate-700 shadow-sm ring-1 ring-inset ring-slate-200 transition hover:bg-slate-50 disabled:opacity-60"
+          >
+            <FileUp className="h-4 w-4" />
+            Sau fișierul tău de clienți
+          </button>
+          <input
+            ref={fileRef}
+            type="file"
+            accept=".xls,.xlsx,.ods,.csv,.txt"
+            className="hidden"
+            onChange={(e) => {
+              const f = e.target.files?.[0];
+              if (f) runFile(f);
+              e.target.value = "";
+            }}
+          />
+        </div>
       </div>
 
       {error && (

@@ -1,6 +1,7 @@
 import { verifyToken } from "@/lib/signed-token";
 import { ensureSchema, getDB, isDBEnabled } from "@/lib/db";
 import { clientIP, rateLimit } from "@/lib/rate-limit";
+import { variantsFor } from "@/lib/name-match";
 
 export const runtime = "nodejs";
 export const maxDuration = 30;
@@ -12,36 +13,6 @@ export const maxDuration = 30;
  * mai mult. Rulează idempotent — a doua apăsare nu strică nimic.
  */
 
-const LEGAL_TOKENS = new Set([
-  "SC", "SRL", "S", "R", "L", "SA", "PFA", "II", "IF", "SNC", "SCS", "SRLD",
-]);
-
-function normalizeName(name: string): string {
-  return name.replace(/[^a-zA-Z0-9]+/g, " ").toUpperCase().trim();
-}
-
-function coreName(norm: string): string {
-  const tokens = norm.split(" ").filter(Boolean);
-  while (tokens.length > 1 && LEGAL_TOKENS.has(tokens[0])) tokens.shift();
-  while (tokens.length > 1 && LEGAL_TOKENS.has(tokens[tokens.length - 1]))
-    tokens.pop();
-  return tokens.join(" ");
-}
-
-function variantsFor(name: string): string[] {
-  const norm = normalizeName(name);
-  if (norm.length < 4) return [];
-  const core = coreName(norm);
-  const set = new Set<string>([norm]);
-  if (core.length >= 4) {
-    set.add(core);
-    set.add(`${core} SRL`);
-    set.add(`${core} S R L`);
-    set.add(`SC ${core} SRL`);
-    set.add(`${core} PFA`);
-  }
-  return Array.from(set);
-}
 
 export async function POST(req: Request) {
   if (!isDBEnabled()) return Response.json({ enabled: false }, { status: 503 });
@@ -58,7 +29,7 @@ export async function POST(req: Request) {
 
   let body: {
     token?: string;
-    clients?: Array<{ name?: string; agent?: string }>;
+    clients?: Array<{ name?: string; agent?: string; cui?: string }>;
     dryRun?: boolean;
   };
   try {
@@ -74,20 +45,30 @@ export async function POST(req: Request) {
   }
 
   const clients = body.clients
-    .filter((c) => typeof c?.name === "string" && c.name.trim().length >= 4)
+    .filter(
+      (c) =>
+        (typeof c?.name === "string" && c.name.trim().length >= 4) ||
+        String(c?.cui ?? "").replace(/\D/g, "").length >= 2,
+    )
     .map((c) => ({
-      name: c.name!.trim().slice(0, 200),
+      name: String(c.name ?? "").trim().slice(0, 200),
       agent: String(c.agent ?? "").slice(0, 128),
+      cui: String(c.cui ?? "").replace(/\D/g, "").slice(0, 12),
     }))
-    .slice(0, 800);
+    .slice(0, 5000);
 
-  const variantToClient = new Map<string, { name: string; agent: string }>();
+  const variantToClient = new Map<
+    string,
+    { name: string; agent: string; cui: string }
+  >();
   for (const c of clients) {
+    if (c.name.length < 4) continue;
     for (const v of variantsFor(c.name)) {
       if (!variantToClient.has(v)) variantToClient.set(v, c);
     }
   }
-  if (variantToClient.size === 0) {
+  const withCui = clients.filter((c) => c.cui.length >= 2);
+  if (variantToClient.size === 0 && withCui.length === 0) {
     return Response.json({ matched: [], unmatched: clients.map((c) => c.name) });
   }
 
@@ -96,24 +77,45 @@ export async function POST(req: Request) {
 
   try {
     await ensureSchema();
+
+    // Potrivirea pe CUI (dacă fișierul îl are) — exactă, prioritară.
+    const cuiRows =
+      withCui.length > 0
+        ? await db<
+            Array<{
+              cui: string;
+              denumire: string;
+              localitate: string;
+              judet: string;
+              status: string;
+            }>
+          >`
+            SELECT cui, denumire, localitate, judet, status FROM prospects
+            WHERE cui = ANY(${withCui.map((c) => c.cui)})
+          `
+        : [];
+    const cuiHits = new Map(cuiRows.map((r) => [r.cui, r]));
     const variants = Array.from(variantToClient.keys());
-    const rows = await db<
-      Array<{
-        cui: string;
-        denumire: string;
-        localitate: string;
-        judet: string;
-        status: string;
-        norm: string;
-      }>
-    >`
-      SELECT cui, denumire, localitate, judet, status,
-             btrim(upper(regexp_replace(denumire, '[^a-zA-Z0-9]+', ' ', 'g'))) AS norm
-      FROM prospects
-      WHERE btrim(upper(regexp_replace(denumire, '[^a-zA-Z0-9]+', ' ', 'g')))
-            = ANY(${variants})
-      LIMIT 2000
-    `;
+    const rows =
+      variants.length > 0
+        ? await db<
+            Array<{
+              cui: string;
+              denumire: string;
+              localitate: string;
+              judet: string;
+              status: string;
+              norm: string;
+            }>
+          >`
+            SELECT cui, denumire, localitate, judet, status,
+                   btrim(upper(regexp_replace(denumire, '[^a-zA-Z0-9]+', ' ', 'g'))) AS norm
+            FROM prospects
+            WHERE btrim(upper(regexp_replace(denumire, '[^a-zA-Z0-9]+', ' ', 'g')))
+                  = ANY(${variants})
+            LIMIT 10000
+          `
+        : [];
 
     // Un client din XLS → o singură firmă (prima cu localitate).
     const byClient = new Map<
@@ -127,9 +129,22 @@ export async function POST(req: Request) {
         wasClient: boolean;
       }
     >();
+    for (const c of withCui) {
+      const r = cuiHits.get(c.cui);
+      if (!r) continue;
+      byClient.set(c.name || r.denumire, {
+        agent: c.agent,
+        cui: r.cui,
+        denumire: r.denumire,
+        localitate: r.localitate,
+        judet: r.judet,
+        wasClient: r.status === "client",
+      });
+    }
     for (const r of rows) {
       const c = variantToClient.get(r.norm);
       if (!c) continue;
+      if (c.cui && cuiHits.has(c.cui)) continue;
       const existing = byClient.get(c.name);
       if (!existing || (!existing.localitate && r.localitate)) {
         byClient.set(c.name, {

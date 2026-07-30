@@ -624,3 +624,141 @@ export async function parseXLSBuffer(buffer: ArrayBuffer): Promise<ParseResult> 
     },
   };
 }
+
+/* ───────────────── Fișier de CLIENȚI (universul de clienți) ───────────────
+   Lista de clienți a firmei: o coloană cu denumirea, opțional CUI și agentul
+   care îi ține. Coloanele se detectează după antet; dacă nu există antet,
+   prima coloană cu texte e denumirea. */
+
+export interface ClientFileRow {
+  name: string;
+  cui: string;
+  agent: string;
+}
+
+export interface ClientsParseResult {
+  clients: ClientFileRow[];
+  sheetName: string;
+  columns: { name: string; cui: string; agent: string };
+}
+
+const CLIENT_NAME_HEADERS =
+  /denumire|client|firma|firmă|nume|societate|magazin|partener/i;
+const CLIENT_CUI_HEADERS = /\bcui\b|cod\s*fiscal|\bcif\b|cod\s*unic/i;
+const CLIENT_AGENT_HEADERS = /agent|vanzator|vânzător|reprezentant|gestionar/i;
+
+function cellText(v: unknown): string {
+  if (v === null || v === undefined) return "";
+  return String(v).trim();
+}
+
+export async function parseClientsFile(
+  buffer: ArrayBuffer,
+): Promise<ClientsParseResult> {
+  const wb = XLSX.read(buffer, { type: "array" });
+  let best: ClientsParseResult = {
+    clients: [],
+    sheetName: "",
+    columns: { name: "", cui: "", agent: "" },
+  };
+
+  for (const sheetName of wb.SheetNames) {
+    const sheet = wb.Sheets[sheetName];
+    if (!sheet) continue;
+    const aoa = XLSX.utils.sheet_to_json<unknown[]>(sheet, {
+      header: 1,
+      defval: null,
+      raw: false,
+      blankrows: false,
+    });
+    if (aoa.length === 0) continue;
+
+    // Căutăm rândul de antet în primele 10 rânduri.
+    let headerRow = -1;
+    let nameCol = -1;
+    let cuiCol = -1;
+    let agentCol = -1;
+    for (let r = 0; r < Math.min(10, aoa.length); r++) {
+      const row = aoa[r] ?? [];
+      let n = -1;
+      let c = -1;
+      let a = -1;
+      for (let i = 0; i < row.length; i++) {
+        const h = cellText(row[i]);
+        if (!h) continue;
+        // Un antet e scurt și nu arată ca o denumire de firmă reală
+        // (ex: „MAGAZIN CENTRAL SRL" conține „magazin" dar NU e antet).
+        const looksLikeFirm =
+          h.length > 30 || /\b(SRL|S\.?R\.?L\.?|PFA|SA|SNC|II)\b\.?$/i.test(h);
+        if (looksLikeFirm) continue;
+        if (n === -1 && CLIENT_NAME_HEADERS.test(h)) n = i;
+        if (c === -1 && CLIENT_CUI_HEADERS.test(h)) c = i;
+        if (a === -1 && CLIENT_AGENT_HEADERS.test(h)) a = i;
+      }
+      if (n !== -1) {
+        headerRow = r;
+        nameCol = n;
+        cuiCol = c;
+        agentCol = a;
+        break;
+      }
+    }
+
+    // Fără antet: prima coloană cu majoritatea celulelor text lungi.
+    if (headerRow === -1) {
+      const sampleRows = aoa.slice(0, 50);
+      const width = Math.max(...sampleRows.map((r) => (r ?? []).length), 0);
+      for (let i = 0; i < width; i++) {
+        const texts = sampleRows.filter((r) => {
+          const v = cellText((r ?? [])[i]);
+          return v.length >= 4 && !/^\d+([.,]\d+)?$/.test(v);
+        }).length;
+        if (texts >= Math.min(5, sampleRows.length)) {
+          nameCol = i;
+          headerRow = -1;
+          break;
+        }
+      }
+      if (nameCol === -1) continue;
+    }
+
+    const clients: ClientFileRow[] = [];
+    for (let r = headerRow + 1; r < aoa.length; r++) {
+      const row = aoa[r] ?? [];
+      const name = cellText(row[nameCol]);
+      if (name.length < 4) continue;
+      // Rânduri de total/subtotal — nu sunt clienți.
+      if (/^total|^subtotal/i.test(name)) continue;
+      clients.push({
+        name: name.slice(0, 200),
+        cui:
+          cuiCol !== -1
+            ? cellText(row[cuiCol]).replace(/\D/g, "").slice(0, 12)
+            : "",
+        agent: agentCol !== -1 ? cellText(row[agentCol]).slice(0, 128) : "",
+      });
+    }
+
+    if (clients.length > best.clients.length) {
+      const headers = headerRow >= 0 ? (aoa[headerRow] ?? []) : [];
+      best = {
+        clients,
+        sheetName,
+        columns: {
+          name: headerRow >= 0 ? cellText(headers[nameCol]) : `coloana ${nameCol + 1}`,
+          cui: cuiCol !== -1 ? cellText(headers[cuiCol]) : "",
+          agent: agentCol !== -1 ? cellText(headers[agentCol]) : "",
+        },
+      };
+    }
+  }
+  // Dedup pe nume+cui (listele centralizate au adesea dubluri).
+  const seen = new Set<string>();
+  best.clients = best.clients.filter((c) => {
+    const k = `${c.cui}|${c.name.toUpperCase()}`;
+    if (seen.has(k)) return false;
+    seen.add(k);
+    return true;
+  }).slice(0, 5000);
+  return best;
+}

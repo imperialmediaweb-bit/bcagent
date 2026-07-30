@@ -1210,7 +1210,11 @@ export default function Dashboard({
             />
             <div className="mt-4">
               {hasData && (
-                <ImportClients token={token} clientAgents={clientAgents} />
+                <ImportClients
+                  token={token}
+                  clientAgents={clientAgents}
+                  agentName={agentName}
+                />
               )}
               <Prospects token={token} agents={agents} />
             </div>
