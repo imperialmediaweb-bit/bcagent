@@ -61,7 +61,7 @@ export default function PanelShell({
             onClick={() => setOpen(false)}
             className={`flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition ${
               active
-                ? "bg-indigo-500/15 text-white"
+                ? "bg-[#ff4d00] text-white"
                 : "text-slate-300 hover:bg-white/5 hover:text-white"
             }`}
           >
@@ -74,11 +74,11 @@ export default function PanelShell({
   );
 
   return (
-    <div className="min-h-screen bg-slate-50">
+    <div className="paperbg min-h-screen">
       {/* Bara mobilă */}
       <header className="sticky top-0 z-30 flex items-center justify-between border-b border-slate-800 bg-slate-900 px-4 py-3 lg:hidden">
         <div className="flex items-center gap-2">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-indigo-500 to-violet-500 text-white">
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg border-2 border-[#ffd23f]/60 bg-[#ff4d00] text-white">
             <LayoutDashboard className="h-4 w-4" />
           </div>
           <span className="text-sm font-semibold text-white">BC Agent</span>
@@ -110,7 +110,7 @@ export default function PanelShell({
       <aside className="fixed inset-y-0 left-0 hidden w-60 flex-col justify-between bg-slate-900 p-4 lg:flex">
         <div>
           <div className="mb-6 flex items-center gap-2 px-1">
-            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-500 to-violet-500 text-white">
+            <div className="flex h-9 w-9 items-center justify-center rounded-xl border-2 border-[#ffd23f]/60 bg-[#ff4d00] text-white">
               <LayoutDashboard className="h-5 w-5" />
             </div>
             <div className="min-w-0">

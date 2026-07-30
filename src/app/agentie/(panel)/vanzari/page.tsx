@@ -150,6 +150,9 @@ function UploadCard({ onUploaded }: { onUploaded: () => void }) {
           <p className="mt-0.5 text-xs text-slate-500">
             Coloanele se detectează automat (Data, Agent, Producător, Client,
             Cantitate, Valoare). Cifrele intră instant în toate analizele.
+            <br />
+            💡 De unde iei fișierul: <strong>SAGA → Situații → Ieșiri pe
+            documente → Export Excel</strong> (merge și CSV/ODS).
           </p>
         </div>
         <input

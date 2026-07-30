@@ -45,7 +45,7 @@ export function Card({
 }) {
   return (
     <div
-      className={`rounded-2xl border border-slate-200 bg-white p-5 shadow-sm ${className}`}
+      className={`rounded-2xl border-2 border-[#161412] bg-white p-5 shadow-[4px_4px_0_rgba(22,20,18,0.9)] ${className}`}
     >
       {children}
     </div>
@@ -66,27 +66,29 @@ export function StatCard({
   icon?: ReactNode;
 }) {
   const tones: Record<string, string> = {
-    indigo: "from-indigo-500 to-violet-500",
-    emerald: "from-emerald-500 to-teal-500",
-    amber: "from-amber-500 to-orange-500",
-    rose: "from-rose-500 to-pink-500",
-    slate: "from-slate-500 to-slate-600",
+    indigo: "#ff4d00",
+    emerald: "#0b5d3b",
+    amber: "#ffd23f",
+    rose: "#9f1239",
+    slate: "#161412",
   };
+  const iconText = tone === "amber" ? "text-[#161412]" : "text-white";
   return (
     <Card className="relative overflow-hidden">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <p className="truncate text-xs font-medium uppercase tracking-wide text-slate-500">
+          <p className="truncate text-xs font-black uppercase tracking-widest text-[#161412]/50">
             {label}
           </p>
-          <p className="mt-1 text-2xl font-semibold tracking-tight text-slate-900">
+          <p className="display mt-1 text-2xl font-extrabold tracking-tight text-[#161412]">
             {value}
           </p>
-          {hint && <p className="mt-1 text-xs text-slate-500">{hint}</p>}
+          {hint && <p className="mt-1 text-xs font-medium text-[#161412]/55">{hint}</p>}
         </div>
         {icon && (
           <div
-            className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br text-white ${tones[tone]}`}
+            className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border-2 border-[#161412] ${iconText}`}
+            style={{ background: tones[tone], boxShadow: "3px 3px 0 rgba(22,20,18,0.9)" }}
           >
             {icon}
           </div>
@@ -145,11 +147,13 @@ export function Button({
   title?: string;
 }) {
   const variants: Record<string, string> = {
-    primary: "bg-indigo-600 text-white hover:bg-indigo-700 shadow-sm",
+    primary:
+      "border-2 border-[#161412] bg-[#ff4d00] text-white shadow-[3px_3px_0_rgba(22,20,18,0.9)] hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none",
     secondary:
-      "border border-slate-200 bg-white text-slate-700 hover:bg-slate-50",
-    danger: "bg-rose-600 text-white hover:bg-rose-700 shadow-sm",
-    ghost: "text-slate-600 hover:bg-slate-100",
+      "border-2 border-[#161412] bg-white text-[#161412] shadow-[3px_3px_0_rgba(22,20,18,0.9)] hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none",
+    danger:
+      "border-2 border-[#161412] bg-rose-600 text-white shadow-[3px_3px_0_rgba(22,20,18,0.9)] hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none",
+    ghost: "text-[#161412]/60 hover:bg-[#161412]/5",
   };
   return (
     <button
@@ -157,7 +161,7 @@ export function Button({
       onClick={onClick}
       disabled={disabled}
       title={title}
-      className={`inline-flex items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition disabled:cursor-not-allowed disabled:opacity-50 ${variants[variant]} ${className}`}
+      className={`inline-flex items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm font-bold transition disabled:cursor-not-allowed disabled:opacity-50 ${variants[variant]} ${className}`}
     >
       {children}
     </button>
@@ -185,7 +189,7 @@ export function Field({
 }
 
 export const inputClass =
-  "mt-1 block w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100";
+  "mt-1 block w-full rounded-lg border-2 border-[#161412]/80 bg-white px-3 py-2 text-sm font-medium text-[#161412] outline-none transition focus:border-[#161412] focus:bg-[#fdf3d8]";
 
 export function Modal({
   open,
@@ -218,7 +222,7 @@ export function Modal({
         aria-hidden="true"
       />
       <div
-        className={`relative max-h-[92vh] w-full overflow-y-auto rounded-t-2xl bg-white p-5 shadow-xl sm:rounded-2xl ${
+        className={`relative max-h-[92vh] w-full overflow-y-auto rounded-t-2xl border-2 border-[#161412] bg-white p-5 shadow-[6px_6px_0_rgba(22,20,18,0.9)] sm:rounded-2xl ${
           wide ? "sm:max-w-3xl" : "sm:max-w-lg"
         }`}
       >

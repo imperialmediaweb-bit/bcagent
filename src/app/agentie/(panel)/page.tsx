@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+// (Link e folosit și în ghidul „Primii pași")
 import { useEffect, useState } from "react";
 import {
   Building2,
@@ -223,6 +224,40 @@ export default function AgentieDashboard() {
             )
             .join(" · ")}
         </Alert>
+      )}
+
+      {data.agents.length === 0 && (
+        <Card className="border-[#ff4d00] bg-[#fdeee3]">
+          <h2 className="text-sm font-black uppercase tracking-widest text-[#161412]">
+            🚀 Primii pași — firma ta e gata în 10 minute
+          </h2>
+          <ol className="mt-3 space-y-2.5 text-sm font-medium text-[#161412]/80">
+            <li>
+              <strong>1. Adaugă agenții</strong> — în{" "}
+              <Link href="/agentie/agenti" className="font-bold text-[#ff4d00] underline">
+                Agenți
+              </Link>{" "}
+              → „Agent nou": pui numele EXACT ca în rapoartele de vânzări și
+              trimiți linkul pe WhatsApp.
+            </li>
+            <li>
+              <strong>2. Urcă vânzările</strong> — în{" "}
+              <Link href="/agentie/vanzari" className="font-bold text-[#ff4d00] underline">
+                Vânzări
+              </Link>
+              : fișierul XLS/CSV îl scoți din SAGA (Situații → Ieșiri pe
+              documente → Export Excel). Coloanele se detectează singure.
+            </li>
+            <li>
+              <strong>3. Importă soldurile</strong> — în{" "}
+              <Link href="/agentie/solduri" className="font-bold text-[#ff4d00] underline">
+                Solduri
+              </Link>
+              : copy-paste din raportul „Solduri clienți" din SAGA — restanțele
+              apar la agenți pe hartă.
+            </li>
+          </ol>
+        </Card>
       )}
 
       <BriefingCard />

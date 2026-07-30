@@ -1,7 +1,13 @@
 @import "tailwindcss";
 
 :root {
-  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+  font-family: var(--font-body), ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+  /* Paleta brandului „foaie de parcurs" — aceeași ca pe landing. */
+  --ink: #161412;
+  --paper: #f5efe4;
+  --hot: #ff4d00;
+  --tag: #ffd23f;
+  --leaf: #0b5d3b;
 }
 
 html,
@@ -18,11 +24,24 @@ body {
   animation: fadeIn 0.28s ease-out both;
 }
 
+/* Fundalul de hârtie cu puncte de print — pentru toate panourile. */
+.paperbg {
+  background: var(--paper);
+  background-image: radial-gradient(#16141208 1.1px, transparent 1.1px);
+  background-size: 22px 22px;
+}
+
+/* Tipografia de afiș (Syne) pentru titluri mari. */
+.display {
+  font-family: var(--font-display), var(--font-body), sans-serif;
+}
+
+/* Cardul brandului: bordură de cerneală + umbră dură decalată. */
 .card {
   background: white;
-  border-radius: 0.75rem;
-  border: 1px solid rgb(229 231 235);
-  box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.04);
+  border-radius: 1rem;
+  border: 2px solid var(--ink);
+  box-shadow: 4px 4px 0 rgba(22, 20, 18, 0.9);
 }
 
 .scroll-mt {
