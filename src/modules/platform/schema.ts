@@ -87,6 +87,8 @@ export async function ensurePlatformSchema(): Promise<void> {
     );
     CREATE UNIQUE INDEX IF NOT EXISTS org_agents_org_agent
       ON org_agents(org_id, agent_id);
+    -- Concedii: managerul marchează agentul „în concediu până la...".
+    ALTER TABLE org_agents ADD COLUMN IF NOT EXISTS away_until DATE;
 
     CREATE TABLE IF NOT EXISTS invoices (
       id TEXT PRIMARY KEY,

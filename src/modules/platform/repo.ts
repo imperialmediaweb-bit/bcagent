@@ -464,14 +464,26 @@ export async function deleteOrgUser(id: string): Promise<void> {
 
 /* ────────────────────────── agenți organizație ────────────────────── */
 
-export async function listOrgAgents(
-  orgId: string,
-): Promise<Array<{ id: string; agentId: string; name: string; active: boolean }>> {
+export async function listOrgAgents(orgId: string): Promise<
+  Array<{
+    id: string;
+    agentId: string;
+    name: string;
+    active: boolean;
+    awayUntil: string | null;
+  }>
+> {
   await ensurePlatformSchema();
   const rows = await db()<
-    Array<{ id: string; agent_id: string; name: string; active: boolean }>
+    Array<{
+      id: string;
+      agent_id: string;
+      name: string;
+      active: boolean;
+      away_until: Date | null;
+    }>
   >`
-    SELECT id, agent_id, name, active FROM org_agents
+    SELECT id, agent_id, name, active, away_until FROM org_agents
     WHERE org_id = ${orgId} ORDER BY created_at ASC
   `;
   return rows.map((r) => ({
@@ -479,7 +491,51 @@ export async function listOrgAgents(
     agentId: r.agent_id,
     name: r.name,
     active: r.active,
+    awayUntil: r.away_until ? iso(r.away_until)!.slice(0, 10) : null,
   }));
+}
+
+/** Concediu: setează / șterge data până la care agentul lipsește. */
+export async function setOrgAgentAway(
+  orgId: string,
+  agentRowId: string,
+  awayUntil: string | null,
+): Promise<void> {
+  await db()`
+    UPDATE org_agents SET away_until = ${awayUntil ? new Date(awayUntil) : null}
+    WHERE id = ${agentRowId} AND org_id = ${orgId}
+  `;
+}
+
+/** Login agenție: userul + hash-ul + starea organizației, dintr-un foc. */
+export async function getOrgUserForLogin(email: string): Promise<
+  | (OrgUser & {
+      passwordHash: string;
+      orgStatus: OrgStatus;
+      orgName: string;
+    })
+  | null
+> {
+  await ensurePlatformSchema();
+  const rows = await db()<
+    Array<OrgUserRow & { password_hash: string; org_status: string; org_name: string }>
+  >`
+    SELECT u.*, o.status AS org_status, o.name AS org_name
+    FROM org_users u JOIN organizations o ON o.id = u.org_id
+    WHERE u.email = ${email.toLowerCase()} LIMIT 1
+  `;
+  const r = rows[0];
+  if (!r) return null;
+  return {
+    ...toOrgUser(r),
+    passwordHash: r.password_hash,
+    orgStatus: isOrgStatus(r.org_status) ? r.org_status : "trial",
+    orgName: r.org_name,
+  };
+}
+
+export async function touchOrgUserLogin(id: string): Promise<void> {
+  await db()`UPDATE org_users SET last_login_at = NOW() WHERE id = ${id}`;
 }
 
 export async function addOrgAgent(

@@ -29,6 +29,16 @@ export {
 } from "./session";
 export { ensurePlatformSchema } from "./schema";
 export {
+  signOrgSession,
+  verifyOrgSession,
+  setOrgSessionCookie,
+  clearOrgSessionCookie,
+  getOrgSession,
+  requireOrgUser,
+  ORG_SESSION_TTL_SECONDS,
+} from "./org-session";
+export type { OrgSession } from "./org-session";
+export {
   addOrgAgent,
   audit,
   changeAdminPassword,
@@ -42,6 +52,7 @@ export {
   deletePlan,
   getAdminByEmail,
   getOrg,
+  getOrgUserForLogin,
   getOrgByStripeCustomer,
   isInvoiceStatus,
   isOrgStatus,
@@ -55,9 +66,11 @@ export {
   monthlySeries,
   platformMetrics,
   setInvoiceStatus,
+  setOrgAgentAway,
   setOrgUserActive,
   setOrgUserPassword,
   touchAdminLogin,
+  touchOrgUserLogin,
   unmarkStripeEvent,
   updateOrg,
   upsertInvoice,
