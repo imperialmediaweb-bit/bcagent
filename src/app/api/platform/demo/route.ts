@@ -1,4 +1,5 @@
 import { isDBEnabled } from "@/lib/db";
+import { requestOrigin } from "@/lib/request-origin";
 import { audit, requireAdmin, seedDemoOrg } from "@/modules/platform";
 
 export const runtime = "nodejs";
@@ -19,7 +20,7 @@ export async function POST(req: Request) {
   if ("response" in auth) return auth.response;
 
   try {
-    const result = await seedDemoOrg(new URL(req.url).origin);
+    const result = await seedDemoOrg(requestOrigin(req));
     await audit(auth.session.email, "demo.create", result.org.id);
     return Response.json({ ok: true, ...result });
   } catch (e) {

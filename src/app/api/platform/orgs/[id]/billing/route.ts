@@ -1,4 +1,5 @@
 import { isDBEnabled } from "@/lib/db";
+import { requestOrigin } from "@/lib/request-origin";
 import {
   audit,
   createCheckoutSession,
@@ -43,7 +44,7 @@ export async function POST(req: Request, ctx: Ctx) {
     return Response.json({ error: "Invalid JSON" }, { status: 400 });
   }
 
-  const origin = new URL(req.url).origin;
+  const origin = requestOrigin(req);
 
   try {
     const org = await getOrg(id);

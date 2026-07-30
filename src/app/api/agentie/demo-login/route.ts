@@ -1,5 +1,6 @@
 import { ensureSchema, getDB, isDBEnabled } from "@/lib/db";
 import { clientIP, rateLimit } from "@/lib/rate-limit";
+import { requestOrigin } from "@/lib/request-origin";
 import { signToken } from "@/lib/signed-token";
 import {
   DEMO_MANAGER_EMAIL,
@@ -49,7 +50,7 @@ export async function GET(req: Request) {
       SELECT id FROM organizations WHERE name = ${DEMO_ORG_NAME} LIMIT 1
     `;
     if (orgExists.length === 0) {
-      await seedDemoOrg(url.origin);
+      await seedDemoOrg(requestOrigin(req));
     }
 
     if (rol === "agent") {
@@ -76,7 +77,7 @@ export async function GET(req: Request) {
         },
         secret,
       );
-      return Response.redirect(new URL(`/a/${token}`, req.url), 302);
+      return Response.redirect(`${requestOrigin(req)}/a/${token}`, 302);
     }
 
     const email = rol === "patron" ? DEMO_OWNER_EMAIL : DEMO_MANAGER_EMAIL;
@@ -101,7 +102,7 @@ export async function GET(req: Request) {
       role: u.role === "owner" ? "owner" : "manager",
       exp: Math.floor(Date.now() / 1000) + ORG_SESSION_TTL_SECONDS,
     });
-    return Response.redirect(new URL("/agentie", req.url), 302);
+    return Response.redirect(`${requestOrigin(req)}/agentie`, 302);
   } catch (e) {
     console.error("[demo-login]", e);
     const msg = e instanceof Error ? e.message : "necunoscută";

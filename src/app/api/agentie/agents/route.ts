@@ -1,4 +1,5 @@
 import { ensureSchema, isDBEnabled, getDB } from "@/lib/db";
+import { requestOrigin } from "@/lib/request-origin";
 import { signToken } from "@/lib/signed-token";
 import {
   addOrgAgent,
@@ -109,7 +110,7 @@ export async function POST(req: Request) {
     await addOrgAgent(orgId, agentId, agentName);
     const exp = Math.floor(Date.now() / 1000) + ttlDays * 86400;
     const token = await signToken({ agentId, agentName, exp }, secret);
-    const origin = new URL(req.url).origin;
+    const origin = requestOrigin(req);
     await audit(auth.session.email, "agent.token", agentId, { orgId, ttlDays });
 
     return Response.json({

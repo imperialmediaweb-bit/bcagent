@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { requestOrigin } from "@/lib/request-origin";
 import { signToken } from "@/lib/signed-token";
 import { clientIP, rateLimit, timingSafeEqual } from "@/lib/rate-limit";
 
@@ -75,7 +76,7 @@ export async function POST(req: Request) {
   );
   const exp = Math.floor(Date.now() / 1000) + ttlDays * 86400;
   const token = await signToken({ agentId, agentName, exp }, tokenSecret);
-  const origin = new URL(req.url).origin;
+  const origin = requestOrigin(req);
   return NextResponse.json({
     token,
     url: `${origin}/a/${token}`,
