@@ -502,7 +502,11 @@ function parseGroupedPivot(
 }
 
 export async function parseXLSBuffer(buffer: ArrayBuffer): Promise<ParseResult> {
-  const wb = XLSX.read(buffer, { type: "array", cellDates: true });
+  const smartText = decodeTextSmart(buffer);
+  const wb =
+    smartText !== null
+      ? XLSX.read(smartText, { type: "string", cellDates: true })
+      : XLSX.read(buffer, { type: "array", cellDates: true });
   const sheetNames = wb.SheetNames;
 
   if (sheetNames.length === 0) {
@@ -647,6 +651,38 @@ const CLIENT_NAME_HEADERS =
 const CLIENT_CUI_HEADERS = /\bcui\b|cod\s*fiscal|\bcif\b|cod\s*unic/i;
 const CLIENT_AGENT_HEADERS = /agent|vanzator|vânzător|reprezentant|gestionar/i;
 
+/**
+ * Fișierele text românești (CSV/TXT din SAGA sau Excel vechi) vin adesea
+ * în Windows-1250, nu UTF-8 — citite greșit, diacriticele ies gunoi (�).
+ * Detectăm: dacă e binar (xlsx/xls/ods) întoarcem null; dacă e text,
+ * încercăm UTF-8 și, când apar caractere sparte, redecodăm ca CP1250.
+ */
+export function decodeTextSmart(buffer: ArrayBuffer): string | null {
+  const bytes = new Uint8Array(buffer);
+  if (bytes.length >= 4) {
+    if (bytes[0] === 0x50 && bytes[1] === 0x4b) return null; // ZIP (xlsx/ods)
+    if (
+      bytes[0] === 0xd0 && bytes[1] === 0xcf &&
+      bytes[2] === 0x11 && bytes[3] === 0xe0
+    )
+      return null; // OLE2 (xls binar)
+  }
+  let ctrl = 0;
+  const n = Math.min(bytes.length, 4096);
+  for (let i = 0; i < n; i++) {
+    const b = bytes[i];
+    if (b < 9 || (b > 13 && b < 32)) ctrl++;
+  }
+  if (n === 0 || ctrl / n > 0.02) return null; // prea multe bytes de control → binar
+  const utf8 = new TextDecoder("utf-8").decode(buffer);
+  if (!utf8.includes("�")) return utf8;
+  try {
+    return new TextDecoder("windows-1250").decode(buffer);
+  } catch {
+    return utf8; // mediu fără CP1250 — rămânem pe ce avem
+  }
+}
+
 function cellText(v: unknown): string {
   if (v === null || v === undefined) return "";
   return String(v).trim();
@@ -655,7 +691,11 @@ function cellText(v: unknown): string {
 export async function parseClientsFile(
   buffer: ArrayBuffer,
 ): Promise<ClientsParseResult> {
-  const wb = XLSX.read(buffer, { type: "array" });
+  const text = decodeTextSmart(buffer);
+  const wb =
+    text !== null
+      ? XLSX.read(text, { type: "string" })
+      : XLSX.read(buffer, { type: "array" });
   let best: ClientsParseResult = {
     clients: [],
     sheetName: "",

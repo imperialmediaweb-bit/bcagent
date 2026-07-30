@@ -9,7 +9,12 @@ const LEGAL_TOKENS = new Set([
 ]);
 
 export function normalizeName(name: string): string {
-  return name.replace(/[^a-zA-Z0-9]+/g, " ").toUpperCase().trim();
+  return name
+    .normalize("NFD") // ș/ş/ț/ţ/ă/â/î → litera de bază + semn separat
+    .replace(/[\u0300-\u036f]/g, "") // aruncăm semnele: Ștefan ≡ Stefan
+    .replace(/[^a-zA-Z0-9]+/g, " ")
+    .toUpperCase()
+    .trim();
 }
 
 export function coreName(norm: string): string {
