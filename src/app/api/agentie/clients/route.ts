@@ -1,5 +1,5 @@
 import { ensureSchema, isDBEnabled, getDB } from "@/lib/db";
-import { listOrgAgents, requireOrgUser } from "@/modules/platform";
+import { audit, listOrgAgents, requireOrgUser } from "@/modules/platform";
 
 export const runtime = "nodejs";
 
@@ -26,7 +26,14 @@ export async function GET(req: Request) {
     await ensureSchema();
     const agents = await listOrgAgents(auth.session.orgId);
     const names = agents.map((a) => a.name);
-    const scoped = agent && names.includes(agent) ? [agent] : names;
+    // „__none__" = clienții încă nedistribuiți (fără agent) — managerul
+    // îi vede și îi împarte; implicit apar și ei alături de cei alocați.
+    const scoped =
+      agent === "__none__"
+        ? [""]
+        : agent && names.includes(agent)
+          ? [agent]
+          : [...names, ""];
 
     const where = () => db`
       WHERE p.status = 'client'
@@ -77,5 +84,51 @@ export async function GET(req: Request) {
   } catch (e) {
     console.error("[agentie clients]", e);
     return Response.json({ error: "Eroare la citirea clienților" }, { status: 500 });
+  }
+}
+
+/** Realocarea unui client pe alt agent (sau scoaterea de pe agent). */
+export async function PATCH(req: Request) {
+  if (!isDBEnabled()) {
+    return Response.json({ error: "DATABASE_URL lipsește" }, { status: 503 });
+  }
+  const auth = await requireOrgUser();
+  if ("response" in auth) return auth.response;
+
+  let body: { cui?: string; agent?: string };
+  try {
+    body = await req.json();
+  } catch {
+    return Response.json({ error: "Invalid JSON" }, { status: 400 });
+  }
+  const cui = String(body.cui ?? "").replace(/\D/g, "").slice(0, 12);
+  const agent = String(body.agent ?? "").trim().slice(0, 128);
+  if (!cui) return Response.json({ error: "CUI lipsește" }, { status: 400 });
+
+  const db = getDB();
+  if (!db) return Response.json({ enabled: false }, { status: 503 });
+  try {
+    await ensureSchema();
+    const agents = await listOrgAgents(auth.session.orgId);
+    const names = agents.map((a) => a.name);
+    if (agent !== "" && !names.includes(agent)) {
+      return Response.json({ error: "Agentul nu e al firmei tale" }, { status: 400 });
+    }
+    // Doar clienții firmei: alocați unui agent al ei sau nedistribuiți.
+    const rows = await db<Array<{ cui: string }>>`
+      UPDATE prospects
+      SET assigned_agent = ${agent}, updated_at = NOW()
+      WHERE cui = ${cui} AND status = 'client'
+        AND (assigned_agent = '' OR assigned_agent = ANY(${names.length ? names : [""]}))
+      RETURNING cui
+    `;
+    if (rows.length === 0) {
+      return Response.json({ error: "Clientul nu e al firmei tale" }, { status: 403 });
+    }
+    await audit(auth.session.email, "client.reassign", cui, { agent });
+    return Response.json({ ok: true });
+  } catch (e) {
+    console.error("[agentie clients PATCH]", e);
+    return Response.json({ error: "Eroare la realocare" }, { status: 500 });
   }
 }

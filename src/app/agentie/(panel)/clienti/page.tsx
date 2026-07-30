@@ -90,6 +90,7 @@ export default function ClientiPage() {
             className={`${inputClass} mt-0 sm:w-56`}
           >
             <option value="">Toți agenții</option>
+            <option value="__none__">⚠ Fără agent (de distribuit)</option>
             {agents.map((a) => (
               <option key={a.agentId} value={a.name}>
                 {a.name}
@@ -128,7 +129,36 @@ export default function ClientiPage() {
                     {c.localitate}
                     {c.judet ? ` (${c.judet})` : ""}
                   </td>
-                  <td className="px-4 py-3 text-slate-600">{c.agent || "—"}</td>
+                  <td className="px-4 py-3">
+                    <select
+                      value={c.agent}
+                      onChange={async (e) => {
+                        try {
+                          await api("/api/agentie/clients", {
+                            method: "PATCH",
+                            json: { cui: c.cui, agent: e.target.value },
+                          });
+                          load();
+                        } catch (err) {
+                          setError(
+                            err instanceof Error ? err.message : String(err),
+                          );
+                        }
+                      }}
+                      className={`rounded-md border px-2 py-1 text-xs font-medium ${
+                        c.agent
+                          ? "border-slate-200 text-slate-700"
+                          : "border-amber-300 bg-amber-50 text-amber-700"
+                      }`}
+                    >
+                      <option value="">— fără agent —</option>
+                      {agents.map((a) => (
+                        <option key={a.agentId} value={a.name}>
+                          {a.name}
+                        </option>
+                      ))}
+                    </select>
+                  </td>
                   <td className="px-4 py-3">
                     {c.lastVisit ? (
                       formatDate(c.lastVisit)
@@ -290,10 +320,12 @@ function ImportUniversCard({
     }>;
     unmatched: string[];
     agentsUnknown: string[];
+    agentsCreated: Array<{ name: string; url: string }>;
     updated: number;
     fileInfo: string;
   } | null>(null);
   const [showAll, setShowAll] = useState(false);
+  const [createAgents, setCreateAgents] = useState(true);
 
   async function handleFile(f: File) {
     setBusy("Citesc fișierul...");
@@ -311,7 +343,7 @@ function ImportUniversCard({
       setBusy(`Potrivesc ${parsed.clients.length} clienți cu firmele oficiale...`);
       const d = await api<NonNullable<typeof result>>(
         "/api/agentie/clients-import",
-        { method: "POST", json: { clients: parsed.clients } },
+        { method: "POST", json: { clients: parsed.clients, createAgents } },
       );
       setResult({
         ...d,
@@ -362,6 +394,17 @@ function ImportUniversCard({
         />
       </div>
 
+      <label className="mt-2 flex cursor-pointer items-center gap-2 text-xs font-medium text-slate-600">
+        <input
+          type="checkbox"
+          checked={createAgents}
+          onChange={(e) => setCreateAgents(e.target.checked)}
+          className="h-4 w-4 rounded border-slate-300"
+        />
+        Creează automat cont pentru agenții noi din fișier (primesc și link de
+        panou)
+      </label>
+
       <ManualAdd agents={agents} onDone={onDone} />
 
       {error && (
@@ -390,6 +433,34 @@ function ImportUniversCard({
               </span>
             )}
           </div>
+          {result.agentsCreated?.length > 0 && (
+            <div className="space-y-1.5 rounded-lg border border-indigo-100 bg-indigo-50/60 p-3">
+              <p className="text-sm font-semibold text-indigo-800">
+                👤 {result.agentsCreated.length} agenți noi creați automat —
+                trimite-le linkul (e panoul lor, valabil 30 de zile):
+              </p>
+              {result.agentsCreated.map((a) => (
+                <div key={a.name} className="flex items-center gap-2 text-xs">
+                  <span className="w-40 shrink-0 truncate font-medium text-slate-700">
+                    {a.name}
+                  </span>
+                  <input
+                    readOnly
+                    value={a.url}
+                    onFocus={(e) => e.target.select()}
+                    className="min-w-0 flex-1 rounded border border-slate-200 bg-white px-2 py-1 font-mono text-[11px]"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => navigator.clipboard?.writeText(a.url)}
+                    className="shrink-0 rounded bg-indigo-600 px-2 py-1 font-medium text-white hover:bg-indigo-700"
+                  >
+                    Copiază
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
           {result.matched.length > 0 && (
             <ul className="divide-y divide-slate-100 rounded-lg border border-slate-100">
               {(showAll ? result.matched : result.matched.slice(0, 8)).map((m) => (

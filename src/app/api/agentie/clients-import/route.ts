@@ -1,6 +1,14 @@
 import { ensureSchema, getDB, isDBEnabled } from "@/lib/db";
 import { normalizeName, variantsFor } from "@/lib/name-match";
-import { audit, listOrgAgents, requireOrgUser } from "@/modules/platform";
+import { requestOrigin } from "@/lib/request-origin";
+import { signToken } from "@/lib/signed-token";
+import {
+  addOrgAgent,
+  audit,
+  getOrg,
+  listOrgAgents,
+  requireOrgUser,
+} from "@/modules/platform";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -26,7 +34,11 @@ export async function POST(req: Request) {
   const auth = await requireOrgUser();
   if ("response" in auth) return auth.response;
 
-  let body: { clients?: Array<Partial<InClient>>; dryRun?: boolean };
+  let body: {
+    clients?: Array<Partial<InClient>>;
+    dryRun?: boolean;
+    createAgents?: boolean;
+  };
   try {
     body = await req.json();
   } catch {
@@ -72,6 +84,51 @@ export async function POST(req: Request) {
       unknownAgents.add(raw);
       return "";
     };
+
+    // „Să-i facă și cont": agenții noi din fișier primesc automat cont
+    // (intrare în org_agents) + link de panou — respectând limita planului.
+    const agentsCreated: Array<{ name: string; url: string }> = [];
+    if (body.createAgents && !body.dryRun) {
+      const rawAgents = new Set(
+        clients.map((c) => c.agent).filter((a) => a.length >= 3),
+      );
+      const secret = process.env.TOKEN_SECRET;
+      const org = await getOrg(auth.session.orgId);
+      let slots = Math.max(0, (org?.agentLimit ?? 0) - orgAgents.length);
+      for (const raw of rawAgents) {
+        const n = normalizeName(raw);
+        if (!n) continue;
+        const exists = agentNorm.some(
+          (a) => a.norm === n || a.norm.includes(n) || n.includes(a.norm),
+        );
+        if (exists) continue;
+        if (slots <= 0) {
+          unknownAgents.add(`${raw} (limita de agenți atinsă)`);
+          continue;
+        }
+        const cleanName = raw.replace(/\s+/g, " ").trim().slice(0, 128);
+        const agentId = `ag-${crypto.randomUUID().replace(/-/g, "").slice(0, 10)}`;
+        await addOrgAgent(auth.session.orgId, agentId, cleanName);
+        agentNorm.push({ name: cleanName, norm: n });
+        slots--;
+        if (secret) {
+          const token = await signToken(
+            {
+              agentId,
+              agentName: cleanName,
+              exp: Math.floor(Date.now() / 1000) + 30 * 86400,
+            },
+            secret,
+          );
+          agentsCreated.push({
+            name: cleanName,
+            url: `${requestOrigin(req)}/a/${token}`,
+          });
+        } else {
+          agentsCreated.push({ name: cleanName, url: "" });
+        }
+      }
+    }
 
     // 1) Potrivire pe CUI — exactă, prioritară.
     const withCui = clients.filter((c) => c.cui.length >= 2);
@@ -204,6 +261,7 @@ export async function POST(req: Request) {
       unmatched,
       updated,
       agentsUnknown: Array.from(unknownAgents),
+      agentsCreated,
       dryRun: !!body.dryRun,
     });
   } catch (e) {
