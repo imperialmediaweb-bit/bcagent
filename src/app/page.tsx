@@ -237,6 +237,64 @@ const ROLES = [
   },
 ];
 
+// ⚠️ PLACEHOLDER: înlocuiește cu citate REALE de la primii clienți.
+const REVIEWS = [
+  {
+    stars: 5,
+    text: "Înainte sunam fiecare agent seara să văd ce-a vândut. Acum deschid telefonul dimineața și știu tot: cine unde a fost, ce comenzi au intrat, cine-i sub target.",
+    who: "Patron, firmă de distribuție",
+    where: "Suceava",
+    color: "#ff4d00",
+  },
+  {
+    stars: 5,
+    text: "Harta cu petele albe ne-a găsit 40 de magazine în comune unde credeam că nu mai e nimic de luat. În prima lună am făcut 11 clienți noi doar de acolo.",
+    who: "Manager de zonă",
+    where: "Botoșani",
+    color: "#0b5d3b",
+  },
+  {
+    stars: 5,
+    text: "Cel mai tare e că-i dictez notele din mașină și data viitoare îmi zice el ce-am vorbit cu clientul. Nu mai țin nimic în cap și nu mai pierd nimic.",
+    who: "Agent de teren",
+    where: "Rădăuți",
+    color: "#1e40af",
+  },
+];
+
+const FAQ = [
+  {
+    q: "Cât durează până suntem funcționali?",
+    a: "10 minute, la propriu. Primești contul firmei, trimiți linkurile agenților pe WhatsApp și primul agent poate lucra de pe teren în aceeași zi. Nu se instalează nimic, nu trebuie server, nu trebuie IT-ist.",
+  },
+  {
+    q: "Agenții mei nu sunt tehnici. Se descurcă?",
+    a: "Dacă știu să dea un mesaj pe WhatsApp, știu să folosească platforma. Totul e pe butoane mari: Comandă, Am fost, Navighează. Notele se pot dicta cu vocea — nici nu trebuie să scrie.",
+  },
+  {
+    q: "Merge cu SAGA / softul meu de gestiune?",
+    a: "Da, prin fișiere — limbajul universal. Rapoartele de vânzări din SAGA se încarcă direct (XLS/ODS), iar comenzile și deconturile se exportă în CSV gata de importat. Nu îți schimbi contabilitatea.",
+  },
+  {
+    q: "Ce se întâmplă dacă un agent rămâne fără semnal?",
+    a: "Comanda se salvează pe telefon și pleacă singură când prinde net. Nimic nu se pierde în zonele fără acoperire.",
+  },
+  {
+    q: "Datele mele sunt în siguranță? Dar dacă pleacă un agent?",
+    a: "Datele stau criptat pe server, cu accese separate pe roluri. Iar când pleacă un agent, apeși un buton: linkul lui moare instant și tot portofoliul (clienți, note, istoric) trece la înlocuitor. Nimic nu mai pleacă cu caietul.",
+  },
+  {
+    q: "Pot anula oricând?",
+    a: "Da. Fără contract pe termen, fără penalizări. Primele 14 zile sunt gratuite, cu tot inclus, fără card la înscriere.",
+  },
+];
+
+const EVERYTHING = [
+  { cat: "PE TEREN", color: "#0b5d3b", items: ["Harta cu 1,3M firme", "Pete albe pe localități", "Rute salvate pe zile", "Navigare Google Maps", "Vizite dintr-un tap", "Note dictate cu vocea", "Comenzi în 30 sec", "Mod fără semnal", "Fișa clientului AI"] },
+  { cat: "PENTRU ȘEFI", color: "#ff4d00", items: ["Briefing AI zilnic", "Prognoza lunii", "Vânzări pe agent și brand", "Evaluare AI per agent", "Targeturi + clasament", "Jurnalul vizitelor", "Comenzi live la depozit", "Concedii fără suprapuneri", "Transfer de portofoliu"] },
+  { cat: "PENTRU BANI", color: "#92400e", items: ["Restanțe la vedere", "Import solduri din SAGA", "Decont cu aprobare", "Export CSV contabilitate", "Salarii + comisioane", "Facturare Stripe", "Antrenor AI de vânzări", "Poze la raft analizate", "Simulare client dificil"] },
+];
+
 const PLANS = [
   {
     name: "START",
@@ -288,7 +346,7 @@ export default function HomePage() {
   return (
     <div className="paper min-h-screen text-[#161412]">
       <style>{`
-        .paper { background: #f5efe4; background-image: radial-gradient(#16141208 1.1px, transparent 1.1px); background-size: 22px 22px; font-family: var(--font-body), system-ui, sans-serif; }
+        .paper { background: #f5efe4; background-image: radial-gradient(#16141208 1.1px, transparent 1.1px); background-size: 22px 22px; font-family: var(--font-body), system-ui, sans-serif; overflow-x: clip; }
         .display { font-family: var(--font-display), var(--font-body), system-ui, sans-serif; }
         .hard { box-shadow: 6px 6px 0 #161412; }
         .hard-sm { box-shadow: 4px 4px 0 #161412; }
@@ -336,6 +394,7 @@ export default function HomePage() {
             <a href="#functii" className="hover:text-[#ff4d00]">Funcții</a>
             <a href="#roluri" className="hover:text-[#ff4d00]">Pentru cine</a>
             <a href="#preturi" className="hover:text-[#ff4d00]">Prețuri</a>
+            <a href="#faq" className="hover:text-[#ff4d00]">Întrebări</a>
           </nav>
           <div className="flex items-center gap-3">
             <Link href="/agentie/login" className="hidden text-sm font-semibold hover:text-[#ff4d00] sm:block">
@@ -390,7 +449,7 @@ export default function HomePage() {
               </div>
             </Reveal>
             <Reveal delay={100}>
-              <h1 className="display mt-6 text-5xl font-extrabold leading-[0.95] tracking-tight sm:text-6xl lg:text-7xl">
+              <h1 className="display mt-6 text-[clamp(2.1rem,10.5vw,4.5rem)] font-extrabold leading-[0.95] tracking-tight sm:text-6xl lg:text-7xl">
                 TEREN.
                 <br />
                 <span className="underline-ink">COMENZI.</span>
@@ -400,10 +459,11 @@ export default function HomePage() {
             </Reveal>
             <Reveal delay={200}>
               <p className="mt-6 max-w-lg text-lg leading-relaxed text-[#161412]/75">
-                Concurentul tău încă își sună agenții să-i întrebe pe unde
-                umblă. Tu vezi tot: <strong>1,3 milioane de firme</strong> pe
-                hartă, comenzile care zboară din teren direct la depozit și un{" "}
-                <strong>antrenor AI</strong> în buzunarul fiecărui agent.
+                Platforma completă pentru firmele de distribuție:{" "}
+                <strong>1,3 milioane de firme</strong> pe hartă, comenzi care
+                ajung din teren direct la depozit, targeturi, încasări și un{" "}
+                <strong>asistent AI</strong> pentru fiecare agent. Totul în
+                timp real, totul într-un singur loc.
               </p>
             </Reveal>
             <Reveal delay={300}>
@@ -423,7 +483,7 @@ export default function HomePage() {
                 </Link>
               </div>
               <p className="mt-4 text-sm font-semibold text-[#161412]/50">
-                Pornit în 10 minute · fără card · primul agent pe teren azi
+                Configurare în 10 minute · fără card · anulezi oricând
               </p>
             </Reveal>
           </div>
@@ -618,6 +678,105 @@ export default function HomePage() {
         </div>
       </section>
 
+      {/* CUM PORNEȘTI */}
+      <section className="border-t-2 border-[#161412] py-20">
+        <div className="mx-auto max-w-6xl px-4 sm:px-6">
+          <Reveal>
+            <h2 className="display text-center text-4xl font-extrabold tracking-tight sm:text-5xl">
+              Funcțional în <span className="underline-ink">10 minute</span>.
+            </h2>
+          </Reveal>
+          <div className="mt-12 grid gap-6 sm:grid-cols-3">
+            {[
+              ["01", "Primești contul firmei", "Email și parolă pentru patron și manageri. Fără instalare, fără server, fără IT-ist."],
+              ["02", "Trimiți linkurile agenților", "Fiecare agent primește un link pe WhatsApp. Îl deschide pe telefon și are tot: harta, rutele, comenzile."],
+              ["03", "Firma rulează singură", "Comenzile ajung la depozit, vizitele în rapoarte, iar AI-ul îți livrează în fiecare dimineață analiza și prognoza."],
+            ].map(([n, t, d], i) => (
+              <Reveal key={n} delay={i * 120}>
+                <div className="hard h-full rounded-2xl border-2 border-[#161412] bg-white p-7">
+                  <span className="display text-5xl font-extrabold text-[#ff4d00]">{n}</span>
+                  <h3 className="display mt-3 text-xl font-extrabold">{t}</h3>
+                  <p className="mt-2 leading-relaxed text-[#161412]/70">{d}</p>
+                </div>
+              </Reveal>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* RECENZII */}
+      <section className="border-t-2 border-[#161412] bg-[#ebe3d2] py-20">
+        <div className="mx-auto max-w-6xl px-4 sm:px-6">
+          <Reveal>
+            <h2 className="display text-center text-4xl font-extrabold tracking-tight sm:text-5xl">
+              Ce spun oamenii <span className="inkshift">de pe teren</span>
+            </h2>
+          </Reveal>
+          <div className="mt-12 grid gap-8 lg:grid-cols-3">
+            {REVIEWS.map((r, i) => (
+              <Reveal key={r.who} delay={i * 120}>
+                <div className={`hard h-full rounded-2xl border-2 border-[#161412] bg-white p-7 ${i === 1 ? "rotate-1" : "-rotate-1"}`}>
+                  <p className="text-lg tracking-widest text-[#ff4d00]">
+                    {"★".repeat(r.stars)}
+                  </p>
+                  <p className="mt-4 text-[17px] leading-relaxed">
+                    „{r.text}"
+                  </p>
+                  <div className="mt-6 flex items-center gap-3">
+                    <span
+                      className="flex h-11 w-11 items-center justify-center rounded-full border-2 border-[#161412] text-lg font-black text-white"
+                      style={{ background: r.color }}
+                    >
+                      {r.who[0]}
+                    </span>
+                    <div>
+                      <p className="text-sm font-bold">{r.who}</p>
+                      <p className="text-xs font-semibold text-[#161412]/50">{r.where}</p>
+                    </div>
+                  </div>
+                </div>
+              </Reveal>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* TOT CE E ÎNĂUNTRU */}
+      <section className="border-t-2 border-[#161412] py-20">
+        <div className="mx-auto max-w-6xl px-4 sm:px-6">
+          <Reveal>
+            <h2 className="display text-center text-4xl font-extrabold tracking-tight sm:text-5xl">
+              Tot ce e <span className="underline-ink">înăuntru</span>
+            </h2>
+            <p className="mx-auto mt-4 max-w-xl text-center text-[#161412]/60">
+              27 de funcții. Un singur abonament. Zero softuri în plus.
+            </p>
+          </Reveal>
+          <div className="mt-12 grid gap-6 lg:grid-cols-3">
+            {EVERYTHING.map((g, gi) => (
+              <Reveal key={g.cat} delay={gi * 120}>
+                <div className="hard h-full rounded-2xl border-2 border-[#161412] bg-white p-6">
+                  <span
+                    className="rounded-md border-2 border-[#161412] px-2.5 py-1 text-[11px] font-black tracking-widest text-white"
+                    style={{ background: g.color }}
+                  >
+                    {g.cat}
+                  </span>
+                  <ul className="mt-5 space-y-2.5">
+                    {g.items.map((it) => (
+                      <li key={it} className="flex items-center gap-2.5 font-medium">
+                        <Check className="h-4 w-4 shrink-0" style={{ color: g.color }} strokeWidth={3} />
+                        {it}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              </Reveal>
+            ))}
+          </div>
+        </div>
+      </section>
+
       {/* PREȚURI — etichete de preț */}
       <section id="preturi" className="border-t-2 border-[#161412] py-20">
         <div className="mx-auto max-w-6xl px-4 sm:px-6">
@@ -677,6 +836,34 @@ export default function HomePage() {
             Toate planurile includ harta cu 1,3M firme, comenzi, rute, vizite,
             targeturi, solduri și decont.
           </p>
+        </div>
+      </section>
+
+      {/* FAQ */}
+      <section id="faq" className="border-t-2 border-[#161412] bg-[#ebe3d2] py-20">
+        <div className="mx-auto max-w-3xl px-4 sm:px-6">
+          <Reveal>
+            <h2 className="display text-center text-4xl font-extrabold tracking-tight sm:text-5xl">
+              Întrebări <span className="inkshift">frecvente</span>
+            </h2>
+          </Reveal>
+          <div className="mt-10 space-y-4">
+            {FAQ.map((f, i) => (
+              <Reveal key={f.q} delay={i * 60}>
+                <details className="hard-sm group rounded-xl border-2 border-[#161412] bg-white open:bg-[#fdf3d8]">
+                  <summary className="flex cursor-pointer list-none items-center justify-between gap-4 px-5 py-4 text-[17px] font-bold [&::-webkit-details-marker]:hidden">
+                    {f.q}
+                    <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md border-2 border-[#161412] bg-[#ffd23f] text-lg font-black transition group-open:rotate-45">
+                      +
+                    </span>
+                  </summary>
+                  <p className="px-5 pb-5 leading-relaxed text-[#161412]/75">
+                    {f.a}
+                  </p>
+                </details>
+              </Reveal>
+            ))}
+          </div>
         </div>
       </section>
 
