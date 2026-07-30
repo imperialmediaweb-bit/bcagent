@@ -144,6 +144,9 @@ async function seedPlans(): Promise<void> {
   `;
   if (parseInt(count, 10) > 0) return;
 
+  // AI-ul costă bani per folosire (tokeni) → intră doar la Pro/Business.
+  // Operaționalul (hartă, comenzi, rute, vizite) e la toți — retenția vine
+  // din folosirea zilnică.
   const defaults = [
     {
       id: "start",
@@ -161,6 +164,7 @@ async function seedPlans(): Promise<void> {
         prospects: true,
         export: true,
         aiInsights: true,
+        aiCoach: true,
         support: "prioritar",
       },
     },
@@ -173,6 +177,8 @@ async function seedPlans(): Promise<void> {
         prospects: true,
         export: true,
         aiInsights: true,
+        aiCoach: true,
+        aiVision: true,
         support: "dedicat",
       },
     },

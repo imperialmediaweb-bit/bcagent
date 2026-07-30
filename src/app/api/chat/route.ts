@@ -65,6 +65,23 @@ export async function POST(req: Request) {
     );
   }
 
+  try {
+    const { agentAIFeatures } = await import("@/modules/platform");
+    const feats = await agentAIFeatures(payload.agentId);
+    if (!feats.aiInsights) {
+      return Response.json(
+        {
+          error:
+            "Chatul AI e inclus de la planul Pro. Cere patronului un upgrade.",
+          upsell: true,
+        },
+        { status: 403 },
+      );
+    }
+  } catch {
+    // fără verificare de plan nu blocăm
+  }
+
   const cleanMessages: ChatMessage[] = body.messages
     .filter(
       (m): m is ChatMessage =>

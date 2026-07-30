@@ -535,6 +535,63 @@ export async function setOrgAgentSalary(
   `;
 }
 
+export interface AIFeatures {
+  aiInsights: boolean;
+  aiCoach: boolean;
+  aiVision: boolean;
+}
+
+const ALL_AI: AIFeatures = { aiInsights: true, aiCoach: true, aiVision: true };
+
+function featuresFromPlan(f: Plan["features"] | null): AIFeatures {
+  if (!f) return ALL_AI;
+  return {
+    aiInsights: f.aiInsights === true,
+    aiCoach: f.aiCoach === true,
+    aiVision: f.aiVision === true,
+  };
+}
+
+/**
+ * Ce AI are voie AGENTUL, după planul firmei lui:
+ *  - agent fără organizație (linkurile proprietarului platformei) → tot
+ *  - organizație în trial sau fără plan (facturare manuală) → tot
+ *  - organizație cu plan → strict ce bifează planul
+ */
+export async function agentAIFeatures(agentId: string): Promise<AIFeatures> {
+  await ensurePlatformSchema();
+  const rows = await db()<
+    Array<{ status: string; plan_id: string | null; features: Plan["features"] | null }>
+  >`
+    SELECT o.status, o.plan_id, p.features
+    FROM org_agents a
+    JOIN organizations o ON o.id = a.org_id
+    LEFT JOIN plans p ON p.id = o.plan_id
+    WHERE a.agent_id = ${agentId} AND a.active
+    LIMIT 1
+  `;
+  const r = rows[0];
+  if (!r) return ALL_AI;
+  if (r.status === "trial" || !r.plan_id) return ALL_AI;
+  return featuresFromPlan(r.features);
+}
+
+/** Aceeași logică, pentru panoul agenției (după orgId). */
+export async function orgAIFeatures(orgId: string): Promise<AIFeatures> {
+  await ensurePlatformSchema();
+  const rows = await db()<
+    Array<{ status: string; plan_id: string | null; features: Plan["features"] | null }>
+  >`
+    SELECT o.status, o.plan_id, p.features
+    FROM organizations o LEFT JOIN plans p ON p.id = o.plan_id
+    WHERE o.id = ${orgId} LIMIT 1
+  `;
+  const r = rows[0];
+  if (!r) return ALL_AI;
+  if (r.status === "trial" || !r.plan_id) return ALL_AI;
+  return featuresFromPlan(r.features);
+}
+
 /** Login agenție: userul + hash-ul + starea organizației, dintr-un foc. */
 export async function getOrgUserForLogin(email: string): Promise<
   | (OrgUser & {

@@ -149,7 +149,19 @@ export default function PlanuriPage() {
                   )}
                   {p.features.aiInsights && (
                     <li className="flex items-center gap-2">
-                      <Check className="h-4 w-4 text-emerald-500" /> Analiză AI
+                      <Check className="h-4 w-4 text-emerald-500" /> Analize AI
+                    </li>
+                  )}
+                  {p.features.aiCoach && (
+                    <li className="flex items-center gap-2">
+                      <Check className="h-4 w-4 text-emerald-500" /> Antrenor AI +
+                      fișe client
+                    </li>
+                  )}
+                  {p.features.aiVision && (
+                    <li className="flex items-center gap-2">
+                      <Check className="h-4 w-4 text-emerald-500" /> Poze stand +
+                      evaluări AI
                     </li>
                   )}
                   {p.features.support && (
@@ -318,9 +330,11 @@ function PlanModal({
           </legend>
           {(
             [
-              ["prospects", "Bază de prospecți"],
+              ["prospects", "Bază de prospecți (1,3M firme)"],
               ["export", "Export CSV"],
-              ["aiInsights", "Analiză AI"],
+              ["aiInsights", "Analize & briefing AI"],
+              ["aiCoach", "Antrenor AI + fișe de client"],
+              ["aiVision", "Poze la stand + evaluări AI agenți"],
             ] as const
           ).map(([key, label]) => (
             <label key={key} className="flex items-center gap-2 text-sm text-slate-700">

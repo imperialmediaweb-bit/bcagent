@@ -55,6 +55,23 @@ export async function POST(req: Request) {
   const cui = String(body.cui ?? "").replace(/\D/g, "");
   if (!cui) return Response.json({ error: "cui lipsește" }, { status: 400 });
 
+  try {
+    const { agentAIFeatures } = await import("@/modules/platform");
+    const feats = await agentAIFeatures(payload.agentId);
+    if (!feats.aiCoach) {
+      return Response.json(
+        {
+          error:
+            "Fișele de client AI sunt incluse de la planul Pro. Cere patronului un upgrade.",
+          upsell: true,
+        },
+        { status: 403 },
+      );
+    }
+  } catch {
+    // fără verificare de plan nu blocăm
+  }
+
   const db = getDB();
   if (!db) return Response.json({ enabled: false }, { status: 503 });
   try {

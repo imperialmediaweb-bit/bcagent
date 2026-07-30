@@ -1,7 +1,7 @@
 import { ensureSchema, isDBEnabled, getDB } from "@/lib/db";
 import { isAIEnabled, streamCompletion } from "@/lib/llm";
 import { clientIP, rateLimit } from "@/lib/rate-limit";
-import { listOrgAgents, requireOrgUser } from "@/modules/platform";
+import { listOrgAgents, orgAIFeatures, requireOrgUser } from "@/modules/platform";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -44,6 +44,17 @@ export async function POST(req: Request) {
   if (!rl.ok) return Response.json({ error: "Prea multe cereri" }, { status: 429 });
   if (!isAIEnabled()) {
     return Response.json({ error: "AI neconfigurat" }, { status: 503 });
+  }
+  const feats = await orgAIFeatures(auth.session.orgId);
+  if (!feats.aiVision) {
+    return Response.json(
+      {
+        error:
+          "Evaluările AI ale agenților sunt incluse în planul Business.",
+        upsell: true,
+      },
+      { status: 403 },
+    );
   }
 
   let body: { agentId?: string };

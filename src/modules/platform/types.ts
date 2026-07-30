@@ -36,6 +36,10 @@ export interface Plan {
   /** Funcționalități incluse, pentru afișare și limite. */
   features: {
     aiInsights?: boolean;
+    /** Antrenorul AI + fișele de client. */
+    aiCoach?: boolean;
+    /** Analiza pozelor de la stand + evaluările AI ale agenților. */
+    aiVision?: boolean;
     prospects?: boolean;
     export?: boolean;
     support?: string;

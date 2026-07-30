@@ -88,6 +88,34 @@ export async function POST(req: Request) {
     return Response.json({ error: "Token invalid sau expirat" }, { status: 401 });
   }
 
+  // Limitele planului firmei: Antrenorul e de la Pro, pozele de la Business.
+  try {
+    const { agentAIFeatures } = await import("@/modules/platform");
+    const feats = await agentAIFeatures(payload.agentId);
+    if (!feats.aiCoach) {
+      return Response.json(
+        {
+          error:
+            "Antrenorul AI e inclus de la planul Pro. Cere patronului un upgrade.",
+          upsell: true,
+        },
+        { status: 403 },
+      );
+    }
+    if (body.image?.data && !feats.aiVision) {
+      return Response.json(
+        {
+          error:
+            "Analiza pozelor de la stand e inclusă în planul Business. Cere patronului un upgrade.",
+          upsell: true,
+        },
+        { status: 403 },
+      );
+    }
+  } catch {
+    // fără DB nu putem verifica planul — nu blocăm (linkurile proprietarului)
+  }
+
   const mode =
     body.mode === "plan" ? "plan" : body.mode === "simulare" ? "simulare" : "chat";
   const system =

@@ -64,6 +64,23 @@ export async function POST(req: Request) {
     );
   }
 
+  try {
+    const { agentAIFeatures } = await import("@/modules/platform");
+    const feats = await agentAIFeatures(payload.agentId);
+    if (!feats.aiInsights) {
+      return Response.json(
+        {
+          error:
+            "Analizele AI sunt incluse de la planul Pro. Cere patronului un upgrade.",
+          upsell: true,
+        },
+        { status: 403 },
+      );
+    }
+  } catch {
+    // fără verificare de plan nu blocăm
+  }
+
   const instructions =
     body.mode === "briefing"
       ? `Scrie BRIEFINGUL SĂPTĂMÂNAL pentru șeful firmei de distribuție, în markdown:

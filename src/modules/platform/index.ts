@@ -40,6 +40,7 @@ export {
 export type { OrgSession } from "./org-session";
 export {
   addOrgAgent,
+  agentAIFeatures,
   audit,
   changeAdminPassword,
   countAdmins,
@@ -64,6 +65,7 @@ export {
   listPlans,
   markStripeEvent,
   monthlySeries,
+  orgAIFeatures,
   platformMetrics,
   setInvoiceStatus,
   setOrgAgentAway,
@@ -77,7 +79,14 @@ export {
   upsertInvoice,
   upsertPlan,
 } from "./repo";
-export type { InvoiceInput, OrgFilter, OrgInput, OrgPatch, PlanInput } from "./repo";
+export type {
+  AIFeatures,
+  InvoiceInput,
+  OrgFilter,
+  OrgInput,
+  OrgPatch,
+  PlanInput,
+} from "./repo";
 export {
   applyInvoice,
   applySubscription,

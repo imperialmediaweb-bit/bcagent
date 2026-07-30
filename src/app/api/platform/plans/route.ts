@@ -89,6 +89,8 @@ export async function POST(req: Request) {
         prospects: !!body.features?.prospects,
         export: !!body.features?.export,
         aiInsights: !!body.features?.aiInsights,
+        aiCoach: !!body.features?.aiCoach,
+        aiVision: !!body.features?.aiVision,
         support: String(body.features?.support ?? "email").slice(0, 40),
       },
       stripePriceId: stripePriceId || null,
