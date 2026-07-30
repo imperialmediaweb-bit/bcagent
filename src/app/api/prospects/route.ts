@@ -1,7 +1,11 @@
 import { verifyToken } from "@/lib/signed-token";
 import { ensureSchema, getDB, isDBEnabled } from "@/lib/db";
 import { clientIP, rateLimit } from "@/lib/rate-limit";
-import { PROSPECT_STATUSES, type ProspectStatus } from "@/modules/prospects";
+import {
+  normalizePhone,
+  PROSPECT_STATUSES,
+  type ProspectStatus,
+} from "@/modules/prospects";
 
 export const runtime = "nodejs";
 
@@ -29,6 +33,9 @@ interface ProspectRow {
   status: string;
   note: string;
   assigned_agent: string;
+  telefon: string;
+  email: string;
+  contact: string;
   updated_at: Date;
 }
 
@@ -62,6 +69,7 @@ export async function GET(req: Request) {
   const agent = url.searchParams.get("agent") ?? "";
   const onlyActive = url.searchParams.get("onlyActive") === "1";
   const onlyTva = url.searchParams.get("onlyTva") === "1";
+  const withPhone = url.searchParams.get("withPhone") === "1";
   const limit = Math.min(
     500,
     Math.max(1, parseInt(url.searchParams.get("limit") ?? "100", 10) || 100),
@@ -89,12 +97,17 @@ export async function GET(req: Request) {
         AND (${agent} = '' OR assigned_agent = ${agent})
         AND (${!onlyActive} OR activ IS TRUE)
         AND (${!onlyTva} OR tva IS TRUE)
+        AND (${!withPhone} OR (telefon IS NOT NULL AND telefon <> ''))
         AND (${search} = '' OR denumire ILIKE ${"%" + search + "%"} OR cui LIKE ${search + "%"} OR adresa ILIKE ${"%" + search + "%"})
     `;
 
     const rows = await db<ProspectRow[]>`
       SELECT cui, denumire, adresa, localitate, judet, caen, caen_desc,
-             tva, activ, status, note, assigned_agent, updated_at
+             tva, activ, status, note, assigned_agent,
+             COALESCE(telefon, '') AS telefon,
+             COALESCE(email, '') AS email,
+             COALESCE(contact, '') AS contact,
+             updated_at
       FROM prospects
       ${buildWhere()}
       ORDER BY denumire ASC
@@ -132,6 +145,9 @@ export async function GET(req: Request) {
         status: r.status,
         note: r.note,
         assignedAgent: r.assigned_agent,
+        telefon: r.telefon,
+        email: r.email,
+        contact: r.contact,
         updatedAt: r.updated_at.toISOString(),
       })),
     });
@@ -157,6 +173,9 @@ export async function PATCH(req: Request) {
     status?: string;
     note?: string;
     assignedAgent?: string;
+    telefon?: string;
+    email?: string;
+    contact?: string;
   };
   try {
     body = await req.json();
@@ -185,6 +204,18 @@ export async function PATCH(req: Request) {
   ) {
     return Response.json({ error: "agent invalid" }, { status: 400 });
   }
+  if (body.telefon !== undefined && String(body.telefon).length > 40) {
+    return Response.json({ error: "telefon invalid" }, { status: 400 });
+  }
+  if (body.email !== undefined) {
+    const em = String(body.email).trim();
+    if (em.length > 160 || (em !== "" && !/^[^@\s]+@[^@\s]+\.[^@\s]{2,}$/.test(em))) {
+      return Response.json({ error: "email invalid" }, { status: 400 });
+    }
+  }
+  if (body.contact !== undefined && String(body.contact).length > 160) {
+    return Response.json({ error: "contact invalid" }, { status: 400 });
+  }
 
   const db = getDB();
   if (!db) return Response.json({ enabled: false }, { status: 503 });
@@ -196,6 +227,10 @@ export async function PATCH(req: Request) {
     if (body.note !== undefined) updates.note = String(body.note);
     if (body.assignedAgent !== undefined)
       updates.assigned_agent = String(body.assignedAgent);
+    if (body.telefon !== undefined)
+      updates.telefon = normalizePhone(String(body.telefon)) || String(body.telefon).trim().slice(0, 40);
+    if (body.email !== undefined) updates.email = String(body.email).trim();
+    if (body.contact !== undefined) updates.contact = String(body.contact).trim();
     if (Object.keys(updates).length === 0) {
       return Response.json({ error: "nimic de actualizat" }, { status: 400 });
     }

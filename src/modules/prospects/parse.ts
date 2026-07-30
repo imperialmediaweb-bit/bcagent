@@ -51,16 +51,17 @@ function normalizeHeader(s: string): string {
     .trim();
 }
 
-const COLUMN_ALIASES: Record<keyof Omit<RawFirmRow, "stare">, string[]> & {
-  stare: string[];
-} = {
+const COLUMN_ALIASES: Record<string, string[]> = {
   cui: ["cui", "cod fiscal", "cod unic", "cif", "codunic", "cod de identificare fiscala"],
   denumire: ["denumire", "denumire platitor", "nume firma", "denumire firma", "nume"],
   adresa: ["adresa", "adresa completa", "adr", "domiciliul fiscal", "sediu", "strada"],
+  /** Numărul de la adresă — coloană separată în fișierele MF (STRADA^NR). */
+  nr: ["nr", "numar", "nr strada", "numar strada"],
   localitate: ["localitate", "oras", "comuna", "loc"],
   judet: ["judet", "jud", "cod judet"],
   caen: ["caen", "cod caen", "obiect de activitate", "cod activitate"],
   stare: ["stare", "stare firma", "stare inregistrare", "status", "stare fiscala"],
+  telefon: ["telefon", "tel", "nr telefon", "numar telefon", "telefoane", "mobil"],
 };
 
 export function detectDelimiter(lines: string[]): string {
@@ -260,7 +261,13 @@ export function parseFirmLine(
   const cuiRaw = get("cui").replace(/^RO/i, "").replace(/\D/g, "");
   const denumire = get("denumire");
   if (!cuiRaw || !denumire) return null;
-  const adresa = get("adresa");
+  const strada = get("adresa");
+  const nr = get("nr");
+  // Fișierele MF au strada și numărul în coloane separate → le unim.
+  const adresa =
+    strada && nr && !/nr\.?\s*\d/i.test(strada)
+      ? `${strada} nr. ${nr}`
+      : strada;
   const judetRaw = get("judet");
   const judet = judetRaw
     ? normalizeCounty(judetRaw)
@@ -273,7 +280,29 @@ export function parseFirmLine(
     judet,
     caen: get("caen"),
     stare: get("stare"),
+    telefon: normalizePhone(get("telefon")),
   };
+}
+
+/**
+ * Normalizează un număr de telefon românesc: păstrează cifrele (și prefixul
+ * internațional), respinge valorile evident invalide (prea scurte/lungi, zerouri).
+ * Fișierele oficiale conțin des câmpuri de telefon golite sau cu gunoi.
+ */
+export function normalizePhone(raw: string): string {
+  const s = String(raw ?? "").trim();
+  if (!s) return "";
+  // Multe numere într-un câmp → luăm primul
+  const first = s.split(/[,;/]| sau /i)[0];
+  const plus = first.trim().startsWith("+");
+  const digits = first.replace(/\D/g, "");
+  if (digits.length < 6 || digits.length > 15) return "";
+  if (/^(0+|1+|9+)$/.test(digits)) return ""; // 000000, 111111 etc.
+  // Format local RO: 0xxxxxxxxx (10 cifre). Acceptăm și fără 0 inițial.
+  if (!plus && digits.length === 9 && !digits.startsWith("0")) {
+    return `0${digits}`;
+  }
+  return plus ? `+${digits}` : digits;
 }
 
 /**

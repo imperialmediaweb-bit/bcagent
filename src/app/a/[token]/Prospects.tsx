@@ -1,18 +1,24 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
 import {
   Building,
   CheckCircle2,
+  ChevronDown,
   ChevronLeft,
   ChevronRight,
+  ChevronUp,
   Download,
   Loader2,
+  Mail,
+  MessageCircle,
   Navigation,
   Phone,
+  Save,
   Search,
   SlidersHorizontal,
   Star,
+  User,
 } from "lucide-react";
 import { downloadCSV } from "@/lib/csv-export";
 import {
@@ -35,6 +41,9 @@ interface ProspectItem {
   status: string;
   note: string;
   assignedAgent: string;
+  telefon: string;
+  email: string;
+  contact: string;
   updatedAt: string;
 }
 
@@ -70,6 +79,14 @@ const DOMAIN_PRESETS: Array<{ id: string; label: string; caens: string[] }> = [
 
 const PAGE_SIZE = 50;
 
+/** Număr pentru linkul WhatsApp: fără +/0 inițial, cu prefix 40 pentru RO. */
+function waNumber(phone: string): string {
+  const digits = phone.replace(/\D/g, "");
+  if (digits.startsWith("40")) return digits;
+  if (digits.startsWith("0")) return `4${digits}`;
+  return `40${digits}`;
+}
+
 function caenShort(code: string, desc: string): string {
   if (!code) return "—";
   if (TARGET_CAEN[code]) {
@@ -101,6 +118,14 @@ export default function Prospects({
   const [searchInput, setSearchInput] = useState("");
   const [onlyActive, setOnlyActive] = useState(true);
   const [onlyTva, setOnlyTva] = useState(false);
+  const [withPhone, setWithPhone] = useState(false);
+  const [expanded, setExpanded] = useState<string | null>(null);
+  const [draft, setDraft] = useState<{
+    telefon: string;
+    email: string;
+    contact: string;
+    note: string;
+  }>({ telefon: "", email: "", contact: "", note: "" });
   const [showFilters, setShowFilters] = useState(true);
   const [page, setPage] = useState(0);
   const [savingCui, setSavingCui] = useState<string | null>(null);
@@ -125,6 +150,7 @@ export default function Prospects({
       if (search) params.set("search", search);
       if (onlyActive) params.set("onlyActive", "1");
       if (onlyTva) params.set("onlyTva", "1");
+      if (withPhone) params.set("withPhone", "1");
       const res = await fetch(`/api/prospects?${params.toString()}`, {
         cache: "no-store",
       });
@@ -150,6 +176,7 @@ export default function Prospects({
     search,
     onlyActive,
     onlyTva,
+    withPhone,
     page,
   ]);
 
@@ -176,7 +203,14 @@ export default function Prospects({
 
   async function patchProspect(
     cui: string,
-    patch: { status?: string; note?: string; assignedAgent?: string },
+    patch: {
+      status?: string;
+      note?: string;
+      assignedAgent?: string;
+      telefon?: string;
+      email?: string;
+      contact?: string;
+    },
   ) {
     setSavingCui(cui);
     try {
@@ -195,6 +229,9 @@ export default function Prospects({
                   status: patch.status ?? p.status,
                   note: patch.note ?? p.note,
                   assignedAgent: patch.assignedAgent ?? p.assignedAgent,
+                  telefon: patch.telefon ?? p.telefon,
+                  email: patch.email ?? p.email,
+                  contact: patch.contact ?? p.contact,
                 }
               : p,
           ),
@@ -211,13 +248,20 @@ export default function Prospects({
     if (!data?.prospects.length) return;
     downloadCSV(
       `firme_${new Date().toISOString().slice(0, 10)}.csv`,
-      ["CUI", "Denumire", "Adresă", "Localitate", "Județ", "CAEN", "Domeniu", "TVA", "Status", "Agent", "Note"],
+      [
+        "CUI", "Denumire", "Adresă", "Localitate", "Județ", "Telefon",
+        "Email", "Persoană contact", "CAEN", "Domeniu", "TVA", "Status",
+        "Agent", "Note",
+      ],
       data.prospects.map((p) => [
         p.cui,
         p.denumire,
         p.adresa,
         p.localitate,
         p.judet,
+        p.telefon,
+        p.email,
+        p.contact,
         p.caen,
         p.caenDesc || caenShort(p.caen, p.caenDesc),
         p.tva === true ? "DA" : p.tva === false ? "NU" : "",
@@ -244,6 +288,7 @@ export default function Prospects({
     setSearchInput("");
     setOnlyActive(true);
     setOnlyTva(false);
+    setWithPhone(false);
     setPage(0);
   }
 
@@ -259,7 +304,8 @@ export default function Prospects({
     (status ? 1 : 0) +
     (localitate ? 1 : 0) +
     (search ? 1 : 0) +
-    (onlyTva ? 1 : 0);
+    (onlyTva ? 1 : 0) +
+    (withPhone ? 1 : 0);
 
   if (error?.includes("configurat")) {
     return (
@@ -469,6 +515,18 @@ export default function Prospects({
                 />
                 Doar plătitori de TVA
               </label>
+              <label className="inline-flex items-center gap-1.5">
+                <input
+                  type="checkbox"
+                  checked={withPhone}
+                  onChange={(e) => {
+                    setWithPhone(e.target.checked);
+                    setPage(0);
+                  }}
+                  className="rounded border-slate-300"
+                />
+                Doar cu număr de telefon
+              </label>
             </div>
           </div>
         )}
@@ -512,10 +570,8 @@ export default function Prospects({
               </thead>
               <tbody>
                 {data.prospects.map((p) => (
-                  <tr
-                    key={p.cui}
-                    className="border-b border-slate-100 last:border-0 hover:bg-slate-50/60"
-                  >
+                  <Fragment key={p.cui}>
+                  <tr className="border-b border-slate-100 hover:bg-slate-50/60">
                     <td className="px-3 py-2.5">
                       <p className="font-medium text-slate-800">{p.denumire}</p>
                       <p className="text-xs text-slate-500">
@@ -525,6 +581,45 @@ export default function Prospects({
                         {p.tva === true ? " · TVA" : ""}
                         {p.activ === null ? " · neverificat" : ""}
                       </p>
+                      {p.telefon ? (
+                        <div className="mt-1 flex items-center gap-2">
+                          <a
+                            href={`tel:${p.telefon}`}
+                            className="inline-flex items-center gap-1 text-xs font-medium text-emerald-700 hover:underline"
+                          >
+                            <Phone className="h-3 w-3" />
+                            {p.telefon}
+                          </a>
+                          <a
+                            href={`https://wa.me/${waNumber(p.telefon)}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            title="WhatsApp"
+                            className="text-emerald-600 hover:text-emerald-800"
+                          >
+                            <MessageCircle className="h-3.5 w-3.5" />
+                          </a>
+                        </div>
+                      ) : (
+                        <p className="mt-1 text-xs text-slate-400">
+                          fără telefon în evidențe
+                        </p>
+                      )}
+                      {p.email && (
+                        <a
+                          href={`mailto:${p.email}`}
+                          className="mt-0.5 inline-flex items-center gap-1 text-xs text-indigo-600 hover:underline"
+                        >
+                          <Mail className="h-3 w-3" />
+                          {p.email}
+                        </a>
+                      )}
+                      {p.contact && (
+                        <p className="mt-0.5 inline-flex items-center gap-1 text-xs text-slate-500">
+                          <User className="h-3 w-3" />
+                          {p.contact}
+                        </p>
+                      )}
                       <p className="mt-0.5 text-xs text-slate-400 md:hidden">
                         {p.adresa}
                       </p>
@@ -588,6 +683,30 @@ export default function Prospects({
                         >
                           <Star className="h-3.5 w-3.5" />
                         </button>
+                        <button
+                          type="button"
+                          title="Editează date de contact"
+                          onClick={() => {
+                            if (expanded === p.cui) {
+                              setExpanded(null);
+                            } else {
+                              setExpanded(p.cui);
+                              setDraft({
+                                telefon: p.telefon,
+                                email: p.email,
+                                contact: p.contact,
+                                note: p.note,
+                              });
+                            }
+                          }}
+                          className="rounded-md border border-slate-200 p-1.5 text-slate-600 hover:bg-slate-50"
+                        >
+                          {expanded === p.cui ? (
+                            <ChevronUp className="h-3.5 w-3.5" />
+                          ) : (
+                            <ChevronDown className="h-3.5 w-3.5" />
+                          )}
+                        </button>
                         <a
                           href={mapsUrl(p)}
                           target="_blank"
@@ -601,6 +720,100 @@ export default function Prospects({
                       </div>
                     </td>
                   </tr>
+                  {expanded === p.cui && (
+                    <tr className="border-b border-slate-100 bg-slate-50/60">
+                      <td colSpan={6} className="px-3 py-3">
+                        <div className="grid gap-3 sm:grid-cols-3">
+                          <label className="block">
+                            <span className="text-xs font-medium uppercase text-slate-500">
+                              Telefon
+                            </span>
+                            <input
+                              type="tel"
+                              value={draft.telefon}
+                              onChange={(e) =>
+                                setDraft({ ...draft, telefon: e.target.value })
+                              }
+                              placeholder="07xx xxx xxx"
+                              className="mt-1 w-full rounded-md border border-slate-200 px-2 py-1.5 text-sm"
+                            />
+                          </label>
+                          <label className="block">
+                            <span className="text-xs font-medium uppercase text-slate-500">
+                              Email
+                            </span>
+                            <input
+                              type="email"
+                              value={draft.email}
+                              onChange={(e) =>
+                                setDraft({ ...draft, email: e.target.value })
+                              }
+                              placeholder="contact@firma.ro"
+                              className="mt-1 w-full rounded-md border border-slate-200 px-2 py-1.5 text-sm"
+                            />
+                          </label>
+                          <label className="block">
+                            <span className="text-xs font-medium uppercase text-slate-500">
+                              Persoană de contact
+                            </span>
+                            <input
+                              type="text"
+                              value={draft.contact}
+                              onChange={(e) =>
+                                setDraft({ ...draft, contact: e.target.value })
+                              }
+                              placeholder="ex: Ion — administrator"
+                              className="mt-1 w-full rounded-md border border-slate-200 px-2 py-1.5 text-sm"
+                            />
+                          </label>
+                          <label className="block sm:col-span-3">
+                            <span className="text-xs font-medium uppercase text-slate-500">
+                              Notițe (ce s-a discutat, program, cerințe)
+                            </span>
+                            <textarea
+                              value={draft.note}
+                              onChange={(e) =>
+                                setDraft({ ...draft, note: e.target.value })
+                              }
+                              rows={2}
+                              className="mt-1 w-full rounded-md border border-slate-200 px-2 py-1.5 text-sm"
+                            />
+                          </label>
+                        </div>
+                        <div className="mt-3 flex items-center gap-2">
+                          <button
+                            type="button"
+                            disabled={savingCui === p.cui}
+                            onClick={async () => {
+                              await patchProspect(p.cui, {
+                                telefon: draft.telefon,
+                                email: draft.email,
+                                contact: draft.contact,
+                                note: draft.note,
+                              });
+                              setExpanded(null);
+                            }}
+                            className="inline-flex items-center gap-1.5 rounded-md bg-emerald-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-emerald-700 disabled:opacity-60"
+                          >
+                            <Save className="h-3.5 w-3.5" />
+                            {savingCui === p.cui ? "Se salvează..." : "Salvează"}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setExpanded(null)}
+                            className="rounded-md border border-slate-200 px-3 py-1.5 text-xs text-slate-600 hover:bg-white"
+                          >
+                            Anulează
+                          </button>
+                          <span className="text-xs text-slate-500">
+                            Emailul nu există în evidențele oficiale — îl
+                            completezi tu când afli.
+                          </span>
+                        </div>
+                      </td>
+                    </tr>
+                  )}
+                  </Fragment>
                 ))}
               </tbody>
             </table>

@@ -1,4 +1,4 @@
-/** Un prospect = o firmă potențial client pentru distribuție. */
+/** Un prospect = o firmă potențial client. */
 export interface Prospect {
   cui: string;
   denumire: string;
@@ -9,6 +9,12 @@ export interface Prospect {
   caenDesc: string;
   tva: boolean | null; // plătitor TVA (null = neverificat la ANAF)
   activ: boolean | null; // firmă activă fiscal (null = neverificat)
+  /** Telefon din fișierul MF sau de la ANAF. */
+  telefon: string;
+  /** Email — NU există în datele oficiale; se completează manual de agent. */
+  email: string;
+  /** Persoană de contact — completată manual de agent. */
+  contact: string;
   status: ProspectStatus;
   note: string;
   assignedAgent: string;
@@ -28,11 +34,14 @@ export const PROSPECT_STATUSES: ProspectStatus[] = [
 export interface RawFirmRow {
   cui: string;
   denumire: string;
+  /** Adresa completă (stradă + număr, dacă fișierul are coloane separate). */
   adresa: string;
   localitate: string;
   judet: string;
   caen: string;
   stare: string; // textul de stare din fișier, dacă există
+  /** Telefon normalizat (doar cifre/+), gol dacă lipsește sau e invalid. */
+  telefon: string;
 }
 
 export interface ParseFirmsResult {
@@ -51,6 +60,8 @@ export interface ProspectFilter {
   status?: ProspectStatus;
   search?: string;
   assignedAgent?: string;
+  /** Doar firmele care au număr de telefon. */
+  withPhone?: boolean;
   limit?: number;
   offset?: number;
 }

@@ -63,8 +63,15 @@ export async function ensureSchema(): Promise<void> {
       status TEXT NOT NULL DEFAULT 'nou',
       note TEXT DEFAULT '',
       assigned_agent TEXT DEFAULT '',
+      telefon TEXT DEFAULT '',
+      email TEXT DEFAULT '',
+      contact TEXT DEFAULT '',
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
+    -- Coloane de contact adăugate ulterior (baze existente)
+    ALTER TABLE prospects ADD COLUMN IF NOT EXISTS telefon TEXT DEFAULT '';
+    ALTER TABLE prospects ADD COLUMN IF NOT EXISTS email TEXT DEFAULT '';
+    ALTER TABLE prospects ADD COLUMN IF NOT EXISTS contact TEXT DEFAULT '';
     CREATE INDEX IF NOT EXISTS prospects_judet ON prospects(judet);
     CREATE INDEX IF NOT EXISTS prospects_status ON prospects(status);
     CREATE INDEX IF NOT EXISTS prospects_caen ON prospects(caen);

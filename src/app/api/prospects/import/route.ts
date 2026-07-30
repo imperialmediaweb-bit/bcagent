@@ -1,9 +1,9 @@
 import { ensureSchema, getDB, isDBEnabled } from "@/lib/db";
 import { clientIP, rateLimit, timingSafeEqual } from "@/lib/rate-limit";
 import {
-  caenDescription,
-  isTargetCaen,
+  caenLabel,
   normalizeCaen,
+  normalizePhone,
 } from "@/modules/prospects";
 
 export const runtime = "nodejs";
@@ -16,6 +16,7 @@ interface ImportProspect {
   localitate?: string;
   judet?: string;
   caen?: string;
+  telefon?: string;
 }
 
 /**
@@ -68,6 +69,7 @@ export async function POST(req: Request) {
       localitate: String(p.localitate ?? "").trim().slice(0, 128),
       judet: String(p.judet ?? "").trim().toUpperCase().slice(0, 2),
       caen: normalizeCaen(String(p.caen ?? "")),
+      telefon: normalizePhone(String(p.telefon ?? "")),
     }))
     .filter((p) => p.cui && p.denumire);
 
@@ -90,7 +92,8 @@ export async function POST(req: Request) {
         localitate: p.localitate,
         judet: p.judet,
         caen: p.caen,
-        caen_desc: isTargetCaen(p.caen) ? caenDescription(p.caen) : "",
+        caen_desc: p.caen ? caenLabel(p.caen) : "",
+        telefon: p.telefon,
       }));
       const res = await db`
         INSERT INTO prospects ${db(chunk)}
@@ -101,6 +104,7 @@ export async function POST(req: Request) {
           judet = CASE WHEN EXCLUDED.judet <> '' THEN EXCLUDED.judet ELSE prospects.judet END,
           caen = CASE WHEN EXCLUDED.caen <> '' THEN EXCLUDED.caen ELSE prospects.caen END,
           caen_desc = CASE WHEN EXCLUDED.caen_desc <> '' THEN EXCLUDED.caen_desc ELSE prospects.caen_desc END,
+          telefon = CASE WHEN EXCLUDED.telefon <> '' THEN EXCLUDED.telefon ELSE prospects.telefon END,
           updated_at = NOW()
       `;
       inserted += res.count;

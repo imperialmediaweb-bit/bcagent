@@ -30,6 +30,7 @@ export {
   detectParserConfig,
   detectDelimiter,
   mapColumnsByHeader,
+  normalizePhone,
 } from "./parse";
 export { queryAnafBatch, ANAF_BATCH_SIZE } from "./anaf";
 export type { AnafFirmInfo } from "./anaf";

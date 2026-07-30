@@ -73,6 +73,7 @@ export async function POST(req: Request) {
         adresa: string;
         caen: string;
         caen_desc: string;
+        telefon: string;
       }> = [];
 
       for (const cui of batch) {
@@ -92,6 +93,7 @@ export async function POST(req: Request) {
             adresa: firm.adresa ?? "",
             caen,
             caen_desc: caen ? caenLabel(caen) : "",
+            telefon: firm.telefon ?? "",
           });
           if (!firm.activ) inactiveRemoved++;
         }
@@ -112,9 +114,10 @@ export async function POST(req: Request) {
             adresa = CASE WHEN u.adresa <> '' THEN u.adresa ELSE p.adresa END,
             caen = CASE WHEN u.caen <> '' THEN u.caen ELSE p.caen END,
             caen_desc = CASE WHEN u.caen_desc <> '' THEN u.caen_desc ELSE p.caen_desc END,
+            telefon = CASE WHEN p.telefon = '' AND u.telefon <> '' THEN u.telefon ELSE p.telefon END,
             updated_at = NOW()
           FROM jsonb_to_recordset(${db.json(updates)})
-            AS u(cui text, activ boolean, tva boolean, adresa text, caen text, caen_desc text)
+            AS u(cui text, activ boolean, tva boolean, adresa text, caen text, caen_desc text, telefon text)
           WHERE p.cui = u.cui
         `;
       }

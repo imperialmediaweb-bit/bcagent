@@ -5,6 +5,8 @@
  * Rulează DOAR server-side (Railway are egress liber).
  */
 
+import { normalizePhone } from "./parse";
+
 const ANAF_URL = "https://webservicesp.anaf.ro/api/PlatitorTvaRest/v9/tva";
 export const ANAF_BATCH_SIZE = 500;
 
@@ -17,6 +19,8 @@ export interface AnafFirmInfo {
   adresa?: string;
   /** Codul CAEN principal raportat de ANAF (4 cifre). */
   caen?: string;
+  /** Telefon din evidența ANAF (normalizat). */
+  telefon?: string;
 }
 
 interface AnafResponseEntry {
@@ -25,6 +29,10 @@ interface AnafResponseEntry {
     denumire?: string;
     adresa?: string;
     cod_CAEN?: string | number;
+    telefon?: string;
+    fax?: string;
+    codPostal?: string;
+    nrRegCom?: string;
     statusRO_e_Factura?: boolean;
   };
   inregistrare_scop_Tva?: { scpTVA?: boolean };
@@ -81,6 +89,7 @@ export async function queryAnafBatch(
       denumire: entry.date_generale?.denumire,
       adresa: entry.date_generale?.adresa,
       caen: caenRaw ? caenRaw.slice(0, 4) : undefined,
+      telefon: normalizePhone(String(entry.date_generale?.telefon ?? "")),
     });
   }
   return result;
