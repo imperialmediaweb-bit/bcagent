@@ -119,6 +119,52 @@ export async function POST(req: Request) {
       WHERE (r->>'date') LIKE ${month + "%"} AND r->>'agent' = ${agent.name}
     `;
 
+    // Profilul de vânzări pe ultimele 3 luni: branduri, evoluție, top clienți
+    // + comparația cu totalul echipei — miezul evaluării „din vânzări".
+    const since3 = new Date();
+    since3.setMonth(since3.getMonth() - 2);
+    const since3Key = since3.toISOString().slice(0, 7) + "-01";
+    const teamNames = agents.map((a) => a.name);
+    const salesByBrand = await db<
+      Array<{ brand: string; value: string; volume: string }>
+    >`
+      SELECT r->>'producer' AS brand,
+             COALESCE(SUM((r->>'value')::float), 0)::text AS value,
+             COALESCE(SUM((r->>'volume')::float), 0)::text AS volume
+      FROM batches b, jsonb_array_elements(b.rows) r
+      WHERE r->>'agent' = ${agent.name} AND (r->>'date') >= ${since3Key}
+        AND COALESCE(r->>'producer', '') <> ''
+      GROUP BY 1 ORDER BY 3 DESC LIMIT 10
+    `;
+    const salesByMonth = await db<
+      Array<{ luna: string; value: string; volume: string; clienti: string }>
+    >`
+      SELECT substr(r->>'date', 1, 7) AS luna,
+             COALESCE(SUM((r->>'value')::float), 0)::text AS value,
+             COALESCE(SUM((r->>'volume')::float), 0)::text AS volume,
+             COUNT(DISTINCT r->>'client')::text AS clienti
+      FROM batches b, jsonb_array_elements(b.rows) r
+      WHERE r->>'agent' = ${agent.name} AND (r->>'date') >= ${since3Key}
+      GROUP BY 1 ORDER BY 1
+    `;
+    const topClientsSales = await db<
+      Array<{ client: string; value: string; volume: string }>
+    >`
+      SELECT r->>'client' AS client,
+             COALESCE(SUM((r->>'value')::float), 0)::text AS value,
+             COALESCE(SUM((r->>'volume')::float), 0)::text AS volume
+      FROM batches b, jsonb_array_elements(b.rows) r
+      WHERE r->>'agent' = ${agent.name} AND (r->>'date') >= ${since3Key}
+        AND COALESCE(r->>'client', '') <> ''
+      GROUP BY 1 ORDER BY 3 DESC, 2 DESC LIMIT 8
+    `;
+    const [teamSales] = await db<[{ value: string; volume: string }]>`
+      SELECT COALESCE(SUM((r->>'value')::float), 0)::text AS value,
+             COALESCE(SUM((r->>'volume')::float), 0)::text AS volume
+      FROM batches b, jsonb_array_elements(b.rows) r
+      WHERE r->>'agent' = ANY(${teamNames}) AND (r->>'date') >= ${since3Key}
+    `;
+
     const context = {
       agent: agent.name,
       luna: month,
@@ -141,6 +187,29 @@ export async function POST(req: Request) {
         target: targetRows[0]?.target_value ?? null,
         realizatValoare: Math.round(parseFloat(sales.value)),
         realizatVolum: Math.round(parseFloat(sales.volume)),
+      },
+      profilVanzari3Luni: {
+        peBranduri: salesByBrand.map((r) => ({
+          brand: r.brand,
+          valoare: Math.round(parseFloat(r.value)),
+          volum: Math.round(parseFloat(r.volume)),
+        })),
+        evolutieLunara: salesByMonth.map((r) => ({
+          luna: r.luna,
+          valoare: Math.round(parseFloat(r.value)),
+          volum: Math.round(parseFloat(r.volume)),
+          clientiUnici: parseInt(r.clienti, 10),
+        })),
+        topClientiiLui: topClientsSales.map((r) => ({
+          client: r.client,
+          valoare: Math.round(parseFloat(r.value)),
+          volum: Math.round(parseFloat(r.volume)),
+        })),
+        totalEchipa: {
+          valoare: Math.round(parseFloat(teamSales.value)),
+          volum: Math.round(parseFloat(teamSales.volume)),
+          numarAgenti: teamNames.length,
+        },
       },
     };
 

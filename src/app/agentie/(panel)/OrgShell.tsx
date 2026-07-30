@@ -12,6 +12,7 @@ import {
   Receipt,
   ShoppingCart,
   Target,
+  TrendingUp,
   Users,
   Wallet,
   Settings,
@@ -21,6 +22,7 @@ import {
 
 const NAV = [
   { href: "/agentie", label: "Dashboard", icon: LayoutDashboard },
+  { href: "/agentie/vanzari", label: "Vânzări", icon: TrendingUp },
   { href: "/agentie/comenzi", label: "Comenzi", icon: ShoppingCart },
   { href: "/agentie/targete", label: "Targeturi", icon: Target },
   { href: "/agentie/agenti", label: "Agenți", icon: UserRound },

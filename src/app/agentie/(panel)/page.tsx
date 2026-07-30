@@ -49,6 +49,75 @@ interface Overview {
   }>;
 }
 
+/** Briefingul AI al firmei: 5 fraze + 3 acțiuni, la un buton. */
+function BriefingCard() {
+  const [text, setText] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function run() {
+    setBusy(true);
+    setText("");
+    setError(null);
+    try {
+      const res = await fetch("/api/agentie/briefing", { method: "POST" });
+      if (!res.ok || !res.body) {
+        const data = (await res.json().catch(() => null)) as {
+          error?: string;
+        } | null;
+        setError(data?.error ?? `Eroare ${res.status}`);
+        return;
+      }
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let acc = "";
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        acc += decoder.decode(value, { stream: true });
+        setText(acc);
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Card className="border-indigo-100 bg-gradient-to-br from-indigo-50/60 to-white">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <h2 className="text-sm font-semibold text-slate-800">
+            🧠 Briefingul AI al firmei
+          </h2>
+          <p className="text-xs text-slate-500">
+            Toate cifrele echipei, comprimate în 5 fraze + 3 acțiuni concrete.
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={run}
+          disabled={busy}
+          className="rounded-lg bg-indigo-600 px-3 py-2 text-sm font-medium text-white shadow-sm hover:bg-indigo-700 disabled:opacity-60"
+        >
+          {busy ? "Analizez firma..." : text ? "Regenerează" : "Generează briefingul"}
+        </button>
+      </div>
+      {error && (
+        <div className="mt-3">
+          <Alert>{error}</Alert>
+        </div>
+      )}
+      {text && (
+        <div className="mt-3 whitespace-pre-wrap rounded-lg bg-white p-4 text-sm leading-relaxed text-slate-700 shadow-sm">
+          {text}
+        </div>
+      )}
+    </Card>
+  );
+}
+
 const RESULT_LABELS: Record<string, string> = {
   gandeste: "🤔 se gândește",
   ne_suna: "📞 ne sună",
@@ -155,6 +224,8 @@ export default function AgentieDashboard() {
             .join(" · ")}
         </Alert>
       )}
+
+      <BriefingCard />
 
       <div className="grid gap-4 lg:grid-cols-2">
         <Card>
