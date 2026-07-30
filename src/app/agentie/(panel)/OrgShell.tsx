@@ -9,6 +9,7 @@ import {
   LayoutDashboard,
   LogOut,
   Menu,
+  ShoppingCart,
   Users,
   Settings,
   UserRound,
@@ -17,6 +18,7 @@ import {
 
 const NAV = [
   { href: "/agentie", label: "Dashboard", icon: LayoutDashboard },
+  { href: "/agentie/comenzi", label: "Comenzi", icon: ShoppingCart },
   { href: "/agentie/agenti", label: "Agenți", icon: UserRound },
   { href: "/agentie/vizite", label: "Vizite", icon: ClipboardList },
   { href: "/agentie/clienti", label: "Clienți", icon: Building2 },

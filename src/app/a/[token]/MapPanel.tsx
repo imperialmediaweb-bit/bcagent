@@ -24,6 +24,7 @@ import {
   DOMAIN_PRESETS,
   countyName,
 } from "@/modules/prospects";
+import OrderModal from "./OrderModal";
 
 const fmt = (n: number) =>
   new Intl.NumberFormat("ro-RO", { maximumFractionDigits: 0 }).format(n);
@@ -822,6 +823,7 @@ function LocalityFirms({
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [visitFor, setVisitFor] = useState<Firm | null>(null);
+  const [orderFor, setOrderFor] = useState<Firm | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -997,6 +999,13 @@ function LocalityFirms({
                   </a>
                   <button
                     type="button"
+                    onClick={() => setOrderFor(f)}
+                    className="inline-flex items-center gap-1 rounded-md bg-emerald-50 px-2 py-1 text-xs font-medium text-emerald-700 hover:bg-emerald-100"
+                  >
+                    🛒 Comandă
+                  </button>
+                  <button
+                    type="button"
                     onClick={() => setVisitFor(visitFor?.cui === f.cui ? null : f)}
                     className="inline-flex items-center gap-1 rounded-md bg-indigo-50 px-2 py-1 text-xs font-medium text-indigo-700 hover:bg-indigo-100"
                   >
@@ -1015,6 +1024,13 @@ function LocalityFirms({
           </ul>
         )}
       </div>
+
+      <OrderModal
+        token={token}
+        firm={orderFor}
+        onClose={() => setOrderFor(null)}
+        onSent={showToast}
+      />
     </div>
   );
 }

@@ -104,6 +104,24 @@ export async function ensureSchema(): Promise<void> {
     );
     CREATE INDEX IF NOT EXISTS visits_agent ON visits(agent_id, visited_at DESC);
     CREATE INDEX IF NOT EXISTS visits_cui ON visits(cui, visited_at DESC);
+    -- Comenzile luate din teren: agentul le bate pe telefon la client,
+    -- depozitul le vede instant, contabila le exportă pentru SAGA.
+    CREATE TABLE IF NOT EXISTS orders (
+      id TEXT PRIMARY KEY,
+      agent_id TEXT NOT NULL,
+      agent_name TEXT NOT NULL DEFAULT '',
+      cui TEXT NOT NULL DEFAULT '',
+      denumire TEXT NOT NULL DEFAULT '',
+      localitate TEXT NOT NULL DEFAULT '',
+      lines JSONB NOT NULL DEFAULT '[]'::jsonb,
+      note TEXT NOT NULL DEFAULT '',
+      status TEXT NOT NULL DEFAULT 'noua',
+      total_value REAL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS orders_agent ON orders(agent_id, created_at DESC);
+    CREATE INDEX IF NOT EXISTS orders_status ON orders(status, created_at DESC);
     -- Cache de geocodare per localitate (Nominatim, 1 req/s) — o localitate
     -- se geocodează O dată, apoi harta o citește instant de aici.
     CREATE TABLE IF NOT EXISTS geo_localitati (
