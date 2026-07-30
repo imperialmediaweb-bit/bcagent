@@ -7,6 +7,8 @@
  * (dezvoltare locală).
  */
 export function requestOrigin(req: Request): string {
+  const fixed = process.env.APP_URL;
+  if (fixed) return fixed.replace(/\/+$/, "");
   const host =
     req.headers.get("x-forwarded-host") ?? req.headers.get("host");
   if (host) {
