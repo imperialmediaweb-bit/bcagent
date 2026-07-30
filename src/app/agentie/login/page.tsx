@@ -129,6 +129,14 @@ export default function AgentieLogin() {
           </form>
         </div>
 
+        <a
+          href="/api/agentie/demo-login"
+          className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl border-2 border-[#161412] bg-[#ffd23f] py-3 text-[15px] font-black text-[#161412] transition hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none"
+          style={{ boxShadow: "4px 4px 0 #161412" }}
+        >
+          🎬 Vezi DEMO — fără cont
+        </a>
+
         <p className="mt-5 text-center text-xs font-semibold text-[#161412]/45">
           Contul îl primești de la administratorul platformei.
           <br />

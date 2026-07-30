@@ -7,6 +7,7 @@ import {
   Alert,
   Button,
   Card,
+  CopyBox,
   Field,
   api,
   inputClass,
@@ -156,6 +157,8 @@ export default function SetariPage() {
         </ol>
       </Card>
 
+      <DemoCard />
+
       <Card>
         <h2 className="mb-3 text-sm font-semibold text-slate-800">
           Alte panouri
@@ -167,6 +170,73 @@ export default function SetariPage() {
         </div>
       </Card>
     </div>
+  );
+}
+
+/** Creează/reface firma DEMO cu date complete — pentru prezentări. */
+function DemoCard() {
+  const [busy, setBusy] = useState(false);
+  const [result, setResult] = useState<{
+    owner: { email: string; password: string };
+    manager: { email: string; password: string };
+    agentLinks: Array<{ name: string; url: string }>;
+  } | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  async function run() {
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await api<NonNullable<typeof result>>("/api/platform/demo", {
+        method: "POST",
+      });
+      setResult(res);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Card>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h2 className="text-sm font-semibold text-slate-800">
+            🎬 Firma DEMO
+          </h2>
+          <p className="mt-0.5 text-xs text-slate-500">
+            Creează/reface „Demo Distribuție SRL" cu tot: 3 agenți, vânzări pe
+            3 luni, vizite, comenzi, targeturi, restanțe, rute pe azi. Butonul
+            „Vezi DEMO" de pe pagina de login intră direct în ea.
+          </p>
+        </div>
+        <Button onClick={run} disabled={busy}>
+          {busy ? "Se construiește..." : result ? "Reface demo" : "Creează demo"}
+        </Button>
+      </div>
+      {error && (
+        <div className="mt-3">
+          <Alert>{error}</Alert>
+        </div>
+      )}
+      {result && (
+        <div className="mt-4 space-y-3">
+          <Alert kind="success">Demo gata! Datele de acces (o singură dată):</Alert>
+          <CopyBox
+            label={`Patron — ${result.owner.email}`}
+            value={result.owner.password}
+          />
+          <CopyBox
+            label={`Manager — ${result.manager.email}`}
+            value={result.manager.password}
+          />
+          {result.agentLinks.map((a) => (
+            <CopyBox key={a.name} label={`Agent — ${a.name}`} value={a.url} />
+          ))}
+        </div>
+      )}
+    </Card>
   );
 }
 
