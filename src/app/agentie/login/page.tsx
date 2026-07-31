@@ -67,6 +67,9 @@ export default function AgentieLogin() {
           >
             BC AGENT
           </span>
+          <span className="rounded-full border-2 border-[#161412] bg-[#ffd23f] px-2 py-0.5 text-[10px] font-black uppercase tracking-widest text-[#161412]">
+            beta
+          </span>
         </Link>
 
         <div
@@ -181,6 +184,9 @@ export default function AgentieLogin() {
 
         <p className="mt-5 text-center text-xs font-semibold text-[#161412]/45">
           Contul îl primești de la administratorul platformei.
+          <br />
+          Platformă în versiune BETA — dacă întâlnești o eroare, apasă
+          butonul 💬 din panou și o rezolvăm rapid.
           <br />
           Parola o schimbi din Setări după primul login. ·{" "}
           <Link href="/ghid" className="underline">

@@ -101,6 +101,7 @@ export default function OrgShell({
             <Building2 className="h-4 w-4" />
           </div>
           <span className="text-sm font-semibold text-white">Agenția mea</span>
+          <span className="rounded-full bg-[#ffd23f] px-1.5 py-0.5 text-[9px] font-black uppercase tracking-wider text-[#161412]">beta</span>
         </div>
         <button
           type="button"
