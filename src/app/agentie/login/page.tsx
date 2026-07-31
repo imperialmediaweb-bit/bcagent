@@ -182,7 +182,10 @@ export default function AgentieLogin() {
         <p className="mt-5 text-center text-xs font-semibold text-[#161412]/45">
           Contul îl primești de la administratorul platformei.
           <br />
-          Parola o schimbi din Setări după primul login.
+          Parola o schimbi din Setări după primul login. ·{" "}
+          <Link href="/ghid" className="underline">
+            Ghidul platformei
+          </Link>
         </p>
       </div>
     </main>

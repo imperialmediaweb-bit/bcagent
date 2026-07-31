@@ -899,9 +899,14 @@ export default function HomePage() {
         <div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-3 border-t border-[#f5efe4]/10 px-4 pt-8 text-sm sm:flex-row sm:px-6">
           <span className="display font-extrabold text-[#f5efe4]">BC AGENT</span>
           <p>Date: surse publice MF/ANAF · Fișierele tale rămân ale tale.</p>
-          <Link href="/agentie/login" className="hover:text-[#f5efe4]">
-            Intră în cont →
-          </Link>
+          <div className="flex items-center gap-4">
+            <Link href="/ghid" className="hover:text-[#f5efe4]">
+              Ghidul platformei
+            </Link>
+            <Link href="/agentie/login" className="hover:text-[#f5efe4]">
+              Intră în cont →
+            </Link>
+          </div>
         </div>
       </footer>
 

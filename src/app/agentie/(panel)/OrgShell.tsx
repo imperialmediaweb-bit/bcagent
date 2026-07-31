@@ -81,6 +81,15 @@ export default function OrgShell({
           </Link>
         );
       })}
+      <a
+        href="/ghid"
+        target="_blank"
+        rel="noopener"
+        className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-slate-300 transition hover:bg-white/5 hover:text-white"
+      >
+        <span className="w-4 text-center">❓</span>
+        Ghidul platformei
+      </a>
     </nav>
   );
 
