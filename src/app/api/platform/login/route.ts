@@ -1,5 +1,6 @@
 import { isDBEnabled } from "@/lib/db";
 import { clientIP, rateLimit } from "@/lib/rate-limit";
+import { verifyTotp } from "@/lib/totp";
 import {
   audit,
   countAdmins,
@@ -37,7 +38,7 @@ export async function POST(req: Request) {
     );
   }
 
-  let body: { email?: string; password?: string };
+  let body: { email?: string; password?: string; otp?: string };
   try {
     body = await req.json();
   } catch {
@@ -54,6 +55,19 @@ export async function POST(req: Request) {
   }
 
   try {
+    const { isLockedOut, recordLoginEvent, adminTotpByEmail } = await import(
+      "@/modules/platform"
+    );
+    if (await isLockedOut("platform", email)) {
+      return Response.json(
+        {
+          error:
+            "Cont blocat temporar (prea multe încercări greșite). Reîncearcă peste 15 minute.",
+        },
+        { status: 423 },
+      );
+    }
+
     let admin = await getAdminByEmail(email);
 
     if (!admin && (await countAdmins()) === 0) {
@@ -70,10 +84,22 @@ export async function POST(req: Request) {
 
     if (!admin || !(await verifyPassword(password, admin.passwordHash))) {
       // Mesaj identic pentru user inexistent și parolă greșită.
+      await recordLoginEvent("platform", email, ip, false);
       return Response.json(
         { error: "Email sau parolă incorecte" },
         { status: 401 },
       );
+    }
+
+    // 2FA pentru super-admin — contul cu cea mai mare putere.
+    const totp = await adminTotpByEmail(email);
+    if (totp.enabled) {
+      const otp = String(body.otp ?? "");
+      if (!otp) return Response.json({ needOtp: true });
+      if (!(await verifyTotp(totp.secret, otp))) {
+        await recordLoginEvent("platform", email, ip, false);
+        return Response.json({ error: "Cod 2FA greșit" }, { status: 401 });
+      }
     }
 
     await setSessionCookie({
@@ -83,6 +109,7 @@ export async function POST(req: Request) {
       exp: Math.floor(Date.now() / 1000) + SESSION_TTL_SECONDS,
     });
     await touchAdminLogin(admin.id);
+    await recordLoginEvent("platform", email, ip, true);
     await audit(admin.email, "admin.login", admin.email, { ip });
 
     return Response.json({

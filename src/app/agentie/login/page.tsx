@@ -10,6 +10,8 @@ export default function AgentieLogin() {
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [otp, setOtp] = useState("");
+  const [needOtp, setNeedOtp] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -21,9 +23,13 @@ export default function AgentieLogin() {
       const res = await fetch("/api/agentie/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify({ email, password, otp: otp || undefined }),
       });
-      const data = (await res.json()) as { error?: string };
+      const data = (await res.json()) as { error?: string; needOtp?: boolean };
+      if (data.needOtp) {
+        setNeedOtp(true);
+        return;
+      }
       if (!res.ok) {
         setError(data.error ?? "Autentificare eșuată");
         return;
@@ -105,6 +111,23 @@ export default function AgentieLogin() {
                 className="mt-1.5 block w-full rounded-lg border-2 border-[#161412] px-3.5 py-3 text-[16px] font-medium text-[#161412] outline-none transition focus:bg-[#fdf3d8]"
               />
             </div>
+
+            {needOtp && (
+              <div>
+                <label className="block text-xs font-black uppercase tracking-widest text-[#161412]/50">
+                  Cod din aplicația Authenticator
+                </label>
+                <input
+                  value={otp}
+                  onChange={(e) => setOtp(e.target.value)}
+                  inputMode="numeric"
+                  maxLength={6}
+                  autoFocus
+                  placeholder="000000"
+                  className="mt-1.5 block w-full rounded-lg border-2 border-[#161412] px-3.5 py-3 text-center font-mono text-[20px] font-bold tracking-[0.4em] text-[#161412] outline-none transition focus:bg-[#fdf3d8]"
+                />
+              </div>
+            )}
 
             {error && (
               <p className="rounded-lg border-2 border-[#161412] bg-[#fbe7ec] px-3 py-2.5 text-sm font-semibold text-[#9f1239]">

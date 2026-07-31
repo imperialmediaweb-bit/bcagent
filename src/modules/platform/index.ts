@@ -29,6 +29,18 @@ export {
 } from "./session";
 export { ensurePlatformSchema } from "./schema";
 export {
+  recordLoginEvent,
+  isLockedOut,
+  loginHistory,
+  getOrgUserTotp,
+  setOrgUserTotp,
+  orgUserTotpByEmail,
+  getAdminTotp,
+  setAdminTotp,
+  adminTotpByEmail,
+} from "./login-security";
+export type { LoginEvent } from "./login-security";
+export {
   seedDemoOrg,
   DEMO_ORG_NAME,
   DEMO_OWNER_EMAIL,

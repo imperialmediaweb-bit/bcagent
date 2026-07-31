@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { Alert, Button, Card, Field, api, inputClass } from "@/app/platform/ui";
+import SecurityCard from "@/app/SecurityCard";
 
 export default function AgentieSetariPage() {
   return (
@@ -19,6 +20,10 @@ export default function AgentieSetariPage() {
         </h2>
         <ChangePassword />
       </Card>
+
+      <div className="max-w-md">
+        <SecurityCard endpoint="/api/agentie/2fa" />
+      </div>
     </div>
   );
 }

@@ -76,6 +76,24 @@ export async function ensurePlatformSchema(): Promise<void> {
       last_login_at TIMESTAMPTZ
     );
     CREATE INDEX IF NOT EXISTS org_users_org ON org_users(org_id);
+    -- 2FA (TOTP — Google Authenticator) pentru conturile cu parolă.
+    ALTER TABLE org_users ADD COLUMN IF NOT EXISTS totp_secret TEXT NOT NULL DEFAULT '';
+    ALTER TABLE org_users ADD COLUMN IF NOT EXISTS totp_enabled BOOLEAN NOT NULL DEFAULT FALSE;
+    ALTER TABLE platform_admins ADD COLUMN IF NOT EXISTS totp_secret TEXT NOT NULL DEFAULT '';
+    ALTER TABLE platform_admins ADD COLUMN IF NOT EXISTS totp_enabled BOOLEAN NOT NULL DEFAULT FALSE;
+
+    -- Istoricul conectărilor (ca la bancă): cine, când, de unde, reușit
+    -- sau nu. Tot de aici se calculează blocarea contului după eșecuri.
+    CREATE TABLE IF NOT EXISTS login_events (
+      id BIGSERIAL PRIMARY KEY,
+      kind TEXT NOT NULL,            -- 'org' | 'platform'
+      email TEXT NOT NULL,
+      ip TEXT NOT NULL DEFAULT '',
+      ok BOOLEAN NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS login_events_email
+      ON login_events(email, created_at DESC);
 
     CREATE TABLE IF NOT EXISTS org_agents (
       id TEXT PRIMARY KEY,

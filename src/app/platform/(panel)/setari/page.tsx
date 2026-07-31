@@ -12,6 +12,7 @@ import {
   api,
   inputClass,
 } from "../../ui";
+import SecurityCard from "@/app/SecurityCard";
 
 interface MeResponse {
   admin: { id: string; email: string };
@@ -158,6 +159,8 @@ export default function SetariPage() {
       </Card>
 
       <DemoCard />
+
+      <SecurityCard endpoint="/api/platform/2fa" />
 
       <Card>
         <h2 className="mb-3 text-sm font-semibold text-slate-800">
