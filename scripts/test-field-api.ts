@@ -52,10 +52,14 @@ function mkToken(agentId: string, agentName: string, expInSec = 3600): string {
   return `${body}.${sig}`;
 }
 
+// IP unic per RULARE: rulările consecutive ale suitei nu se lovesc de
+// rate limitele pe IP (protecțiile pe IP au testele lor dedicate).
+const RUN_IP = `10.77.${Math.floor(Math.random() * 250)}.${Math.floor(Math.random() * 250)}`;
+
 async function post(path: string, body: unknown): Promise<{ status: number; data: any }> {
   const res = await fetch(`${BASE}${path}`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", "X-Forwarded-For": RUN_IP },
     body: JSON.stringify(body),
   });
   const text = await res.text();
@@ -69,7 +73,7 @@ async function post(path: string, body: unknown): Promise<{ status: number; data
 }
 
 async function get(path: string): Promise<{ status: number; data: any }> {
-  const res = await fetch(`${BASE}${path}`);
+  const res = await fetch(`${BASE}${path}`, { headers: { "X-Forwarded-For": RUN_IP } });
   const text = await res.text();
   let data: any = null;
   try {
@@ -249,7 +253,8 @@ async function main() {
       clients: [{ name: "QA MARKET SRL", agent: "Alt Agent Nou" }],
     });
     const [p2] = await sql`SELECT assigned_agent FROM prospects WHERE cui = '9001'`;
-    check("re-importul e idempotent", again.status === 200);
+    check("re-importul e idempotent", again.status === 200, JSON.stringify(again.data));
+    
     check("re-importul NU fură alocarea existentă", p2.assigned_agent === "QA Unu");
     check("re-importul marchează era-deja-client", again.data.matched[0].wasClient === true);
 
