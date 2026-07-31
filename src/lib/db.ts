@@ -172,6 +172,13 @@ export async function ensureSchema(): Promise<void> {
     ALTER TABLE orders ADD COLUMN IF NOT EXISTS foto TEXT NOT NULL DEFAULT '';
     -- Stocul din mașina fiecărui agent: se încarcă dimineața, scade la
     -- fiecare vânzare van, se descarcă la retur.
+    -- PIN-ul linkului de agent: linkul singur nu mai e de ajuns pe un
+    -- dispozitiv străin — se cere PIN-ul setat de agent la prima deschidere.
+    CREATE TABLE IF NOT EXISTS agent_pin (
+      agent_id TEXT PRIMARY KEY,
+      pin_hash TEXT NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
     CREATE TABLE IF NOT EXISTS van_stock (
       agent_id TEXT NOT NULL,
       produs TEXT NOT NULL,

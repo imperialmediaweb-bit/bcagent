@@ -165,6 +165,24 @@ export default function AgentiPage() {
                   >
                     {a.active ? "⏸ Blochează" : "▶ Deblochează"}
                   </Button>
+                  <Button
+                    variant="secondary"
+                    title="Telefon pierdut/schimbat: șterge PIN-ul și dispozitivele — agentul își setează PIN nou la următoarea deschidere a linkului"
+                    onClick={async () => {
+                      if (!confirm(`Resetezi PIN-ul lui ${a.name}? Va seta unul nou la următoarea deschidere a linkului.`)) return;
+                      try {
+                        await api("/api/agentie/agents", {
+                          method: "PATCH",
+                          json: { agentRowId: a.id, resetPin: true },
+                        });
+                        alert("PIN resetat ✓");
+                      } catch (e) {
+                        alert(e instanceof Error ? e.message : String(e));
+                      }
+                    }}
+                  >
+                    🔑 Reset PIN
+                  </Button>
                 </div>
                 {a.awayUntil && (
                   <p className="mt-2 text-xs text-sky-600">

@@ -18,7 +18,7 @@ function db() {
 }
 
 export async function recordLoginEvent(
-  kind: "org" | "platform",
+  kind: "org" | "platform" | "agent",
   email: string,
   ip: string,
   ok: boolean,
@@ -32,7 +32,7 @@ export async function recordLoginEvent(
 
 /** Contul e blocat? (prea multe eșecuri recente) */
 export async function isLockedOut(
-  kind: "org" | "platform",
+  kind: "org" | "platform" | "agent",
   email: string,
 ): Promise<boolean> {
   await ensurePlatformSchema();
@@ -52,7 +52,7 @@ export interface LoginEvent {
 
 /** Ultimele conectări ale unui cont — afișate în Setări, ca la bancă. */
 export async function loginHistory(
-  kind: "org" | "platform",
+  kind: "org" | "platform" | "agent",
   email: string,
   limit = 15,
 ): Promise<LoginEvent[]> {
@@ -176,7 +176,7 @@ export interface KnownDevice {
  * caz în care apelantul trimite emailul de alertă.
  */
 export async function touchDevice(
-  kind: "org" | "platform",
+  kind: "org" | "platform" | "agent",
   email: string,
   deviceId: string,
   ua: string,
@@ -195,7 +195,7 @@ export async function touchDevice(
 
 /** Contul avea deja măcar un dispozitiv? (primul login nu alertează) */
 export async function hasAnyDevice(
-  kind: "org" | "platform",
+  kind: "org" | "platform" | "agent",
   email: string,
 ): Promise<boolean> {
   await ensurePlatformSchema();
@@ -207,7 +207,7 @@ export async function hasAnyDevice(
 }
 
 export async function listDevices(
-  kind: "org" | "platform",
+  kind: "org" | "platform" | "agent",
   email: string,
 ): Promise<KnownDevice[]> {
   await ensurePlatformSchema();

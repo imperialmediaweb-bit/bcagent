@@ -146,6 +146,7 @@ export async function PATCH(req: Request) {
     force?: boolean;
     salaryCents?: number | null;
     commissionPct?: number | null;
+    resetPin?: boolean;
   };
   try {
     await ensureSchema();
@@ -225,6 +226,20 @@ export async function PATCH(req: Request) {
         awayUntil: until,
         forced: !!body.force,
       });
+    }
+
+    if (body.resetPin === true) {
+      // Telefon pierdut/schimbat: PIN-ul și dispozitivele agentului se
+      // șterg — la următoarea deschidere a linkului își setează PIN nou.
+      const [row] = await db<Array<{ agent_id: string }>>`
+        SELECT agent_id FROM org_agents WHERE id = ${rowId} AND org_id = ${orgId}
+      `;
+      if (!row) {
+        return Response.json({ error: "Agentul nu e al firmei tale" }, { status: 403 });
+      }
+      await db`DELETE FROM agent_pin WHERE agent_id = ${row.agent_id}`;
+      await db`DELETE FROM known_devices WHERE kind = 'agent' AND email = ${row.agent_id}`;
+      await audit(auth.session.email, "agent.pin_reset", row.agent_id, { orgId });
     }
 
     if (body.salaryCents !== undefined || body.commissionPct !== undefined) {
