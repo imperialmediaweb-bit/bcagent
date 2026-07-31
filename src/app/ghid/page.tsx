@@ -82,6 +82,7 @@ export default function GhidPage() {
           </p>
           <nav className="mt-4 flex flex-wrap justify-center gap-2 text-sm font-bold">
             <a href="#agent" className="rounded-full border-2 border-[#161412] bg-[#ffd23f] px-3 py-1">📱 Agentul</a>
+            <a href="#pascupas" className="rounded-full border-2 border-[#161412] bg-white px-3 py-1">📖 Pas cu pas</a>
             <a href="#firma" className="rounded-full border-2 border-[#161412] bg-white px-3 py-1">🏢 Manager / Patron</a>
             <a href="#admin" className="rounded-full border-2 border-[#161412] bg-white px-3 py-1">⚙️ Administrator</a>
             <a href="#intrare" className="rounded-full border-2 border-[#161412] bg-white px-3 py-1">🔑 Cum intri</a>
@@ -160,6 +161,78 @@ export default function GhidPage() {
           <Row icon="🐛" name="Raportează o problemă">
             Ceva nu merge? Apeși butonul de problemă, scrii ce s-a întâmplat și
             AI-ul îți dă pe loc o soluție; problema ajunge și la administrator.
+          </Row>
+        </Panel>
+
+        <Panel
+          id="pascupas"
+          title="📖 Pas cu pas — rețetele agentului"
+          subtitle="Exact ce apeși, în ordine. Pentru prima săptămână pe platformă."
+        >
+          <Row icon="🧭" name="Cum îmi fac o RUTĂ din hartă">
+            1) Deschide <B>Harta pieței</B> și alege domeniul (alimentare /
+            baruri). 2) Apasă pe bula unei localități → se deschide lista
+            firmelor de acolo. 3) La fiecare firmă care te interesează apasă{" "}
+            <B>„+ Rută"</B> — se adună în coșul de rută (îl vezi jos, cu
+            numărul de opriri). 4) Când ai terminat, apasă pe coș →{" "}
+            <B>„Salvează ruta"</B> → îi dai un nume și alegi ziua din
+            săptămână (ex. „Ruta Rădăuți — marți"). 5) Gata: în ziua aia, ruta
+            apare automat sus, în „Ziua mea".
+          </Row>
+          <Row icon="⚡" name="Cum îmi face AI-ul ruta SINGUR">
+            În cardul <B>„De vizitat săptămâna asta"</B> (clienții pe care nu
+            i-ai văzut de 7 zile) apasă <B>„Fă-mi ruta din ei"</B> — se
+            construiește singură din scadenți. O salvezi pe azi și pornești.
+          </Row>
+          <Row icon="🚗" name="Cum pornesc NAVIGAREA">
+            Din „Ziua mea" apasă <B>„Pornește ruta de azi"</B> → se deschide
+            Google Maps cu toate opririle în ordine; apeși Start și te duce
+            din client în client. Pentru o singură firmă: butonul{" "}
+            <B>„Navighează"</B> de pe firmă.
+          </Row>
+          <Row icon="✍️" name="Cum marchez VIZITA (obligatoriu la fiecare client)">
+            Pe firma la care ai fost apasă <B>„Am fost"</B> și alege:{" "}
+            <B>client</B> (a cumpărat) / <B>se mai gândește</B> /{" "}
+            <B>ne sună</B> / <B>nu vrea</B>. Poți adăuga o notă — apasă
+            microfonul și <B>dictează</B>, se scrie singură. Din asta se
+            calculează scadenții și rapoartele șefului.
+          </Row>
+          <Row icon="🚐" name="Cum VÂND PE LOC din dubă (van)">
+            Dimineața: cardul „Marfa din mașină" → <B>„Încarc marfă"</B> →
+            scrii ce ai luat în dubă. La client: 🛒 pe firmă → alege{" "}
+            <B>„🚐 Vând pe loc"</B> → produsele + prețul → alege cum ai
+            încasat (numerar/card/termen) → <B>„Încasează și salvează"</B>.
+            Stocul scade singur. Seara: „Retur la depozit" pentru ce n-ai
+            vândut — și vezi câți bani ai de predat.
+          </Row>
+          <Row icon="📷" name="Cum citesc FACTURA cu poza">
+            În fereastra de comandă apasă <B>„📷 Poză la factură"</B> →
+            fotografiază factura (merge și scrisă de mână) → în 3 secunde
+            AI-ul completează singur produsele, cantitățile și prețurile → tu
+            doar verifici și salvezi. Poza rămâne atașată ca dovadă.
+          </Row>
+          <Row icon="📦" name="Cum trimit COMANDĂ la depozit">
+            La fel ca vânzarea pe loc, dar lași selectat{" "}
+            <B>„📦 Comandă la depozit"</B> — comanda pleacă instant la firmă
+            pentru pregătire și livrare. Fără semnal? Rămâne salvată pe
+            telefon și o retrimiți când ai net.
+          </Row>
+          <Row icon="👥" name="Cum îmi aduc CLIENȚII mei în aplicație">
+            Secțiunea Clienți → <B>„Sau fișierul tău de clienți"</B> → tragi
+            Excel-ul/CSV-ul tău (orice format) → clienții se potrivesc cu
+            firmele oficiale și intră în portofoliul tău, cu telefon și
+            adresă pe hartă.
+          </Row>
+          <Row icon="🎓" name="Cum folosesc ANTRENORUL">
+            Scrie-i sau <B>dictează-i</B> orice: „ce clienți să vizitez azi?",
+            „cum răspund când zice că e scump?". Știe cifrele TALE. Trimite-i{" "}
+            <B>poza raftului</B> din magazin — îți spune ce să aranjezi și ce
+            lipsește.
+          </Row>
+          <Row icon="📲" name="Cum îmi pun aplicația pe telefon">
+            Deschide linkul tău în Chrome/Safari → meniul browserului →{" "}
+            <B>„Adaugă la ecranul principal"</B>. Apare ca aplicație normală,
+            cu iconiță — o deschizi cu un singur apas, fără link.
           </Row>
         </Panel>
 

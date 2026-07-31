@@ -1329,12 +1329,12 @@ function Sidebar({
         </nav>
         <div className="border-t border-slate-200 p-4 text-xs text-slate-500">
           <a
-            href="/ghid"
+            href="/ghid#pascupas"
             target="_blank"
             rel="noopener"
             className="flex items-center gap-2 rounded-md px-1 py-1.5 font-medium text-slate-600 hover:text-slate-900"
           >
-            ❓ Ghidul platformei
+            ❓ Cum fac? — ghid pas cu pas
           </a>
           <p className="mt-1">Sales analytics · token + AI + DB</p>
         </div>
