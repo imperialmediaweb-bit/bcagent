@@ -4,7 +4,7 @@ import type { Metadata } from "next";
 export const metadata: Metadata = {
   title: "Ghidul BC Agent — ce face fiecare funcție",
   description:
-    "Ghid complet pe panouri: agent de teren, manager/patron, administrator. Fiecare funcție explicată pe scurt.",
+    "Ghid complet: agentul de teren și panoul firmei (manager/patron). Fiecare funcție explicată pe scurt, pas cu pas.",
 };
 
 /**
@@ -88,7 +88,6 @@ export default function GhidPage() {
             <a href="#agent" className="rounded-full border-2 border-[#161412] bg-[#ffd23f] px-3 py-1">📱 Agentul</a>
             <a href="#pascupas" className="rounded-full border-2 border-[#161412] bg-white px-3 py-1">📖 Pas cu pas</a>
             <a href="#firma" className="rounded-full border-2 border-[#161412] bg-white px-3 py-1">🏢 Manager / Patron</a>
-            <a href="#admin" className="rounded-full border-2 border-[#161412] bg-white px-3 py-1">⚙️ Administrator</a>
             <a href="#intrare" className="rounded-full border-2 border-[#161412] bg-white px-3 py-1">🔑 Cum intri</a>
           </nav>
         </header>
@@ -313,34 +312,7 @@ export default function GhidPage() {
           </Row>
         </Panel>
 
-        <Panel
-          id="admin"
-          title="⚙️ Panoul ADMINISTRATORULUI platformei"
-          subtitle="Pentru proprietarul BC Agent — /platform/login."
-        >
-          <Row icon="🏢" name="Organizații">
-            Toate firmele-client: le creezi, le suspendezi, le setezi planul și
-            limita de agenți, le faci conturile de patron.
-          </Row>
-          <Row icon="💳" name="Planuri & Facturi">
-            Prețurile abonamentelor (pe agenți + funcții AI) și facturile
-            emise; se conectează la Stripe pentru încasare automată.
-          </Row>
-          <Row icon="🐛" name="Probleme">
-            Tot ce raportează utilizatorii, cu diagnosticul AI atașat — le
-            treci prin stări până la rezolvat.
-          </Row>
-          <Row icon="🎬" name="Firma DEMO">
-            Un buton reface oricând firma demo cu date vii — pentru prezentări.
-            Butoanele „Vezi DEMO" de pe login intră direct în ea.
-          </Row>
-          <Row icon="🗃️" name="Import firme (/admin)">
-            Unealta cu care se încarcă baza celor 1,3M de firme din România
-            (fișierul MF) și verificarea ANAF — sursa hărții și a prospecților.
-          </Row>
-        </Panel>
-
-        <Panel id="intrare" title="🔑 Cum intri" subtitle="Trei uși, trei feluri de oameni.">
+<Panel id="intrare" title="🔑 Cum intri" subtitle="Trei uși, trei feluri de oameni.">
           <Row icon="📱" name="Agent">
             Fără parolă: primești un link personal de la manager. Prima
             deschidere → îți setezi PIN-ul. Salvează pagina pe ecranul
@@ -354,13 +326,7 @@ export default function GhidPage() {
             cu email + parola primită. Vrei doar să vezi cum arată? Butonul
             galben „Vezi DEMO" te bagă într-o firmă de probă, pe orice rol.
           </Row>
-          <Row icon="⚙️" name="Administrator">
-            <Link href="/platform/login" className="font-bold underline">
-              /platform/login
-            </Link>{" "}
-            — contul proprietarului platformei.
-          </Row>
-        </Panel>
+          </Panel>
 
         <footer className="pb-6 text-center text-sm font-semibold text-[#161412]/45">
           <Link href="/" className="underline">← Înapoi la prima pagină</Link>
