@@ -12,6 +12,10 @@ export const metadata: Metadata = {
  * limba utilizatorului. Pagină publică — se trimite ca link oricui.
  */
 
+function B({ children }: { children: React.ReactNode }) {
+  return <strong className="text-[#161412]">{children}</strong>;
+}
+
 function Row({ icon, name, children }: { icon: string; name: string; children: React.ReactNode }) {
   return (
     <div className="flex gap-3 border-b border-[#161412]/10 py-3 last:border-0">
