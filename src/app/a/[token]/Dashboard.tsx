@@ -133,6 +133,26 @@ export default function Dashboard({
   const [agentRates, setAgentRates] = useState<Record<string, number>>({});
   const [savedAt, setSavedAt] = useState<Date | null>(null);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  // Meniul arată DOAR secțiunea aleasă (aerisit); „tot" = pagina lungă veche.
+  const [view, setView] = useState<string>("acasa");
+  useEffect(() => {
+    try {
+      const v = localStorage.getItem("bcagent:view");
+      if (v) setView(v);
+    } catch {
+      // fără localStorage — rămâne acasă
+    }
+  }, []);
+  function goView(v: string) {
+    setView(v);
+    try {
+      localStorage.setItem("bcagent:view", v);
+    } catch {
+      // nimic
+    }
+    window.scrollTo({ top: 0 });
+  }
+  const vis = (id: string) => (view === "tot" || view === id ? "" : " hidden");
   const [batches, setBatches] = useState<
     Array<{
       id: string;
@@ -698,6 +718,8 @@ export default function Dashboard({
     <div className="paperbg min-h-screen">
       <Sidebar
         hasData={hasData}
+        view={view}
+        onNav={goView}
         mobileOpen={mobileNavOpen}
         onCloseMobile={() => setMobileNavOpen(false)}
       />
@@ -716,6 +738,7 @@ export default function Dashboard({
         />
 
         <main className="mx-auto max-w-7xl space-y-8 px-4 py-8 sm:px-6 lg:px-8">
+          <div className={"space-y-8" + vis("acasa")}>
           <DayPanel token={token} />
           <VanPanel token={token} />
           <Hero
@@ -763,6 +786,7 @@ export default function Dashboard({
               </ul>
             </section>
           )}
+          </div>
 
           {hasData && (
             <>
@@ -778,7 +802,7 @@ export default function Dashboard({
                 </div>
               )}
 
-              <section id="overview" className="scroll-mt fade-in">
+              <section id="overview" className={"scroll-mt fade-in" + vis("overview")}>
                 <SectionTitle
                   icon={<BarChart3 className="h-5 w-5" />}
                   title="Privire de ansamblu"
@@ -841,7 +865,7 @@ export default function Dashboard({
               />
 
               {aiSummary && (
-                <section id="ai" className="scroll-mt fade-in">
+                <section id="ai" className={"scroll-mt fade-in" + vis("ai")}>
                   <SectionTitle
                     icon={<Bot className="h-5 w-5" />}
                     title="AI Insights"
@@ -858,7 +882,7 @@ export default function Dashboard({
               )}
 
               {smart && (
-                <section id="smart" className="scroll-mt fade-in">
+                <section id="smart" className={"scroll-mt fade-in" + vis("smart")}>
                   <SectionTitle
                     icon={<Sparkles className="h-5 w-5" />}
                     title="Analiză Smart"
@@ -870,7 +894,7 @@ export default function Dashboard({
                 </section>
               )}
 
-              <section id="harta" className="scroll-mt fade-in">
+              <section id="harta" className={"scroll-mt fade-in" + vis("harta")}>
                 <SectionTitle
                   icon={<MapIcon className="h-5 w-5" />}
                   title="Harta pieței"
@@ -881,7 +905,7 @@ export default function Dashboard({
                 </div>
               </section>
 
-              <section id="antrenor" className="scroll-mt fade-in">
+              <section id="antrenor" className={"scroll-mt fade-in" + vis("antrenor")}>
                 <SectionTitle
                   icon={<Bot className="h-5 w-5" />}
                   title="Antrenorul meu"
@@ -892,7 +916,7 @@ export default function Dashboard({
                 </div>
               </section>
 
-              <section id="obiective" className="scroll-mt fade-in">
+              <section id="obiective" className={"scroll-mt fade-in" + vis("obiective")}>
                 <SectionTitle
                   icon={<Trophy className="h-5 w-5" />}
                   title="Target & decont"
@@ -917,7 +941,7 @@ export default function Dashboard({
                 producers={producers}
               />
 
-              <section id="evolutie" className="scroll-mt fade-in">
+              <section id="evolutie" className={"scroll-mt fade-in" + vis("evolutie")}>
                 <SectionTitle
                   icon={<LineChartIcon className="h-5 w-5" />}
                   title="Evoluție vânzări și clienți"
@@ -1019,7 +1043,7 @@ export default function Dashboard({
                 </div>
               </section>
 
-              <section id="distribuire" className="scroll-mt fade-in">
+              <section id="distribuire" className={"scroll-mt fade-in" + vis("distribuire")}>
                 <SectionTitle
                   icon={<PieChartIcon className="h-5 w-5" />}
                   title="Distribuție pe producători și agenți"
@@ -1046,7 +1070,7 @@ export default function Dashboard({
                 </div>
               </section>
 
-              <section id="matrice" className="scroll-mt fade-in">
+              <section id="matrice" className={"scroll-mt fade-in" + vis("matrice")}>
                 <SectionTitle
                   icon={<Grid3X3 className="h-5 w-5" />}
                   title="Matrice Agent × Producător"
@@ -1055,7 +1079,7 @@ export default function Dashboard({
                 <CrossTabPanel matrix={matrix} metric={metric} />
               </section>
 
-              <section id="comisioane" className="scroll-mt fade-in">
+              <section id="comisioane" className={"scroll-mt fade-in" + vis("comisioane")}>
                 <SectionTitle
                   icon={<Coins className="h-5 w-5" />}
                   title="Comisioane per agent"
@@ -1073,7 +1097,7 @@ export default function Dashboard({
                 />
               </section>
 
-              <section id="eficienta" className="scroll-mt fade-in">
+              <section id="eficienta" className={"scroll-mt fade-in" + vis("eficienta")}>
                 <SectionTitle
                   icon={<Trophy className="h-5 w-5" />}
                   title="Eficiență per agent"
@@ -1133,7 +1157,7 @@ export default function Dashboard({
                 </div>
               </section>
 
-              <section id="clienti" className="scroll-mt fade-in">
+              <section id="clienti" className={"scroll-mt fade-in" + vis("clienti")}>
                 <SectionTitle
                   icon={<Building2 className="h-5 w-5" />}
                   title="Top clienți"
@@ -1191,7 +1215,7 @@ export default function Dashboard({
                 </div>
               </section>
 
-              <section id="anomalii" className="scroll-mt fade-in">
+              <section id="anomalii" className={"scroll-mt fade-in" + vis("anomalii")}>
                 <SectionTitle
                   icon={<AlertTriangle className="h-5 w-5" />}
                   title="Anomalii și storno-uri"
@@ -1202,7 +1226,7 @@ export default function Dashboard({
             </>
           )}
 
-          <section id="prospecti" className="scroll-mt fade-in">
+          <section id="prospecti" className={"scroll-mt fade-in" + vis("prospecti")}>
             <SectionTitle
               icon={<Building2 className="h-5 w-5" />}
               title="Prospecți"
@@ -1251,15 +1275,20 @@ function initials(name: string): string {
 }
 
 function Sidebar({
+  view,
+  onNav,
   hasData,
   mobileOpen,
   onCloseMobile,
 }: {
+  view: string;
+  onNav: (v: string) => void;
   hasData: boolean;
   mobileOpen: boolean;
   onCloseMobile: () => void;
 }) {
   const links = [
+    { href: "#acasa", label: "Acasă (ziua mea)", icon: BarChart3 },
     { href: "#overview", label: "Privire ansamblu", icon: BarChart3 },
     { href: "#ai", label: "AI Insights", icon: Bot },
     { href: "#smart", label: "Analiză Smart", icon: Sparkles },
@@ -1274,6 +1303,7 @@ function Sidebar({
     { href: "#eficienta", label: "Eficiență", icon: Trophy },
     { href: "#clienti", label: "Top clienți", icon: Building2 },
     { href: "#anomalii", label: "Anomalii", icon: AlertTriangle },
+    { href: "#tot", label: "Tot pe o pagină", icon: Grid3X3 },
   ];
   return (
     <>
@@ -1308,22 +1338,30 @@ function Sidebar({
         </div>
         <nav className="flex-1 space-y-1 overflow-y-auto px-3 py-4">
           {links.map((l) => {
-            // Prospecții sunt independenți de upload-ul XLS — mereu accesibili
-            const enabled = hasData || l.href === "#prospecti";
+            const key = l.href.slice(1);
+            // Acasă, prospecții și harta merg și fără XLS încărcat.
+            const enabled =
+              hasData || ["acasa", "prospecti", "harta", "tot"].includes(key);
+            const active = view === key;
             return (
-              <a
+              <button
                 key={l.href}
-                href={l.href}
-                onClick={onCloseMobile}
-                className={`flex items-center gap-3 rounded-md px-3 py-2.5 text-sm font-medium transition ${
-                  enabled
-                    ? "text-slate-700 hover:bg-slate-100"
-                    : "pointer-events-none text-slate-400"
+                type="button"
+                onClick={() => {
+                  onNav(key);
+                  onCloseMobile();
+                }}
+                className={`flex w-full items-center gap-3 rounded-md px-3 py-2.5 text-left text-sm font-medium transition ${
+                  active
+                    ? "bg-[#ff4d00] text-white"
+                    : enabled
+                      ? "text-slate-700 hover:bg-slate-100"
+                      : "pointer-events-none text-slate-400"
                 }`}
               >
                 <l.icon className="h-4 w-4" />
                 {l.label}
-              </a>
+              </button>
             );
           })}
         </nav>
