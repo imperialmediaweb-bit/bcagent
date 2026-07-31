@@ -1328,8 +1328,15 @@ function Sidebar({
           })}
         </nav>
         <div className="border-t border-slate-200 p-4 text-xs text-slate-500">
-          <p>Sales analytics</p>
-          <p className="mt-1">v0.4 · token + AI + DB</p>
+          <a
+            href="/ghid"
+            target="_blank"
+            rel="noopener"
+            className="flex items-center gap-2 rounded-md px-1 py-1.5 font-medium text-slate-600 hover:text-slate-900"
+          >
+            ❓ Ghidul platformei
+          </a>
+          <p className="mt-1">Sales analytics · token + AI + DB</p>
         </div>
       </aside>
     </>
