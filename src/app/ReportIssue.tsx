@@ -1,15 +1,23 @@
 "use client";
 
 import { useState } from "react";
-import { Bug, Loader2, Send } from "lucide-react";
+import { Loader2, MessageCircle, Send } from "lucide-react";
 
 /**
- * „Raportează o problemă" — buton discret, formular minim, iar AI-ul
- * răspunde PE LOC cu o soluție dacă poate. Raportul complet (cu diagnostic)
- * ajunge la admin în /platform/probleme.
+ * „Probleme, sugestii, feedback" — buton discret, formular minim.
+ * La probleme, AI-ul răspunde PE LOC cu o soluție dacă poate; totul
+ * (cu diagnostic) ajunge la admin în /platform/probleme.
  */
+
+const KINDS = [
+  { id: "problema", label: "🐛 Problemă", prefix: "[PROBLEMĂ]" },
+  { id: "sugestie", label: "💡 Sugestie", prefix: "[SUGESTIE]" },
+  { id: "feedback", label: "💬 Feedback", prefix: "[FEEDBACK]" },
+] as const;
+
 export default function ReportIssue({ token }: { token?: string }) {
   const [open, setOpen] = useState(false);
+  const [kind, setKind] = useState<(typeof KINDS)[number]["id"]>("problema");
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<{
@@ -21,16 +29,18 @@ export default function ReportIssue({ token }: { token?: string }) {
     e.preventDefault();
     setBusy(true);
     setResult(null);
+    const meta = KINDS.find((k) => k.id === kind)!;
     try {
       const res = await fetch("/api/issues", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           token,
-          message,
+          message: `${meta.prefix} ${message}`,
           page: typeof window !== "undefined" ? window.location.pathname : "",
           context: {
             ua: typeof navigator !== "undefined" ? navigator.userAgent.slice(0, 200) : "",
+            kind,
           },
         }),
       });
@@ -42,9 +52,12 @@ export default function ReportIssue({ token }: { token?: string }) {
       setMessage("");
       setResult({
         kind: "ok",
-        text: data.suggestion
-          ? `Raportat ✓. Între timp, încearcă asta:\n${data.suggestion}`
-          : "Raportat ✓ — adminul a primit problema și diagnosticul.",
+        text:
+          kind === "problema"
+            ? data.suggestion
+              ? `Raportat ✓. Între timp, încearcă asta:\n${data.suggestion}`
+              : "Raportat ✓ — adminul a primit problema și diagnosticul."
+            : "Mulțumim! ✓ — sugestia ta a ajuns la echipă.",
       });
     } catch {
       setResult({ kind: "err", text: "Eroare de rețea — mai încearcă o dată." });
@@ -62,10 +75,10 @@ export default function ReportIssue({ token }: { token?: string }) {
           setResult(null);
         }}
         className="fixed bottom-4 right-4 z-40 flex h-11 w-11 items-center justify-center rounded-full bg-slate-900 text-white shadow-lg transition hover:scale-105"
-        title="Raportează o problemă"
-        aria-label="Raportează o problemă"
+        title="Probleme, sugestii, feedback"
+        aria-label="Probleme, sugestii, feedback"
       >
-        <Bug className="h-5 w-5" />
+        <MessageCircle className="h-5 w-5" />
       </button>
 
       {open && (
@@ -73,9 +86,25 @@ export default function ReportIssue({ token }: { token?: string }) {
           <div className="absolute inset-0" onClick={() => setOpen(false)} aria-hidden />
           <div className="relative w-full rounded-t-2xl bg-white p-5 shadow-xl sm:max-w-md sm:rounded-2xl">
             <h3 className="flex items-center gap-2 text-base font-semibold text-slate-900">
-              <Bug className="h-4 w-4 text-rose-500" />
-              Ce nu merge?
+              <MessageCircle className="h-4 w-4 text-indigo-500" />
+              Spune-ne orice
             </h3>
+            <div className="mt-3 grid grid-cols-3 gap-1.5 rounded-xl bg-slate-100 p-1">
+              {KINDS.map((k) => (
+                <button
+                  key={k.id}
+                  type="button"
+                  onClick={() => setKind(k.id)}
+                  className={`rounded-lg px-2 py-1.5 text-sm font-semibold transition ${
+                    kind === k.id
+                      ? "bg-white text-slate-900 shadow-sm"
+                      : "text-slate-500"
+                  }`}
+                >
+                  {k.label}
+                </button>
+              ))}
+            </div>
             <form onSubmit={submit} className="mt-3 space-y-3">
               <textarea
                 value={message}
@@ -83,7 +112,13 @@ export default function ReportIssue({ token }: { token?: string }) {
                 rows={3}
                 required
                 minLength={5}
-                placeholder="Ex: nu merge încărcat fișierul CSV cu vânzările, zice că nu găsește coloanele"
+                placeholder={
+                  kind === "problema"
+                    ? "Ex: nu merge încărcat fișierul CSV cu vânzările, zice că nu găsește coloanele"
+                    : kind === "sugestie"
+                      ? "Ex: ar fi util să pot sorta clienții după restanțe"
+                      : "Ex: harta e super, o folosim zilnic!"
+                }
                 className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-indigo-400 focus:outline-none"
               />
               {result && (
@@ -115,7 +150,7 @@ export default function ReportIssue({ token }: { token?: string }) {
                   ) : (
                     <Send className="h-4 w-4" />
                   )}
-                  {busy ? "AI-ul analizează..." : "Trimite"}
+                  {busy && kind === "problema" ? "AI-ul analizează..." : "Trimite"}
                 </button>
               </div>
             </form>

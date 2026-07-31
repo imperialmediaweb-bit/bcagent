@@ -490,7 +490,7 @@ export default function MapPanel({
             </span>
             <span className="inline-flex items-center gap-1.5">
               <span className="h-3 w-3 rounded-full bg-amber-500/70 ring-1 ring-amber-600" />
-              pete albe
+              neacoperite (pete albe)
             </span>
           </div>
         </div>
@@ -742,7 +742,7 @@ export default function MapPanel({
         <div className="flex flex-wrap items-center justify-between gap-2">
           <h4 className="flex items-center gap-2 text-sm font-semibold text-slate-800">
             <BedDouble className="h-4 w-4 text-amber-500" />
-            Cele mai mari pete albe din{" "}
+            Cele mai mari zone neacoperite din{" "}
             {COUNTY_LIST.find((c) => c.code === judet)?.name ?? judet}
           </h4>
           <p className="text-xs text-slate-500">

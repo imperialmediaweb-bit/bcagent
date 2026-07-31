@@ -874,7 +874,7 @@ export default function Dashboard({
                 <SectionTitle
                   icon={<MapIcon className="h-5 w-5" />}
                   title="Harta pieței"
-                  subtitle="Unde ai clienți vs. unde există firme neacoperite (pete albe) — pe baza celor 1,3M firme active"
+                  subtitle="Verde = ai clienți acolo · Portocaliu = firme neacoperite (pete albe) — pe baza celor 1,3M firme active"
                 />
                 <div className="mt-4">
                   <MapPanel token={token} clients={allClients} />
