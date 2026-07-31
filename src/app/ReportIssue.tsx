@@ -74,11 +74,12 @@ export default function ReportIssue({ token }: { token?: string }) {
           setOpen(true);
           setResult(null);
         }}
-        className="fixed bottom-4 right-4 z-40 flex h-11 w-11 items-center justify-center rounded-full bg-slate-900 text-white shadow-lg transition hover:scale-105"
+        className="fixed bottom-4 right-4 z-40 flex items-center gap-2 rounded-full bg-slate-900 py-2.5 pl-3 pr-4 text-white shadow-lg transition hover:scale-105"
         title="Probleme, sugestii, feedback"
         aria-label="Probleme, sugestii, feedback"
       >
         <MessageCircle className="h-5 w-5" />
+        <span className="text-sm font-semibold">Sugestii / erori</span>
       </button>
 
       {open && (
