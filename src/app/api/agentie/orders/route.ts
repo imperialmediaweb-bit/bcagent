@@ -71,7 +71,15 @@ export async function GET(req: Request) {
       if (fr.length === 0 || !fr[0].foto) {
         return Response.json({ error: "Fără poză" }, { status: 404 });
       }
-      return Response.json({ foto: fr[0].foto });
+      const { decryptData } = await import("@/lib/crypto-data");
+      const plain = await decryptData(fr[0].foto);
+      if (!plain) {
+        return Response.json(
+          { error: "Poza nu poate fi decriptată (cheie lipsă/schimbată)" },
+          { status: 500 },
+        );
+      }
+      return Response.json({ foto: plain });
     }
 
     // Fără coloana foto în listă (base64 greu) — doar flag; poza se cere

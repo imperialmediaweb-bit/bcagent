@@ -106,10 +106,12 @@ export async function POST(req: Request) {
     ? lines.reduce((s, l) => s + l.cantitate * (l.pret ?? 0), 0)
     : null;
   // Poza facturii (opțională): JPEG mic făcut pe telefon, ca dovadă.
+  // Se criptează AES-256-GCM înainte de stocare (dacă DATA_KEY e setat).
   const rawFoto = String(body.foto ?? "");
+  const { encryptData } = await import("@/lib/crypto-data");
   const foto =
     rawFoto.startsWith("data:image/") && rawFoto.length <= 1_500_000
-      ? rawFoto
+      ? await encryptData(rawFoto)
       : "";
 
   const db = getDB();
