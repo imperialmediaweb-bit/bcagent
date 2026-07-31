@@ -2,7 +2,7 @@ import Link from "next/link";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "Ghidul BC Agent — ce face fiecare funcție",
+  title: "Ghidul Provendi — ce face fiecare funcție",
   description:
     "Ghid complet: agentul de teren și panoul firmei (manager/patron). Fiecare funcție explicată pe scurt, pas cu pas.",
 };
@@ -66,13 +66,13 @@ export default function GhidPage() {
               className="flex h-11 w-11 items-center justify-center rounded-lg border-2 border-[#161412] bg-[#ff4d00] text-xl font-black text-white"
               style={{ boxShadow: "4px 4px 0 #161412" }}
             >
-              B
+              P
             </span>
             <span
               className="text-2xl font-extrabold tracking-tight text-[#161412]"
               style={{ fontFamily: "var(--font-display), sans-serif" }}
             >
-              BC AGENT
+              PROVENDI
             </span>
           </Link>
           <h1

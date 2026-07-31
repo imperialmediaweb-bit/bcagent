@@ -59,13 +59,13 @@ export default function PlatformLogin() {
             className="flex h-11 w-11 items-center justify-center rounded-lg border-2 border-[#161412] bg-[#161412] text-xl font-black text-[#ffd23f]"
             style={{ boxShadow: "4px 4px 0 #ff4d00" }}
           >
-            B
+            P
           </span>
           <span
             className="text-2xl font-extrabold tracking-tight text-[#161412]"
             style={{ fontFamily: "var(--font-display), sans-serif" }}
           >
-            BC AGENT
+            PROVENDI
           </span>
         </Link>
 

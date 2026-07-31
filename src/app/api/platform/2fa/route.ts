@@ -50,7 +50,7 @@ export async function POST(req: Request) {
     if (body.action === "init") {
       const secret = generateTotpSecret();
       await setAdminTotp(auth.session.adminId, secret, false);
-      const uri = totpUri(secret, auth.session.email, "BC Agent Admin");
+      const uri = totpUri(secret, auth.session.email, "Provendi Admin");
       const qr = await QRCode.toDataURL(uri, { margin: 1, width: 220 });
       return Response.json({ secret, uri, qr });
     }

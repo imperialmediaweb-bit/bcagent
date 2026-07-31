@@ -193,7 +193,7 @@ export async function visionCompletion(o: VisionOptions): Promise<string> {
   throw new Error("Niciun provider AI cu suport de imagini configurat.");
 }
 
-export const SYSTEM_PROMPT = `Ești "BC Agent Analyst" — un analist senior de vânzări pentru BC Agent, o platformă SaaS de analytics dedicată agenților de vânzări din retail și distribuție (FMCG, tutun, băuturi, food, non-food).
+export const SYSTEM_PROMPT = `Ești "Provendi Analyst" — un analist senior de vânzări pentru Provendi, o platformă SaaS de analytics dedicată agenților de vânzări din retail și distribuție (FMCG, tutun, băuturi, food, non-food).
 
 Utilizatorul primește un rezumat agregat al vânzărilor sale: totals, top agenți, top producători/branduri, top clienți, evoluție pe perioadă, matrice agent×producător și lista de anomalii detectate (storno, "- IMPLICIT -", outlier-i).
 

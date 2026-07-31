@@ -1325,7 +1325,7 @@ function Sidebar({
             <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-indigo-500 to-violet-500 text-white">
               <BarChart3 className="h-4 w-4" />
             </div>
-            <span className="font-semibold tracking-tight">BC Agent</span>
+            <span className="font-semibold tracking-tight">Provendi</span>
           </div>
           <button
             type="button"

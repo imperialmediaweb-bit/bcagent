@@ -86,6 +86,6 @@ export async function verifyTotp(
 }
 
 /** URL-ul otpauth:// pe care îl scanează aplicația de autentificare. */
-export function totpUri(secret: string, account: string, issuer = "BC Agent"): string {
+export function totpUri(secret: string, account: string, issuer = "Provendi"): string {
   return `otpauth://totp/${encodeURIComponent(issuer)}:${encodeURIComponent(account)}?secret=${secret}&issuer=${encodeURIComponent(issuer)}&algorithm=SHA1&digits=6&period=30`;
 }

@@ -15,7 +15,7 @@ const grotesk = Space_Grotesk({
 });
 
 export const metadata: Metadata = {
-  title: "BC Agent — Sales Analytics",
+  title: "Provendi — Sales Analytics",
   description: "Rapoarte de vânzări și eficiență pentru agenți",
   manifest: "/manifest.webmanifest",
   icons: {
@@ -24,7 +24,7 @@ export const metadata: Metadata = {
   },
   appleWebApp: {
     capable: true,
-    title: "BC Agent",
+    title: "Provendi",
     statusBarStyle: "default",
   },
 };

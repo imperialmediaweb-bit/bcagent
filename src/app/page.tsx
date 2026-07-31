@@ -395,7 +395,7 @@ export default function HomePage() {
               B
             </div>
             <span className="display text-xl font-extrabold tracking-tight">
-              BC AGENT
+              PROVENDI
             </span>
           </div>
           <nav className="hidden items-center gap-7 text-sm font-semibold md:flex">
@@ -882,7 +882,7 @@ export default function HomePage() {
             <h2 className="display text-4xl font-extrabold leading-tight tracking-tight sm:text-6xl">
               ÎNCHIDE CAIETUL.
               <br />
-              <span className="inkshift">DESCHIDE BC AGENT.</span>
+              <span className="inkshift">DESCHIDE PROVENDI.</span>
             </h2>
             <a
               href="#preturi"
@@ -897,7 +897,7 @@ export default function HomePage() {
 
       <footer className="bg-[#161412] pb-10 text-[#f5efe4]/50">
         <div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-3 border-t border-[#f5efe4]/10 px-4 pt-8 text-sm sm:flex-row sm:px-6">
-          <span className="display font-extrabold text-[#f5efe4]">BC AGENT</span>
+          <span className="display font-extrabold text-[#f5efe4]">PROVENDI</span>
           <p>Date: surse publice MF/ANAF · Fișierele tale rămân ale tale.</p>
           <div className="flex items-center gap-4">
             <Link href="/ghid" className="hover:text-[#f5efe4]">

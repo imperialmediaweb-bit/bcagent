@@ -81,15 +81,22 @@ export async function GET(req: Request) {
     }
 
     const email = rol === "patron" ? DEMO_OWNER_EMAIL : DEMO_MANAGER_EMAIL;
-    const rows = await db<
-      Array<{ id: string; org_id: string; email: string; name: string; role: string }>
-    >`
-      SELECT u.id, u.org_id, u.email, u.name, u.role
-      FROM org_users u
-      JOIN organizations o ON o.id = u.org_id
-      WHERE o.name = ${DEMO_ORG_NAME} AND u.email = ${email} AND u.active
-      LIMIT 1
-    `;
+    const findUser = () =>
+      db<
+        Array<{ id: string; org_id: string; email: string; name: string; role: string }>
+      >`
+        SELECT u.id, u.org_id, u.email, u.name, u.role
+        FROM org_users u
+        JOIN organizations o ON o.id = u.org_id
+        WHERE o.name = ${DEMO_ORG_NAME} AND u.email = ${email} AND u.active
+        LIMIT 1
+      `;
+    let rows = await findUser();
+    if (rows.length === 0) {
+      // Demo vechi (conturi de dinaintea rebranduirii) — îl refacem pe loc.
+      await seedDemoOrg(requestOrigin(req));
+      rows = await findUser();
+    }
     if (rows.length === 0) {
       return Response.json({ error: "Contul demo lipsește" }, { status: 404 });
     }

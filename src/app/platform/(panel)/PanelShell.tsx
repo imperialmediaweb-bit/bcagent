@@ -90,7 +90,7 @@ export default function PanelShell({
           <div className="flex h-8 w-8 items-center justify-center rounded-lg border-2 border-[#ffd23f]/60 bg-[#ff4d00] text-white">
             <LayoutDashboard className="h-4 w-4" />
           </div>
-          <span className="text-sm font-semibold text-white">BC Agent</span>
+          <span className="text-sm font-semibold text-white">Provendi</span>
         </div>
         <button
           type="button"
@@ -124,7 +124,7 @@ export default function PanelShell({
             </div>
             <div className="min-w-0">
               <p className="truncate text-sm font-semibold text-white">
-                BC Agent
+                Provendi
               </p>
               <p className="text-xs text-slate-400">Super admin</p>
             </div>

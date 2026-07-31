@@ -119,7 +119,7 @@ export default function AdminPage() {
         </div>
         <div>
           <h1 className="text-2xl font-semibold tracking-tight text-slate-900">
-            BC Agent — Admin
+            Provendi — Admin
           </h1>
           <p className="text-sm text-slate-500">
             Emite linkuri magice pentru agenții tăi

@@ -17,8 +17,8 @@ import {
  */
 
 export const DEMO_ORG_NAME = "Demo Distribuție SRL";
-export const DEMO_OWNER_EMAIL = "demo@bcagent.ro";
-export const DEMO_MANAGER_EMAIL = "manager.demo@bcagent.ro";
+export const DEMO_OWNER_EMAIL = "demo@provendi.ro";
+export const DEMO_MANAGER_EMAIL = "manager.demo@provendi.ro";
 
 const AGENTS = [
   { id: "demo-a1", name: "Andrei Munteanu" },

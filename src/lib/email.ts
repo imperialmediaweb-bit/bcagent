@@ -23,7 +23,7 @@ export async function sendEmail(opts: {
       Authorization: `Bearer ${key}`,
     },
     body: JSON.stringify({
-      from: process.env.EMAIL_FROM || "BC Agent <onboarding@resend.dev>",
+      from: process.env.EMAIL_FROM || "Provendi <onboarding@resend.dev>",
       to: [opts.to],
       subject: opts.subject,
       html: opts.html,

@@ -68,13 +68,13 @@ export default function PinGate({
             className="flex h-11 w-11 items-center justify-center rounded-lg border-2 border-[#161412] bg-[#ff4d00] text-xl font-black text-white"
             style={{ boxShadow: "4px 4px 0 #161412" }}
           >
-            B
+            P
           </span>
           <span
             className="text-2xl font-extrabold tracking-tight text-[#161412]"
             style={{ fontFamily: "var(--font-display), sans-serif" }}
           >
-            BC AGENT
+            PROVENDI
           </span>
         </div>
 

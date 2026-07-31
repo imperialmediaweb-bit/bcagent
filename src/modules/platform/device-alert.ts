@@ -47,7 +47,7 @@ export async function handleDeviceOnLogin(
       });
       await sendEmail({
         to: email,
-        subject: "⚠️ Conectare nouă la BC Agent de pe un dispozitiv necunoscut",
+        subject: "⚠️ Conectare nouă la Provendi de pe un dispozitiv necunoscut",
         html: `
           <div style="font-family:system-ui,sans-serif;max-width:520px;margin:0 auto">
             <h2 style="color:#161412">Conectare de pe un dispozitiv nou</h2>
@@ -62,7 +62,7 @@ export async function handleDeviceOnLogin(
             <p><strong>Nu ai fost tu?</strong> Schimbă parola imediat din
             Setări și activează autentificarea în doi pași (2FA). Dispozitivele
             contului se văd în panou, la Setări → Securitatea contului.</p>
-            <p style="color:#999;font-size:12px;margin-top:20px">BC Agent — alertă automată de securitate.</p>
+            <p style="color:#999;font-size:12px;margin-top:20px">Provendi — alertă automată de securitate.</p>
           </div>`,
       });
     }

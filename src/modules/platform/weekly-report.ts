@@ -182,7 +182,7 @@ export function renderReportHTML(r: WeeklyReport): string {
   return `
 <div style="font-family:Arial,sans-serif;max-width:640px;margin:0 auto;color:#161412">
   <div style="background:#161412;color:#ffd23f;padding:16px 20px;border-radius:12px 12px 0 0">
-    <strong style="font-size:18px">BC AGENT</strong>
+    <strong style="font-size:18px">PROVENDI</strong>
     <span style="color:#f5efe4;float:right">${r.periodLabel}</span>
   </div>
   <div style="border:2px solid #161412;border-top:none;border-radius:0 0 12px 12px;padding:20px">
@@ -223,7 +223,7 @@ export function renderReportHTML(r: WeeklyReport): string {
         : ""
     }
     <p style="margin-top:16px;font-size:12px;color:#888">
-      Trimis automat de BC Agent. Detalii complete în panoul firmei.
+      Trimis automat de Provendi. Detalii complete în panoul firmei.
     </p>
   </div>
 </div>`;

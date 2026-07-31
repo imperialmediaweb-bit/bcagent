@@ -2,7 +2,7 @@ import Link from "next/link";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "BC Agent — prezentarea platformei",
+  title: "Provendi — prezentarea platformei",
   description:
     "Platforma completă pentru firmele de distribuție: agenți pe teren, vânzări live, hartă, AI. Prezentare cu capturi reale.",
 };
@@ -81,13 +81,13 @@ export default function PrezentarePage() {
               className="flex h-12 w-12 items-center justify-center rounded-lg border-2 border-[#161412] bg-[#ff4d00] text-2xl font-black text-white"
               style={{ boxShadow: "4px 4px 0 #161412" }}
             >
-              B
+              P
             </span>
             <span
               className="text-3xl font-extrabold tracking-tight text-[#161412]"
               style={{ fontFamily: "var(--font-display), sans-serif" }}
             >
-              BC AGENT
+              PROVENDI
             </span>
           </div>
           <h1
