@@ -55,9 +55,8 @@ export async function POST(req: Request) {
   }
 
   try {
-    const { isLockedOut, recordLoginEvent, adminTotpByEmail } = await import(
-      "@/modules/platform"
-    );
+    const { isLockedOut, recordLoginEvent, adminTotpByEmail, handleDeviceOnLogin } =
+      await import("@/modules/platform");
     if (await isLockedOut("platform", email)) {
       return Response.json(
         {
@@ -110,6 +109,7 @@ export async function POST(req: Request) {
     });
     await touchAdminLogin(admin.id);
     await recordLoginEvent("platform", email, ip, true);
+    await handleDeviceOnLogin("platform", email, req, ip);
     await audit(admin.email, "admin.login", admin.email, { ip });
 
     return Response.json({

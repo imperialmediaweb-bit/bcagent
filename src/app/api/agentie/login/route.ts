@@ -4,6 +4,7 @@ import { verifyTotp } from "@/lib/totp";
 import {
   audit,
   getOrgUserForLogin,
+  handleDeviceOnLogin,
   isLockedOut,
   ORG_SESSION_TTL_SECONDS,
   orgUserTotpByEmail,
@@ -97,6 +98,7 @@ export async function POST(req: Request) {
     });
     await touchOrgUserLogin(user.id);
     await recordLoginEvent("org", email, ip, true);
+    await handleDeviceOnLogin("org", email, req, ip);
     await audit(user.email, "orguser.login", user.orgId);
 
     return Response.json({

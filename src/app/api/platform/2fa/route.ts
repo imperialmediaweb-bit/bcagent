@@ -3,7 +3,9 @@ import { isDBEnabled } from "@/lib/db";
 import { generateTotpSecret, totpUri, verifyTotp } from "@/lib/totp";
 import {
   audit,
+  describeDevice,
   getAdminTotp,
+  listDevices,
   loginHistory,
   requireAdmin,
   setAdminTotp,
@@ -20,7 +22,12 @@ export async function GET() {
   try {
     const totp = await getAdminTotp(auth.session.adminId);
     const history = await loginHistory("platform", auth.session.email);
-    return Response.json({ totpEnabled: totp.enabled, history });
+    const devices = (await listDevices("platform", auth.session.email)).map((d) => ({
+      name: describeDevice(d.ua),
+      ip: d.ip,
+      lastSeen: d.lastSeen,
+    }));
+    return Response.json({ totpEnabled: totp.enabled, history, devices });
   } catch (e) {
     console.error("[platform 2fa GET]", e);
     return Response.json({ error: "Eroare" }, { status: 500 });

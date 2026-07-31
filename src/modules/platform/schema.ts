@@ -95,6 +95,21 @@ export async function ensurePlatformSchema(): Promise<void> {
     CREATE INDEX IF NOT EXISTS login_events_email
       ON login_events(email, created_at DESC);
 
+    -- Dispozitivele cunoscute ale unui cont (ca la Facebook): la login de
+    -- pe un browser nou, proprietarul primește email de alertă.
+    CREATE TABLE IF NOT EXISTS known_devices (
+      id BIGSERIAL PRIMARY KEY,
+      kind TEXT NOT NULL,            -- 'org' | 'platform'
+      email TEXT NOT NULL,
+      device_id TEXT NOT NULL,
+      ua TEXT NOT NULL DEFAULT '',
+      ip TEXT NOT NULL DEFAULT '',
+      first_seen TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      last_seen TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      UNIQUE (kind, email, device_id)
+    );
+    CREATE INDEX IF NOT EXISTS known_devices_email ON known_devices(kind, email);
+
     CREATE TABLE IF NOT EXISTS org_agents (
       id TEXT PRIMARY KEY,
       org_id TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,

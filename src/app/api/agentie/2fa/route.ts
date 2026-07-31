@@ -3,7 +3,9 @@ import { isDBEnabled } from "@/lib/db";
 import { generateTotpSecret, totpUri, verifyTotp } from "@/lib/totp";
 import {
   audit,
+  describeDevice,
   getOrgUserTotp,
+  listDevices,
   loginHistory,
   requireOrgUser,
   setOrgUserTotp,
@@ -26,7 +28,12 @@ export async function GET() {
   try {
     const totp = await getOrgUserTotp(auth.session.userId);
     const history = await loginHistory("org", auth.session.email);
-    return Response.json({ totpEnabled: totp.enabled, history });
+    const devices = (await listDevices("org", auth.session.email)).map((d) => ({
+      name: describeDevice(d.ua),
+      ip: d.ip,
+      lastSeen: d.lastSeen,
+    }));
+    return Response.json({ totpEnabled: totp.enabled, history, devices });
   } catch (e) {
     console.error("[agentie 2fa GET]", e);
     return Response.json({ error: "Eroare" }, { status: 500 });

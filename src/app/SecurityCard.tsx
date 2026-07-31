@@ -10,6 +10,12 @@ interface LoginEvent {
   createdAt: string;
 }
 
+interface Device {
+  name: string;
+  ip: string;
+  lastSeen: string;
+}
+
 /**
  * „Ca la bancă": autentificare în doi pași (Google Authenticator) +
  * istoricul conectărilor contului. Folosită și în panoul agenției, și
@@ -18,6 +24,7 @@ interface LoginEvent {
 export default function SecurityCard({ endpoint }: { endpoint: string }) {
   const [enabled, setEnabled] = useState<boolean | null>(null);
   const [history, setHistory] = useState<LoginEvent[]>([]);
+  const [devices, setDevices] = useState<Device[]>([]);
   const [setup, setSetup] = useState<{ qr: string; secret: string } | null>(null);
   const [otp, setOtp] = useState("");
   const [msg, setMsg] = useState<{ kind: "success" | "error"; text: string } | null>(null);
@@ -25,9 +32,14 @@ export default function SecurityCard({ endpoint }: { endpoint: string }) {
 
   const load = useCallback(async () => {
     try {
-      const d = await api<{ totpEnabled: boolean; history: LoginEvent[] }>(endpoint);
+      const d = await api<{
+        totpEnabled: boolean;
+        history: LoginEvent[];
+        devices?: Device[];
+      }>(endpoint);
       setEnabled(d.totpEnabled);
       setHistory(d.history ?? []);
+      setDevices(d.devices ?? []);
     } catch {
       setEnabled(null);
     }
@@ -144,6 +156,24 @@ export default function SecurityCard({ endpoint }: { endpoint: string }) {
         )}
 
         {msg && <Alert kind={msg.kind}>{msg.text}</Alert>}
+
+        {devices.length > 0 && (
+          <div>
+            <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-400">
+              Dispozitive cunoscute — la un login de pe unul nou primești
+              email de alertă
+            </p>
+            <ul className="divide-y divide-slate-100 rounded-lg border border-slate-100 text-xs">
+              {devices.map((d, i) => (
+                <li key={i} className="flex items-center justify-between px-3 py-1.5">
+                  <span className="font-medium text-slate-700">📱 {d.name}</span>
+                  <span className="text-slate-400">IP {d.ip || "—"}</span>
+                  <span className="text-slate-500">{formatDateTime(d.lastSeen)}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
 
         {history.length > 0 && (
           <div>

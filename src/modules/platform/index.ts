@@ -39,7 +39,14 @@ export {
   setAdminTotp,
   adminTotpByEmail,
 } from "./login-security";
-export type { LoginEvent } from "./login-security";
+export {
+  describeDevice,
+  hasAnyDevice,
+  listDevices,
+  touchDevice,
+} from "./login-security";
+export type { LoginEvent, KnownDevice } from "./login-security";
+export { handleDeviceOnLogin } from "./device-alert";
 export {
   seedDemoOrg,
   DEMO_ORG_NAME,
