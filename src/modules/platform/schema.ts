@@ -110,6 +110,21 @@ export async function ensurePlatformSchema(): Promise<void> {
     );
     CREATE INDEX IF NOT EXISTS known_devices_email ON known_devices(kind, email);
 
+    -- Telemetrie de erori: TOT ce se împiedică la utilizatori se prinde
+    -- automat (crash JS, cereri API eșuate) — adminul vede fără ca omul
+    -- să raporteze nimic.
+    CREATE TABLE IF NOT EXISTS app_events (
+      id BIGSERIAL PRIMARY KEY,
+      kind TEXT NOT NULL,             -- 'js_error' | 'api_error'
+      page TEXT NOT NULL DEFAULT '',
+      message TEXT NOT NULL DEFAULT '',
+      status INTEGER,
+      ua TEXT NOT NULL DEFAULT '',
+      ip TEXT NOT NULL DEFAULT '',
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS app_events_time ON app_events(created_at DESC);
+
     CREATE TABLE IF NOT EXISTS org_agents (
       id TEXT PRIMARY KEY,
       org_id TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,

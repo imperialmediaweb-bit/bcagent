@@ -1,3 +1,4 @@
+import Telemetry from "./Telemetry";
 import "./globals.css";
 import type { Metadata, Viewport } from "next";
 import { Syne, Space_Grotesk } from "next/font/google";
@@ -40,6 +41,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="ro" className={`${syne.variable} ${grotesk.variable}`}>
       <body className="min-h-screen bg-neutral-50 text-neutral-900 antialiased">
+        <Telemetry />
         {children}
       </body>
     </html>

@@ -7,6 +7,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useState } from "react";
 import {
   Bug,
+  Radar,
   Building2,
   FileText,
   LayoutDashboard,
@@ -21,6 +22,7 @@ import {
 const NAV = [
   { href: "/platform", label: "Dashboard", icon: LayoutDashboard },
   { href: "/platform/probleme", label: "Probleme", icon: Bug },
+  { href: "/platform/activitate", label: "Activitate & erori", icon: Radar },
   { href: "/platform/organizatii", label: "Organizații", icon: Building2 },
   { href: "/platform/planuri", label: "Planuri", icon: Tags },
   { href: "/platform/facturi", label: "Facturi", icon: FileText },
