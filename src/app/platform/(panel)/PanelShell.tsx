@@ -1,5 +1,7 @@
 "use client";
 
+import Logo from "@/app/Logo";
+
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useState } from "react";
@@ -118,16 +120,9 @@ export default function PanelShell({
       {/* Sidebar desktop */}
       <aside className="fixed inset-y-0 left-0 hidden w-60 flex-col justify-between bg-slate-900 p-4 lg:flex">
         <div>
-          <div className="mb-6 flex items-center gap-2 px-1">
-            <div className="flex h-9 w-9 items-center justify-center rounded-xl border-2 border-[#ffd23f]/60 bg-[#ff4d00] text-white">
-              <LayoutDashboard className="h-5 w-5" />
-            </div>
-            <div className="min-w-0">
-              <p className="truncate text-sm font-semibold text-white">
-                Provendi
-              </p>
-              <p className="text-xs text-slate-400">Super admin</p>
-            </div>
+          <div className="mb-6 px-1">
+            <Logo iconSize={30} textClassName="text-base" variant="dark" />
+            <p className="mt-1 px-0.5 text-xs text-slate-400">Super admin</p>
           </div>
           {nav}
         </div>

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useState } from "react";
 import ReportIssue from "@/app/ReportIssue";
+import Logo from "@/app/Logo";
 import {
   Building2,
   ClipboardList,
@@ -128,18 +129,11 @@ export default function OrgShell({
 
       <aside className="fixed inset-y-0 left-0 hidden w-60 flex-col justify-between bg-slate-900 p-4 lg:flex">
         <div>
-          <div className="mb-6 flex items-center gap-2 px-1">
-            <div className="flex h-9 w-9 items-center justify-center rounded-xl border-2 border-[#ffd23f]/60 bg-[#ff4d00] text-white">
-              <Building2 className="h-5 w-5" />
-            </div>
-            <div className="min-w-0">
-              <p className="truncate text-sm font-semibold text-white">
-                Agenția mea
-              </p>
-              <p className="text-xs text-slate-400">
-                {role === "owner" ? "Patron" : "Manager"}
-              </p>
-            </div>
+          <div className="mb-6 px-1">
+            <Logo iconSize={30} textClassName="text-base" variant="dark" />
+            <p className="mt-1 px-0.5 text-xs text-slate-400">
+              {role === "owner" ? "Panou patron" : "Panou manager"}
+            </p>
           </div>
           {nav}
         </div>
