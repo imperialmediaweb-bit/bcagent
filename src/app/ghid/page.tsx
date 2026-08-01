@@ -21,9 +21,9 @@ function Row({ icon, name, children }: { icon: string; name: string; children: R
   return (
     <div className="flex gap-3 border-b border-[#161412]/10 py-3 last:border-0">
       <span className="w-7 shrink-0 text-center text-lg">{icon}</span>
-      <div>
+      <div className="min-w-0">
         <p className="font-bold text-[#161412]">{name}</p>
-        <p className="text-sm text-[#161412]/70">{children}</p>
+        <p className="break-words text-sm text-[#161412]/70">{children}</p>
       </div>
     </div>
   );
@@ -37,7 +37,7 @@ function Panel({ id, title, subtitle, children }: { id: string; title: string; s
         style={{ boxShadow: "6px 6px 0 rgba(22,20,18,0.9)" }}
       >
         <h2
-          className="text-xl font-extrabold text-[#161412]"
+          className="break-words text-xl font-extrabold text-[#161412]"
           style={{ fontFamily: "var(--font-display), sans-serif" }}
         >
           {title}
@@ -78,6 +78,7 @@ export default function GhidPage() {
             <a href="#agent" className="rounded-full border-2 border-[#161412] bg-[#ffd23f] px-3 py-1">📱 Agentul</a>
             <a href="#pascupas" className="rounded-full border-2 border-[#161412] bg-white px-3 py-1">📖 Pas cu pas</a>
             <a href="#firma" className="rounded-full border-2 border-[#161412] bg-white px-3 py-1">🏢 Manager / Administrator</a>
+            <a href="#pascupasfirma" className="rounded-full border-2 border-[#161412] bg-white px-3 py-1">📖 Pas cu pas firmă</a>
             <a href="#intrare" className="rounded-full border-2 border-[#161412] bg-white px-3 py-1">🔑 Cum intri</a>
           </nav>
         </header>
@@ -229,6 +230,23 @@ export default function GhidPage() {
             <B>poza raftului</B> din magazin — îți spune ce să aranjezi și ce
             lipsește.
           </Row>
+          <Row icon="🎯" name="Cum îmi văd TARGETUL și clasamentul">
+            Secțiunea <B>„Targetul meu"</B>: cât ai de făcut luna asta, cât ai
+            făcut deja și procentul — plus clasamentul echipei, să vezi unde
+            ești față de colegi. Dacă ești sub ritmul lunii, apare cu roșu în
+            „Ziua mea".
+          </Row>
+          <Row icon="🧾" name="Cum îmi bag CHELTUIELILE (decont)">
+            Secțiunea <B>Decont</B> → „Adaugă cheltuială" → alegi categoria
+            (combustibil, masă, altele), suma și o notă → trimiți. Managerul
+            o aprobă din panoul lui și vezi statusul la fiecare: în așteptare
+            / aprobat / respins.
+          </Row>
+          <Row icon="🔐" name="Ce fac dacă am UITAT PIN-ul">
+            Suni managerul: el intră la <B>Agenți</B> → rândul tău →
+            „Resetează PIN". La următoarea deschidere a linkului îți setezi un
+            PIN nou. Linkul rămâne același.
+          </Row>
           <Row icon="📲" name="Cum îmi pun aplicația pe telefon">
             Deschide linkul tău în Chrome/Safari → meniul browserului →{" "}
             <B>„Adaugă la ecranul principal"</B>. Apare ca aplicație normală,
@@ -241,6 +259,24 @@ export default function GhidPage() {
           title="🏢 Panoul FIRMEI — manager și administrator"
           subtitle="Se intră cu email + parolă pe /agentie/login. Managerul vede tot; salariile și echipa sunt doar ale administratorului."
         >
+          <Row icon="🚀" name="Prima zi — de la cont la firmă funcțională">
+            1) Îți faci contul pe{" "}
+            <Link href="/agentie/inregistrare" className="font-bold underline">
+              /agentie/inregistrare
+            </Link>{" "}
+            (30 de secunde, 14 zile gratuit). 2) <B>Clienți</B> → tragi
+            fișierul tău de clienți — agenții din fișier primesc automat cont
+            și link. N-ai fișier? Îi adaugi din <B>Agenți</B>, cu mâna. 3)
+            Trimiți fiecărui agent linkul lui pe WhatsApp. 4) <B>Vânzări</B> →
+            încarci raportul din SAGA ca să ai istoricul și analizele. 5){" "}
+            <B>Solduri</B> → încarci restanțele. 6) <B>Targeturi</B> → pui
+            targetul lunii. De aici totul curge singur din teren.
+          </Row>
+          <Row icon="🎁" name="Perioada de probă">
+            14 zile cu tot inclus, fără card. Vezi permanent în panou câte
+            zile mai ai. Nu ai apucat să testezi? Scrie-ne din butonul 💬 și
+            o prelungim — nimic nu se șterge și nimeni nu e blocat automat.
+          </Row>
           <Row icon="📊" name="Dashboard">
             Pulsul firmei: vizite azi/săptămână, clienți, scadenți, conversii.
             „Briefingul AI" comprimă totul în 5 fraze + 3 acțiuni concrete.
@@ -308,6 +344,104 @@ export default function GhidPage() {
             Schimbi parola, activezi 2FA (cod Google Authenticator la login),
             vezi istoricul conectărilor și dispozitivele cunoscute. La login de
             pe un aparat nou primești alertă pe email.
+          </Row>
+          <Row icon="💬" name="Sugestii & erori">
+            Butonul 💬 din colțul panoului: ai găsit o problemă, ai o idee sau
+            vrei o funcție? Scrii două rânduri și ajunge direct la noi —
+            platforma e în BETA și construim după ce ne cer firmele.
+          </Row>
+        </Panel>
+
+        <Panel
+          id="pascupasfirma"
+          title="📖 Pas cu pas — administrator & manager"
+          subtitle="Exact ce apeși, în ordine, pentru fiecare treabă din birou. Ce e marcat (doar administratorul) nu apare la manageri."
+        >
+          <Row icon="👥" name="Cum ADAUG un agent și îi dau linkul">
+            <B>Agenți</B> → „Adaugă agent" → scrii numele → apare pe listă cu
+            butonul <B>„Copiază linkul"</B> → îl lipești în WhatsApp-ul lui.
+            Atât. La prima deschidere agentul își setează singur PIN-ul, iar
+            linkul lui nu se mai deschide pe alt telefon fără PIN.
+          </Row>
+          <Row icon="📥" name="Cum IMPORT tot universul de clienți deodată">
+            <B>Clienți</B> → „Adu universul de clienți" → tragi fișierul tău
+            (Excel/CSV, orice format — coloanele se detectează singure, merg
+            și diacriticele). Platforma potrivește clienții cu firmele
+            oficiale după CUI sau nume, îi <B>împarte singură pe agenți</B>{" "}
+            după coloana de agent din fișier, iar agenții care nu există încă{" "}
+            <B>primesc automat cont și link</B>. La final vezi exact: câți au
+            intrat, câți nu s-au potrivit și de ce.
+          </Row>
+          <Row icon="📈" name="Cum ÎNCARC vânzările din SAGA">
+            Scoți din SAGA raportul de vânzări (XLS/CSV) → <B>Vânzări</B> →
+            tragi fișierul în chenar → analizele se calculează singure:
+            evoluție lunară, agent × brand, top clienți, prognoze. Încarci
+            câte luni vrei — se adună, nu se suprascriu.
+          </Row>
+          <Row icon="💰" name="Cum ÎNCARC soldurile (restanțele)">
+            <B>Solduri</B> → tragi fișierul cu restanțe (CUI + sumă e
+            de-ajuns) → restanța apare pe fiecare client, iar agentul e
+            avertizat cu roșu ÎNAINTE să ia comandă nouă de la rău-platnic.
+          </Row>
+          <Row icon="📦" name="Cum lucrez cu COMENZILE din teren">
+            <B>Comenzi</B>: fiecare comandă nouă apare singură (pagina se
+            reîmprospătează la minut). Depozitul apasă <B>„Pregătește"</B> →{" "}
+            <B>„Livrează"</B> pe măsură ce lucrează. Vânzările van au badge
+            mov 🚐 și în „Dubele azi" vezi <B>câți bani are fiecare agent de
+            predat</B>. Contabila apasă „Export CSV" și îl bagă în
+            SAGA/Excel.
+          </Row>
+          <Row icon="📎" name="Cum ATAȘEZ facturi la o comandă">
+            Pe orice comandă: <B>„📎 atașează factura"</B> → fotografiezi sau
+            alegi poza. Mai ai una? <B>„＋ încă una"</B> — oricâte facturi pe
+            aceeași comandă (max 10). „📎 vezi facturile (2)" le deschide pe
+            toate. Pozele se țin criptate.
+          </Row>
+          <Row icon="🎯" name="Cum SETEZ targeturile lunii">
+            <B>Targeturi</B> → alegi luna → scrii suma la fiecare agent →
+            salvezi. Progresul se calculează singur din vânzări, agentul își
+            vede procentul în telefon, iar tu vezi clasamentul întregii
+            echipe.
+          </Row>
+          <Row icon="🧾" name="Cum APROB deconturile">
+            <B>Decont</B> → vezi fiecare cheltuială trimisă de agenți, cu
+            categorie și notă → Aprobi sau Respingi → totalurile pe lună se
+            fac singure.
+          </Row>
+          <Row icon="🏖️" name="Cum dau CONCEDIU fără să rămână zona goală">
+            <B>Agenți</B> → rândul agentului → „Concediu" → pui perioada.
+            Dacă se suprapune cu a altui coleg, platforma te{" "}
+            <B>avertizează</B>. Agentul în concediu apare marcat peste tot.
+          </Row>
+          <Row icon="🔁" name="Cum PREDAU portofoliul când pleacă un agent">
+            <B>Agenți</B> → „Transferă portofoliul" → alegi de la cine la
+            cine → bifezi „dezactivează agentul" → toți clienții, notele și
+            istoricul trec la înlocuitor, iar <B>linkul celui plecat moare pe
+            loc</B>. Nimic nu pleacă cu omul.
+          </Row>
+          <Row icon="🔐" name="Cum RESETEZ PIN-ul unui agent">
+            Agentul a uitat PIN-ul sau și-a schimbat telefonul: <B>Agenți</B>{" "}
+            → rândul lui → „Resetează PIN" → la următoarea deschidere a
+            linkului își pune PIN nou. Nu trebuie link nou.
+          </Row>
+          <Row icon="👔" name="Cum ADAUG un manager (doar administratorul)">
+            <B>Echipa</B> → „Adaugă utilizator" → email + parolă temporară +
+            rol <B>manager</B> → îi trimiți datele; își schimbă parola din
+            Setări la prima intrare. Managerul vede tot operaționalul, dar NU
+            vede salariile și NU poate umbla la Echipa.
+          </Row>
+          <Row icon="🛡️" name="Cum îmi BLINDEZ contul (recomandat în ziua 1)">
+            <B>Setări</B> → „Schimbă parola" (dacă ai primit-o de la
+            altcineva) → „Activează 2FA": scanezi codul QR cu Google
+            Authenticator și de atunci la login se cere și codul din
+            aplicație. Tot acolo: istoricul conectărilor și dispozitivele
+            cunoscute — la orice login de pe aparat nou primești email de
+            alertă, ca la Facebook.
+          </Row>
+          <Row icon="📬" name="Cum primesc RAPORTUL săptămânal">
+            Nu faci nimic: lunea dimineața îți vine pe email toată săptămâna
+            în o pagină — vizite, conversii, comenzi, target, restanțe +
+            rezumatul AI. Îl vezi oricând și în panou, la „Raportul săpt.".
           </Row>
         </Panel>
 
