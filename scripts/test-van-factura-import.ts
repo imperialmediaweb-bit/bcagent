@@ -223,6 +223,32 @@ async function main() {
   const [bad] = await sql`SELECT foto FROM orders WHERE id = ${r.data.id}`;
   check("foto non-imagine se ignoră", bad?.foto === "");
 
+  console.log("\n══ Mai multe facturi pe aceeași comandă ══");
+  r = await req("PATCH", "/api/agentie/orders", {
+    id: oid, foto: "data:image/jpeg;base64,REVG",
+  }, ck1);
+  check("managerul atașează a 2-a factură", r.status === 200 && r.data.nFoto === 2);
+  r = await req("PATCH", "/api/agentie/orders", {
+    id: oid, foto: "data:image/jpeg;base64,R0hJ",
+  }, ck1);
+  check("a 3-a factură ok", r.status === 200 && r.data.nFoto === 3);
+  r = await req("PATCH", "/api/agentie/orders", {
+    id: oid, foto: "data:image/jpeg;base64,QUJD",
+  }, ck2);
+  check("firma rivală NU poate atașa → 403", r.status === 403);
+  r = await req("GET", `/api/agentie/orders?foto=${oid}`, undefined, ck1);
+  check("toate cele 3 poze vin la vizualizare",
+    r.status === 200 && Array.isArray(r.data.fotos) && r.data.fotos.length === 3 &&
+    r.data.fotos.every((f: string) => f.startsWith("data:image/")));
+  check("prima poză = cea a agentului (ordine păstrată)",
+    r.data.fotos?.[0] === "data:image/jpeg;base64,QUJD" && r.data.foto === r.data.fotos?.[0]);
+  r = await req("GET", "/api/agentie/orders?days=7", undefined, ck1);
+  const multi = (r.data.orders ?? []).find((o: any) => o.id === oid);
+  check("lista arată nFoto=3", multi?.nFoto === 3 && multi?.hasFoto === true);
+  const extras = await sql`SELECT foto FROM order_fotos WHERE order_id = ${oid}`;
+  check("pozele extra sunt criptate în DB",
+    extras.length === 2 && extras.every((e: any) => String(e.foto).startsWith("enc1:")));
+
   console.log("\n══ Import universul de clienți ══");
   r = await req("POST", "/api/agentie/clients-import", {
     clients: [

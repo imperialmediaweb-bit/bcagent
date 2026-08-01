@@ -246,8 +246,10 @@ export default function GhidPage() {
           </Row>
           <Row icon="📦" name="Comenzi">
             Tot ce trimit agenții din teren, live: le treci prin stări (nouă →
-            pregătită → livrată), vezi vânzările van cu badge, deschizi poza
-            facturii, iar „Dubele azi" îți arată stocul fiecărei mașini și{" "}
+            pregătită → livrată), vezi vânzările van cu badge, deschizi pozele
+            facturilor și mai poți atașa oricâte facturi pe aceeași comandă
+            (buton „＋ încă una"), iar „Dubele azi" îți arată stocul fiecărei
+            mașini și{" "}
             <strong>câți bani are fiecare agent de predat</strong>. Export CSV
             gata de SAGA/Excel.
           </Row>

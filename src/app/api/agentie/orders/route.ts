@@ -33,6 +33,7 @@ interface OrderRow {
   tip: string;
   plata: string;
   has_foto: boolean;
+  n_foto: number;
 }
 
 export async function GET(req: Request) {
@@ -60,7 +61,9 @@ export async function GET(req: Request) {
     const ids = agents.map((a) => a.agentId);
     const scoped = agentId && ids.includes(agentId) ? [agentId] : ids;
 
-    // Poza facturii unei singure comenzi (se cere doar la click, nu în listă).
+    // Pozele facturilor unei singure comenzi (se cer doar la click, nu în
+    // listă). O comandă poate avea mai multe: prima în orders.foto,
+    // următoarele în order_fotos.
     const fotoId = url.searchParams.get("foto") ?? "";
     if (fotoId) {
       const fr = await db<Array<{ foto: string }>>`
@@ -68,18 +71,33 @@ export async function GET(req: Request) {
         WHERE id = ${fotoId} AND agent_id = ANY(${ids.length ? ids : [""]})
         LIMIT 1
       `;
-      if (fr.length === 0 || !fr[0].foto) {
+      if (fr.length === 0) {
+        return Response.json({ error: "Fără poză" }, { status: 404 });
+      }
+      const extra = await db<Array<{ foto: string }>>`
+        SELECT foto FROM order_fotos
+        WHERE order_id = ${fotoId}
+        ORDER BY created_at, id
+      `;
+      const encrypted = [
+        ...(fr[0].foto ? [fr[0].foto] : []),
+        ...extra.map((e) => e.foto),
+      ];
+      if (encrypted.length === 0) {
         return Response.json({ error: "Fără poză" }, { status: 404 });
       }
       const { decryptData } = await import("@/lib/crypto-data");
-      const plain = await decryptData(fr[0].foto);
-      if (!plain) {
+      const fotos = (
+        await Promise.all(encrypted.map((enc) => decryptData(enc)))
+      ).filter((p): p is string => Boolean(p));
+      if (fotos.length === 0) {
         return Response.json(
-          { error: "Poza nu poate fi decriptată (cheie lipsă/schimbată)" },
+          { error: "Pozele nu pot fi decriptate (cheie lipsă/schimbată)" },
           { status: 500 },
         );
       }
-      return Response.json({ foto: plain });
+      // `foto` rămâne pentru compatibilitate (prima poză); `fotos` le are pe toate.
+      return Response.json({ foto: fotos[0], fotos });
     }
 
     // Fără coloana foto în listă (base64 greu) — doar flag; poza se cere
@@ -87,7 +105,10 @@ export async function GET(req: Request) {
     const rows = await db<OrderRow[]>`
       SELECT id, agent_id, agent_name, cui, denumire, localitate, lines,
              note, status, total_value, created_at, tip, plata,
-             (foto != '') AS has_foto
+             (foto != '') AS has_foto,
+             ((foto != '')::int
+               + (SELECT COUNT(*) FROM order_fotos f WHERE f.order_id = orders.id)
+             )::int AS n_foto
       FROM orders
       WHERE agent_id = ANY(${scoped.length ? scoped : [""]})
         AND (${status} = '' OR status = ${status})
@@ -162,7 +183,8 @@ export async function GET(req: Request) {
         createdAt: r.created_at.toISOString(),
         tip: r.tip,
         plata: r.plata,
-        hasFoto: r.has_foto,
+        hasFoto: r.has_foto || r.n_foto > 0,
+        nFoto: r.n_foto,
       })),
     });
   } catch (e) {
@@ -202,20 +224,42 @@ export async function PATCH(req: Request) {
     const agents = await listOrgAgents(auth.session.orgId);
     const ids = agents.map((a) => a.agentId);
     if (wantsFoto) {
-      // Managerul/patronul atașează factura (poza) la o comandă existentă
-      // — criptată la fel ca la agent.
-      const { encryptData } = await import("@/lib/crypto-data");
-      const enc = await encryptData(rawFoto);
-      const rows = await db<Array<{ id: string }>>`
-        UPDATE orders SET foto = ${enc}, updated_at = NOW()
+      // Managerul/patronul atașează O factură în plus la o comandă
+      // existentă — criptată la fel ca la agent. Prima poză stă în
+      // orders.foto, următoarele în order_fotos (o comandă poate avea
+      // mai multe facturi). Limită 10 — destul pentru orice livrare reală.
+      const cur = await db<Array<{ foto: string; n: string }>>`
+        SELECT foto,
+               (SELECT COUNT(*) FROM order_fotos f WHERE f.order_id = orders.id)::text AS n
+        FROM orders
         WHERE id = ${id} AND agent_id = ANY(${ids.length ? ids : [""]})
-        RETURNING id
+        LIMIT 1
       `;
-      if (rows.length === 0) {
+      if (cur.length === 0) {
         return Response.json({ error: "Comanda nu e a firmei tale" }, { status: 403 });
       }
-      await audit(auth.session.email, "order.foto_attach", id);
-      return Response.json({ ok: true });
+      const total = (cur[0].foto ? 1 : 0) + parseInt(cur[0].n, 10);
+      if (total >= 10) {
+        return Response.json(
+          { error: "Maxim 10 facturi pe o comandă" },
+          { status: 400 },
+        );
+      }
+      const { encryptData } = await import("@/lib/crypto-data");
+      const enc = await encryptData(rawFoto);
+      if (!cur[0].foto) {
+        await db`
+          UPDATE orders SET foto = ${enc}, updated_at = NOW() WHERE id = ${id}
+        `;
+      } else {
+        await db`
+          INSERT INTO order_fotos (order_id, foto) VALUES (${id}, ${enc})
+        `;
+      }
+      await audit(auth.session.email, "order.foto_attach", id, {
+        nr: total + 1,
+      });
+      return Response.json({ ok: true, nFoto: total + 1 });
     }
 
     const rows = await db<Array<{ id: string }>>`

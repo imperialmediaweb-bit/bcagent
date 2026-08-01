@@ -34,6 +34,7 @@ interface Order {
   tip: string;
   plata: string;
   hasFoto: boolean;
+  nFoto: number;
 }
 
 interface VanInfo {
@@ -83,7 +84,7 @@ export default function ComenziPage() {
   const [vans, setVans] = useState<VanInfo[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-  const [fotoView, setFotoView] = useState<string | null>(null);
+  const [fotoView, setFotoView] = useState<string[] | null>(null);
   const attachRef = useRef<HTMLInputElement | null>(null);
   const [attachFor, setAttachFor] = useState<string | null>(null);
 
@@ -104,8 +105,10 @@ export default function ComenziPage() {
 
   async function openFoto(id: string) {
     try {
-      const d = await api<{ foto: string }>(`/api/agentie/orders?foto=${id}`);
-      setFotoView(d.foto);
+      const d = await api<{ foto: string; fotos?: string[] }>(
+        `/api/agentie/orders?foto=${id}`,
+      );
+      setFotoView(d.fotos?.length ? d.fotos : [d.foto]);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     }
@@ -232,15 +235,25 @@ export default function ComenziPage() {
 
       {fotoView && (
         <div
-          className="fixed inset-0 z-[1300] flex items-center justify-center bg-slate-900/70 p-4"
+          className="fixed inset-0 z-[1300] flex items-start justify-center overflow-y-auto bg-slate-900/70 p-4"
           onClick={() => setFotoView(null)}
         >
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={fotoView}
-            alt="Factura fotografiată de agent"
-            className="max-h-[90vh] max-w-full rounded-xl shadow-2xl"
-          />
+          <div className="my-auto flex max-w-full flex-col items-center gap-4">
+            {fotoView.length > 1 && (
+              <p className="rounded-full bg-slate-900/80 px-3 py-1 text-xs font-medium text-white">
+                {fotoView.length} facturi pe comanda asta — derulează
+              </p>
+            )}
+            {fotoView.map((src, i) => (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                key={i}
+                src={src}
+                alt={`Factura ${i + 1}`}
+                className="max-h-[88vh] max-w-full rounded-xl shadow-2xl"
+              />
+            ))}
+          </div>
         </div>
       )}
 
@@ -319,27 +332,33 @@ export default function ComenziPage() {
                           🚐 pe loc{o.plata ? ` · ${o.plata}` : ""}
                         </span>
                       )}
-                      {o.hasFoto ? (
+                      {o.hasFoto && (
                         <button
                           type="button"
                           onClick={() => openFoto(o.id)}
                           className="rounded-full bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-700 ring-1 ring-inset ring-amber-200 hover:bg-amber-100"
                         >
-                          📎 vezi factura
-                        </button>
-                      ) : (
-                        <button
-                          type="button"
-                          title="Atașează poza facturii la comanda asta"
-                          onClick={() => {
-                            setAttachFor(o.id);
-                            attachRef.current?.click();
-                          }}
-                          className="rounded-full bg-slate-50 px-2 py-0.5 text-xs font-medium text-slate-500 ring-1 ring-inset ring-slate-200 hover:bg-slate-100"
-                        >
-                          📎 atașează factura
+                          📎{" "}
+                          {o.nFoto > 1
+                            ? `vezi facturile (${o.nFoto})`
+                            : "vezi factura"}
                         </button>
                       )}
+                      <button
+                        type="button"
+                        title={
+                          o.hasFoto
+                            ? "Mai adaugă o factură la comanda asta"
+                            : "Atașează poza facturii la comanda asta"
+                        }
+                        onClick={() => {
+                          setAttachFor(o.id);
+                          attachRef.current?.click();
+                        }}
+                        className="rounded-full bg-slate-50 px-2 py-0.5 text-xs font-medium text-slate-500 ring-1 ring-inset ring-slate-200 hover:bg-slate-100"
+                      >
+                        {o.hasFoto ? "＋ încă una" : "📎 atașează factura"}
+                      </button>
                     </p>
                     <p className="mt-0.5 text-xs text-slate-500">
                       {o.agentName} · {o.localitate || "—"} ·{" "}

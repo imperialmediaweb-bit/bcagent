@@ -170,6 +170,15 @@ export async function ensureSchema(): Promise<void> {
     ALTER TABLE orders ADD COLUMN IF NOT EXISTS plata TEXT NOT NULL DEFAULT '';
     -- Poza facturii/bonului (JPEG mic, data-URL) — dovada vânzării pe loc.
     ALTER TABLE orders ADD COLUMN IF NOT EXISTS foto TEXT NOT NULL DEFAULT '';
+    -- O comandă poate avea MAI MULTE facturi: prima rămâne în orders.foto,
+    -- restul aici (criptate identic, AES-256-GCM prin DATA_KEY).
+    CREATE TABLE IF NOT EXISTS order_fotos (
+      id BIGSERIAL PRIMARY KEY,
+      order_id TEXT NOT NULL,
+      foto TEXT NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS order_fotos_order ON order_fotos(order_id, created_at);
     -- Stocul din mașina fiecărui agent: se încarcă dimineața, scade la
     -- fiecare vânzare van, se descarcă la retur.
     -- PIN-ul linkului de agent: linkul singur nu mai e de ajuns pe un
