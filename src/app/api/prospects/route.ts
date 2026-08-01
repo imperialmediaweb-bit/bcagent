@@ -96,7 +96,7 @@ export async function GET(req: Request) {
         AND (${caenInPatterns.length === 0} OR caen LIKE ANY(${caenInPatterns}))
         AND (${status} = '' OR status = ${status})
         AND (${agent} = '' OR assigned_agent = ${agent})
-        AND (${!onlyActive} OR activ IS TRUE)
+        AND (${!onlyActive} OR activ IS DISTINCT FROM FALSE)
         AND (${!onlyTva} OR tva IS TRUE)
         AND (${!withPhone} OR (telefon IS NOT NULL AND telefon <> ''))
         AND (${search} = '' OR denumire ILIKE ${"%" + search + "%"} OR cui LIKE ${search + "%"} OR adresa ILIKE ${"%" + search + "%"})

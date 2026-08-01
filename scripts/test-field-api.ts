@@ -281,6 +281,32 @@ async function main() {
     check("token expirat → 401", r.status === 401);
   }
 
+  console.log("\n══ Hartă vs listă: firmele NEverificate ANAF se văd ══");
+  // Bug real prins de tester (Brodina): bula hărții număra firmele cu
+  // activ NULL (neverificate încă), dar lista cerea activ=TRUE → „0 firme".
+  // Cele două filtre trebuie să fie identice: doar radiatele se ascund.
+  await sql`DELETE FROM prospects WHERE cui = '9009'`;
+  await sql`
+    INSERT INTO prospects (cui, denumire, adresa, localitate, judet, caen, activ, telefon, status, assigned_agent)
+    VALUES ('9009','QA NEVERIFICATA SRL','Str. N 9','QA BRODINA','SV','4711',NULL,'','nou','')
+  `;
+  {
+    const r = await get(
+      `/api/prospects?token=${TOK}&judet=SV&localitate=QA BRODINA&onlyActive=1&caenIn=4711`,
+    );
+    check(
+      "firma cu activ NULL apare în listă cu onlyActive=1",
+      r.status === 200 && (r.data.prospects ?? []).some((p: any) => p.cui === "9009"),
+      JSON.stringify(r.data?.total),
+    );
+    const g = await get(`/api/prospects/geo?token=${TOK}&judet=SV&caenIn=4711&geocode=0`);
+    const loc = (g.data?.localities ?? g.data?.rows ?? []).find(
+      (l: any) => l.localitate === "QA BRODINA",
+    );
+    check("aceeași firmă e numărată și în bula hărții", g.status === 200 && !!loc);
+  }
+  await sql`DELETE FROM prospects WHERE cui = '9009'`;
+
   // Curățenie finală.
   await sql`DELETE FROM visits WHERE agent_id LIKE 'qa-%'`;
   await sql`DELETE FROM routes WHERE agent_id LIKE 'qa-%'`;

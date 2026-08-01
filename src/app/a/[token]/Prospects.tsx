@@ -489,7 +489,7 @@ export default function Prospects({
                   }}
                   className="rounded border-slate-300"
                 />
-                Doar firme active (verificate ANAF)
+                Doar firme active (ascunde radiatele)
               </label>
               <label className="inline-flex items-center gap-1.5">
                 <input
