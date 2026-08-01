@@ -124,7 +124,7 @@ export default function PrezentarePage() {
           <p>Prospectarea nu mai e pe pile și memorie — e pe hartă.</p>
         </Slide>
 
-        <Slide img="firma-dashboard" kicker="Panoul patronului" title="Pulsul firmei, live, de oriunde">
+        <Slide img="firma-dashboard" kicker="Panoul administratorului" title="Pulsul firmei, live, de oriunde">
           <p>
             Vizitele echipei azi, clienți, conversii, scadenți — și{" "}
             <B>Briefingul AI</B>: toate cifrele firmei comprimate în 5 fraze +
@@ -172,7 +172,7 @@ export default function PrezentarePage() {
         <Slide img="firma-agenti" kicker="Echipa" title="Fiecare agent, cu evaluarea lui AI">
           <p>
             Linkuri de acces dintr-un click, concedii cu detectarea
-            suprapunerilor, salarii (doar patronul), <B>evaluare AI</B> per
+            suprapunerilor, salarii (doar administratorul), <B>evaluare AI</B> per
             agent — profil, puncte slabe, prognoză, cu cine să lucrezi.
           </p>
           <p>
@@ -241,7 +241,7 @@ export default function PrezentarePage() {
               className="rounded-xl border-2 border-[#161412] bg-[#ff4d00] px-6 py-3 text-[16px] font-black text-white transition hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none"
               style={{ boxShadow: "4px 4px 0 #161412" }}
             >
-              Intră ca PATRON →
+              Intră ca ADMINISTRATOR →
             </a>
             <a
               href="/api/agentie/demo-login?rol=agent"

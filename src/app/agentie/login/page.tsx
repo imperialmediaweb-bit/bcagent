@@ -74,7 +74,7 @@ export default function AgentieLogin() {
             Panoul firmei
           </h1>
           <p className="mt-1 text-sm font-medium text-[#161412]/60">
-            Pentru patron și manageri
+            Pentru administrator și manageri
           </p>
 
           <form onSubmit={submit} className="mt-6 space-y-4">
@@ -88,7 +88,7 @@ export default function AgentieLogin() {
                 onChange={(e) => setEmail(e.target.value)}
                 required
                 autoComplete="username"
-                placeholder="patron@firma.ro"
+                placeholder="admin@firma.ro"
                 className="mt-1.5 block w-full rounded-lg border-2 border-[#161412] px-3.5 py-3 text-[16px] font-medium text-[#161412] outline-none transition focus:bg-[#fdf3d8]"
               />
             </div>
@@ -146,6 +146,14 @@ export default function AgentieLogin() {
           </form>
         </div>
 
+        <Link
+          href="/agentie/inregistrare"
+          className="mt-4 block rounded-xl border-2 border-[#161412] bg-white py-3 text-center text-[15px] font-black text-[#161412] transition hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none"
+          style={{ boxShadow: "4px 4px 0 #161412" }}
+        >
+          ✨ Nu ai cont? Creează-l singur — 14 zile gratuit
+        </Link>
+
         <div
           className="mt-4 rounded-xl border-2 border-[#161412] bg-[#ffd23f] p-3.5"
           style={{ boxShadow: "4px 4px 0 #161412" }}
@@ -156,7 +164,7 @@ export default function AgentieLogin() {
           <div className="mt-2.5 grid grid-cols-3 gap-2">
             {(
               [
-                ["patron", "Patron"],
+                ["patron", "Administrator"],
                 ["manager", "Manager"],
                 ["agent", "Agent"],
               ] as const
@@ -174,8 +182,6 @@ export default function AgentieLogin() {
         </div>
 
         <p className="mt-5 text-center text-xs font-semibold text-[#161412]/45">
-          Contul îl primești de la administratorul platformei.
-          <br />
           Platformă în versiune BETA — dacă întâlnești o eroare, apasă
           butonul 💬 din panou și o rezolvăm rapid.
           <br />

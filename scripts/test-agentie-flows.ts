@@ -271,6 +271,49 @@ async function main() {
   check("raportul rivalului nu conține echipa noastră",
     !(JSON.stringify(r.data).includes("Vlad Unu")));
 
+  console.log("\n══ Înregistrare singură (self-signup, trial 14 zile) ══");
+  await sql`DELETE FROM org_users WHERE email = 'qa.selfsignup@test.ro'`;
+  await sql`DELETE FROM organizations WHERE name = 'QA Selfsignup SRL'`;
+  r = await req("POST", "/api/agentie/signup", {
+    firma: "QA Selfsignup SRL", name: "QA Self", email: "qa.selfsignup@test.ro",
+    password: "scurt",
+  });
+  check("parolă scurtă → 400", r.status === 400);
+  const sres = await fetch(`${BASE}/api/agentie/signup`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      firma: "QA Selfsignup SRL", name: "QA Self",
+      email: "qa.selfsignup@test.ro", password: "parola-buna-123",
+    }),
+  });
+  check("signup ok + sesiune pornită",
+    sres.status === 200 && (sres.headers.get("set-cookie") ?? "").includes("bcagent_org="));
+  const [sorg] = await sql`
+    SELECT status, trial_ends_at, agent_limit FROM organizations
+    WHERE name = 'QA Selfsignup SRL'
+  `;
+  const trialDays = sorg?.trial_ends_at
+    ? Math.round((new Date(sorg.trial_ends_at).getTime() - Date.now()) / 86400_000)
+    : 0;
+  check("organizația e în trial ~14 zile",
+    sorg?.status === "trial" && trialDays >= 13 && trialDays <= 14);
+  const [suser] = await sql`
+    SELECT role, active FROM org_users WHERE email = 'qa.selfsignup@test.ro'
+  `;
+  check("contul creat e owner (administrator) activ",
+    suser?.role === "owner" && suser?.active === true);
+  r = await req("POST", "/api/agentie/signup", {
+    firma: "QA Selfsignup SRL", name: "QA Self",
+    email: "qa.selfsignup@test.ro", password: "parola-buna-123",
+  });
+  check("același email a doua oară → 409", r.status === 409);
+  const selfck = await login("qa.selfsignup@test.ro", "parola-buna-123");
+  r = await req("GET", "/api/agentie/orders", undefined, selfck);
+  check("firma nouă intră și panoul răspunde", r.status === 200);
+  await sql`DELETE FROM org_users WHERE email = 'qa.selfsignup@test.ro'`;
+  await sql`DELETE FROM organizations WHERE name = 'QA Selfsignup SRL'`;
+
   console.log("\n══ Curățenie ══");
   await sql`DELETE FROM organizations WHERE name IN ('QA Boss SRL', 'QA Boss Rival SRL')`;
   for (const t of ["batches", "orders", "van_stock", "routes", "visits", "expenses"]) {

@@ -41,10 +41,12 @@ const NAV = [
 export default function OrgShell({
   name,
   role,
+  trialDaysLeft = null,
   children,
 }: {
   name: string;
   role: string;
+  trialDaysLeft?: number | null;
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
@@ -129,7 +131,7 @@ export default function OrgShell({
           <div className="mb-6 px-1">
             <Logo iconSize={30} textClassName="text-base" variant="dark" />
             <p className="mt-1 px-0.5 text-xs text-slate-400">
-              {role === "owner" ? "Panou patron" : "Panou manager"}
+              {role === "owner" ? "Panou administrator" : "Panou manager"}
             </p>
           </div>
           {nav}
@@ -148,7 +150,23 @@ export default function OrgShell({
         </div>
       </aside>
 
-      <main className="px-4 py-6 sm:px-6 lg:ml-60 lg:px-8">{children}</main>
+      <main className="px-4 py-6 sm:px-6 lg:ml-60 lg:px-8">
+        {trialDaysLeft !== null && (
+          <p className="mb-4 rounded-xl border border-amber-300 bg-amber-50 px-4 py-2.5 text-sm font-medium text-amber-800">
+            🎁 Perioadă de probă —{" "}
+            {trialDaysLeft > 0 ? (
+              <>
+                mai ai <strong>{trialDaysLeft} {trialDaysLeft === 1 ? "zi" : "zile"}</strong> cu
+                tot inclus.
+              </>
+            ) : (
+              <>proba a expirat.</>
+            )}{" "}
+            Ai nevoie de mai mult timp? Scrie-ne din butonul 💬 și o prelungim.
+          </p>
+        )}
+        {children}
+      </main>
       <ReportIssue />
     </div>
   );

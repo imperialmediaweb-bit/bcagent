@@ -18,7 +18,7 @@ import {
 } from "@/app/platform/ui";
 
 /**
- * Echipa de conducere: patronul (owner) + managerii care au grijă de agenți.
+ * Echipa de conducere: administratorul (owner) + managerii care au grijă de agenți.
  * Owner-ul creează conturile; managerii văd tot panoul, dar nu umblă la
  * conturi.
  */
@@ -109,7 +109,7 @@ export default function EchipaPage() {
             Echipa de conducere
           </h1>
           <p className="text-sm text-slate-500">
-            Patronul are control total; managerii supraveghează agenții,
+            Administratorul are control total; managerii supraveghează agenții,
             vizitele și vânzările.
           </p>
         </div>
@@ -127,7 +127,7 @@ export default function EchipaPage() {
 
       {!isOwner && (
         <Alert kind="info">
-          Doar patronul (owner) poate crea sau modifica conturi. Tu vezi lista.
+          Doar administratorul (owner) poate crea sau modifica conturi. Tu vezi lista.
         </Alert>
       )}
       {error && <Alert>{error}</Alert>}
@@ -148,7 +148,7 @@ export default function EchipaPage() {
                   <p className="flex items-center gap-2 text-sm font-medium text-slate-800">
                     <span className="truncate">{u.name || u.email}</span>
                     <Badge status={u.role === "owner" ? "activ" : "trial"}>
-                      {u.role === "owner" ? "patron" : "manager"}
+                      {u.role === "owner" ? "administrator" : "manager"}
                     </Badge>
                     {!u.active && <Badge status="anulat">dezactivat</Badge>}
                   </p>
@@ -236,7 +236,7 @@ export default function EchipaPage() {
                 className={inputClass}
               >
                 <option value="manager">Manager (supervizor agenți)</option>
-                <option value="owner">Owner (patron)</option>
+                <option value="owner">Owner (administrator)</option>
               </select>
             </Field>
             {error && <Alert>{error}</Alert>}

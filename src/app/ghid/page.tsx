@@ -5,7 +5,7 @@ import type { Metadata } from "next";
 export const metadata: Metadata = {
   title: "Ghidul Provendi — ce face fiecare funcție",
   description:
-    "Ghid complet: agentul de teren și panoul firmei (manager/patron). Fiecare funcție explicată pe scurt, pas cu pas.",
+    "Ghid complet: agentul de teren și panoul firmei (manager/administrator). Fiecare funcție explicată pe scurt, pas cu pas.",
 };
 
 /**
@@ -77,7 +77,7 @@ export default function GhidPage() {
           <nav className="mt-4 flex flex-wrap justify-center gap-2 text-sm font-bold">
             <a href="#agent" className="rounded-full border-2 border-[#161412] bg-[#ffd23f] px-3 py-1">📱 Agentul</a>
             <a href="#pascupas" className="rounded-full border-2 border-[#161412] bg-white px-3 py-1">📖 Pas cu pas</a>
-            <a href="#firma" className="rounded-full border-2 border-[#161412] bg-white px-3 py-1">🏢 Manager / Patron</a>
+            <a href="#firma" className="rounded-full border-2 border-[#161412] bg-white px-3 py-1">🏢 Manager / Administrator</a>
             <a href="#intrare" className="rounded-full border-2 border-[#161412] bg-white px-3 py-1">🔑 Cum intri</a>
           </nav>
         </header>
@@ -238,8 +238,8 @@ export default function GhidPage() {
 
         <Panel
           id="firma"
-          title="🏢 Panoul FIRMEI — manager și patron"
-          subtitle="Se intră cu email + parolă pe /agentie/login. Managerul vede tot; salariile și echipa sunt doar ale patronului."
+          title="🏢 Panoul FIRMEI — manager și administrator"
+          subtitle="Se intră cu email + parolă pe /agentie/login. Managerul vede tot; salariile și echipa sunt doar ale administratorului."
         >
           <Row icon="📊" name="Dashboard">
             Pulsul firmei: vizite azi/săptămână, clienți, scadenți, conversii.
@@ -269,7 +269,7 @@ export default function GhidPage() {
             WhatsApp). Tot de aici: concedii (cu detectarea suprapunerilor!),
             blocarea INSTANT a unui agent plecat, resetarea PIN-ului, evaluarea
             AI a fiecărui agent (profil, puncte slabe, prognoză) și — doar
-            patronul — salariile.
+            administratorul — salariile.
           </Row>
           <Row icon="🔁" name="Transfer portofoliu">
             Când un agent pleacă: toți clienții lui trec la alt agent dintr-un
@@ -300,8 +300,8 @@ export default function GhidPage() {
             scadenți, restanțe + rezumat AI. Îl primești și pe email, lunea
             dimineața.
           </Row>
-          <Row icon="👔" name="Echipa (doar patronul)">
-            Patronul adaugă conturi de manageri/supervizori — fiecare cu emailul
+          <Row icon="👔" name="Echipa (doar administratorul)">
+            Administratorul adaugă conturi de manageri/supervizori — fiecare cu emailul
             și parola lui.
           </Row>
           <Row icon="🔒" name="Setări & securitate">
@@ -318,12 +318,17 @@ export default function GhidPage() {
             telefonului (Adaugă la ecranul principal) și o folosești ca pe o
             aplicație.
           </Row>
-          <Row icon="🏢" name="Patron / Manager">
+          <Row icon="🏢" name="Administrator / Manager">
+            Firma nu are cont încă? Ți-l faci singur în 30 de secunde pe{" "}
+            <Link href="/agentie/inregistrare" className="font-bold underline">
+              /agentie/inregistrare
+            </Link>{" "}
+            — 14 zile de probă cu tot inclus. Ai deja cont? Intri pe{" "}
             <Link href="/agentie/login" className="font-bold underline">
               /agentie/login
             </Link>{" "}
-            cu email + parola primită. Vrei doar să vezi cum arată? Butonul
-            galben „Vezi DEMO" te bagă într-o firmă de probă, pe orice rol.
+            cu email + parolă. Vrei doar să vezi cum arată? Butonul galben
+            „Vezi DEMO" te bagă într-o firmă de probă, pe orice rol.
           </Row>
           </Panel>
 

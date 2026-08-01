@@ -244,7 +244,7 @@ const REVIEWS = [
   {
     stars: 5,
     text: "Înainte sunam fiecare agent seara să văd ce-a vândut. Acum deschid telefonul dimineața și știu tot: cine unde a fost, ce comenzi au intrat, cine-i sub target.",
-    who: "Patron, firmă de distribuție",
+    who: "Administrator, firmă de distribuție",
     where: "Suceava",
     color: "#ff4d00",
   },
@@ -267,7 +267,7 @@ const REVIEWS = [
 const FAQ = [
   {
     q: "Cât durează până suntem funcționali?",
-    a: "10 minute, la propriu. Primești contul firmei, trimiți linkurile agenților pe WhatsApp și primul agent poate lucra de pe teren în aceeași zi. Nu se instalează nimic, nu trebuie server, nu trebuie IT-ist.",
+    a: "10 minute, la propriu. Îți creezi contul singur (14 zile gratuit), trimiți linkurile agenților pe WhatsApp și primul agent poate lucra de pe teren în aceeași zi. Nu se instalează nimic, nu trebuie server, nu trebuie IT-ist.",
   },
   {
     q: "Agenții mei nu sunt tehnici. Se descurcă?",
@@ -472,7 +472,7 @@ export default function HomePage() {
             <Reveal delay={300}>
               <div className="mt-8 flex flex-wrap items-center gap-4">
                 <a
-                  href="#preturi"
+                  href="/agentie/inregistrare"
                   className="hard group inline-flex items-center gap-2 rounded-xl border-2 border-[#161412] bg-[#ff4d00] px-7 py-4 text-lg font-bold text-white transition hover:translate-x-[3px] hover:translate-y-[3px] hover:shadow-none"
                 >
                   14 zile gratuite
@@ -691,7 +691,7 @@ export default function HomePage() {
           </Reveal>
           <div className="mt-12 grid gap-6 sm:grid-cols-3">
             {[
-              ["01", "Primești contul firmei", "Email și parolă pentru patron și manageri. Fără instalare, fără server, fără IT-ist."],
+              ["01", "Îți creezi contul în 30 de secunde", "Singur, de pe provendi.ro — 14 zile de probă cu tot inclus, fără card. Fără instalare, fără server, fără IT-ist."],
               ["02", "Trimiți linkurile agenților", "Fiecare agent primește un link pe WhatsApp. Îl deschide pe telefon și are tot: harta, rutele, comenzile."],
               ["03", "Firma rulează singură", "Comenzile ajung la depozit, vizitele în rapoarte, iar AI-ul îți livrează în fiecare dimineață analiza și prognoza."],
             ].map(([n, t, d], i) => (
@@ -823,7 +823,7 @@ export default function HomePage() {
                       ))}
                     </ul>
                     <Link
-                      href="/agentie/login"
+                      href="/agentie/inregistrare"
                       className={`hard-sm mt-8 block rounded-xl border-2 border-[#161412] py-3.5 text-center font-black transition hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none ${
                         p.hot ? "bg-[#161412] text-[#ffd23f]" : "bg-white"
                       }`}
