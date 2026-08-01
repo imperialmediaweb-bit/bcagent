@@ -88,12 +88,7 @@ export default function PanelShell({
     <div className="paperbg min-h-screen">
       {/* Bara mobilă */}
       <header className="sticky top-0 z-30 flex items-center justify-between border-b border-slate-800 bg-slate-900 px-4 py-3 lg:hidden">
-        <div className="flex items-center gap-2">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg border-2 border-[#ffd23f]/60 bg-[#ff4d00] text-white">
-            <LayoutDashboard className="h-4 w-4" />
-          </div>
-          <span className="text-sm font-semibold text-white">Provendi</span>
-        </div>
+        <Logo iconSize={26} textClassName="text-sm" variant="dark" />
         <button
           type="button"
           onClick={() => setOpen((v) => !v)}
