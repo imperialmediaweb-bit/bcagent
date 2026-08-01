@@ -1,4 +1,5 @@
 import Link from "next/link";
+import Logo from "@/app/Logo";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
@@ -77,18 +78,7 @@ export default function PrezentarePage() {
         {/* HERO */}
         <header className="text-center">
           <div className="inline-flex items-center gap-2.5">
-            <span
-              className="flex h-12 w-12 items-center justify-center rounded-lg border-2 border-[#161412] bg-[#ff4d00] text-2xl font-black text-white"
-              style={{ boxShadow: "4px 4px 0 #161412" }}
-            >
-              P
-            </span>
-            <span
-              className="text-3xl font-extrabold tracking-tight text-[#161412]"
-              style={{ fontFamily: "var(--font-display), sans-serif" }}
-            >
-              PROVENDI
-            </span>
+            <Logo />
           </div>
           <h1
             className="mx-auto mt-6 max-w-2xl text-3xl font-extrabold leading-tight text-[#161412] md:text-4xl"

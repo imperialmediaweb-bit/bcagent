@@ -1,5 +1,7 @@
 "use client";
 
+import Logo from "@/app/Logo";
+
 import { useState } from "react";
 import { Loader2, ShieldCheck } from "lucide-react";
 
@@ -64,18 +66,7 @@ export default function PinGate({
     >
       <div className="w-full max-w-sm">
         <div className="mb-8 flex items-center justify-center gap-2.5">
-          <span
-            className="flex h-11 w-11 items-center justify-center rounded-lg border-2 border-[#161412] bg-[#ff4d00] text-xl font-black text-white"
-            style={{ boxShadow: "4px 4px 0 #161412" }}
-          >
-            P
-          </span>
-          <span
-            className="text-2xl font-extrabold tracking-tight text-[#161412]"
-            style={{ fontFamily: "var(--font-display), sans-serif" }}
-          >
-            PROVENDI
-          </span>
+          <Logo />
         </div>
 
         <div

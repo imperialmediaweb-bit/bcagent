@@ -1,5 +1,7 @@
 "use client";
 
+import Logo from "@/app/Logo";
+
 import Link from "next/link";
 import {
   useCallback,
@@ -390,14 +392,7 @@ export default function HomePage() {
       {/* NAV */}
       <header className="sticky top-0 z-40 border-b-2 border-[#161412] bg-[#f5efe4]/95 backdrop-blur">
         <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-3 sm:px-6">
-          <div className="flex items-center gap-2.5">
-            <div className="hard-sm flex h-10 w-10 items-center justify-center rounded-lg border-2 border-[#161412] bg-[#ff4d00] text-lg font-black text-white">
-              B
-            </div>
-            <span className="display text-xl font-extrabold tracking-tight">
-              PROVENDI
-            </span>
-          </div>
+          <Logo iconSize={38} textClassName="text-xl" />
           <nav className="hidden items-center gap-7 text-sm font-semibold md:flex">
             <a href="#functii" className="hover:text-[#ff4d00]">Funcții</a>
             <a href="#roluri" className="hover:text-[#ff4d00]">Pentru cine</a>

@@ -1,5 +1,7 @@
 "use client";
 
+import Logo from "@/app/Logo";
+
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
@@ -55,18 +57,7 @@ export default function PlatformLogin() {
     >
       <div className="w-full max-w-sm">
         <Link href="/" className="mb-8 flex items-center justify-center gap-2.5">
-          <span
-            className="flex h-11 w-11 items-center justify-center rounded-lg border-2 border-[#161412] bg-[#161412] text-xl font-black text-[#ffd23f]"
-            style={{ boxShadow: "4px 4px 0 #ff4d00" }}
-          >
-            P
-          </span>
-          <span
-            className="text-2xl font-extrabold tracking-tight text-[#161412]"
-            style={{ fontFamily: "var(--font-display), sans-serif" }}
-          >
-            PROVENDI
-          </span>
+          <Logo />
         </Link>
 
         <div
