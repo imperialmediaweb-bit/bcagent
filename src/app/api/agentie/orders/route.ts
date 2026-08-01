@@ -179,7 +179,7 @@ export async function PATCH(req: Request) {
   const auth = await requireOrgUser();
   if ("response" in auth) return auth.response;
 
-  let body: { id?: string; status?: string };
+  let body: { id?: string; status?: string; foto?: string };
   try {
     await ensureSchema();
     body = await req.json();
@@ -188,7 +188,9 @@ export async function PATCH(req: Request) {
   }
   const id = String(body.id ?? "");
   const status = String(body.status ?? "");
-  if (!id || !STATUSES.includes(status as (typeof STATUSES)[number])) {
+  const rawFoto = String(body.foto ?? "");
+  const wantsFoto = rawFoto.startsWith("data:image/") && rawFoto.length <= 1_500_000;
+  if (!id || (!wantsFoto && !STATUSES.includes(status as (typeof STATUSES)[number]))) {
     return Response.json({ error: "id/status invalid" }, { status: 400 });
   }
 
@@ -199,6 +201,23 @@ export async function PATCH(req: Request) {
     // Doar comenzile agenților propriei organizații.
     const agents = await listOrgAgents(auth.session.orgId);
     const ids = agents.map((a) => a.agentId);
+    if (wantsFoto) {
+      // Managerul/patronul atașează factura (poza) la o comandă existentă
+      // — criptată la fel ca la agent.
+      const { encryptData } = await import("@/lib/crypto-data");
+      const enc = await encryptData(rawFoto);
+      const rows = await db<Array<{ id: string }>>`
+        UPDATE orders SET foto = ${enc}, updated_at = NOW()
+        WHERE id = ${id} AND agent_id = ANY(${ids.length ? ids : [""]})
+        RETURNING id
+      `;
+      if (rows.length === 0) {
+        return Response.json({ error: "Comanda nu e a firmei tale" }, { status: 403 });
+      }
+      await audit(auth.session.email, "order.foto_attach", id);
+      return Response.json({ ok: true });
+    }
+
     const rows = await db<Array<{ id: string }>>`
       UPDATE orders SET status = ${status}, updated_at = NOW()
       WHERE id = ${id} AND agent_id = ANY(${ids.length ? ids : [""]})

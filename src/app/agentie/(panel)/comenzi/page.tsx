@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Download, PackageCheck, ShoppingCart } from "lucide-react";
 import {
   Alert,
@@ -63,6 +63,17 @@ const STATUS_META: Record<
   anulata: { label: "✖ anulată", cls: "bg-slate-100 text-slate-500 ring-slate-200" },
 };
 
+/** Poza se micșorează în browser înainte de trimitere (max 1280px). */
+async function downscale(file: File): Promise<string> {
+  const bitmap = await createImageBitmap(file);
+  const scale = Math.min(1, 1280 / Math.max(bitmap.width, bitmap.height));
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.round(bitmap.width * scale);
+  canvas.height = Math.round(bitmap.height * scale);
+  canvas.getContext("2d")!.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+  return canvas.toDataURL("image/jpeg", 0.82);
+}
+
 export default function ComenziPage() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [counts, setCounts] = useState<Record<string, number>>({});
@@ -73,6 +84,23 @@ export default function ComenziPage() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [fotoView, setFotoView] = useState<string | null>(null);
+  const attachRef = useRef<HTMLInputElement | null>(null);
+  const [attachFor, setAttachFor] = useState<string | null>(null);
+
+  async function attachFoto(file: File) {
+    if (!attachFor) return;
+    try {
+      const dataUrl = await downscale(file);
+      await api("/api/agentie/orders", {
+        method: "PATCH",
+        json: { id: attachFor, foto: dataUrl },
+      });
+      setAttachFor(null);
+      await load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    }
+  }
 
   async function openFoto(id: string) {
     try {
@@ -190,6 +218,18 @@ export default function ComenziPage() {
 
       {error && <Alert>{error}</Alert>}
 
+      <input
+        ref={attachRef}
+        type="file"
+        accept="image/*"
+        className="hidden"
+        onChange={(e) => {
+          const f = e.target.files?.[0];
+          if (f) attachFoto(f);
+          e.target.value = "";
+        }}
+      />
+
       {fotoView && (
         <div
           className="fixed inset-0 z-[1300] flex items-center justify-center bg-slate-900/70 p-4"
@@ -279,13 +319,25 @@ export default function ComenziPage() {
                           🚐 pe loc{o.plata ? ` · ${o.plata}` : ""}
                         </span>
                       )}
-                      {o.hasFoto && (
+                      {o.hasFoto ? (
                         <button
                           type="button"
                           onClick={() => openFoto(o.id)}
                           className="rounded-full bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-700 ring-1 ring-inset ring-amber-200 hover:bg-amber-100"
                         >
                           📎 vezi factura
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          title="Atașează poza facturii la comanda asta"
+                          onClick={() => {
+                            setAttachFor(o.id);
+                            attachRef.current?.click();
+                          }}
+                          className="rounded-full bg-slate-50 px-2 py-0.5 text-xs font-medium text-slate-500 ring-1 ring-inset ring-slate-200 hover:bg-slate-100"
+                        >
+                          📎 atașează factura
                         </button>
                       )}
                     </p>
