@@ -405,7 +405,7 @@ export default function HomePage() {
             </Link>
             <a
               href="/agentie/inregistrare"
-              className="hard-sm whitespace-nowrap rounded-lg border-2 border-[#161412] bg-[#ffd23f] px-3 py-2 text-[13px] font-bold transition hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none sm:px-4 sm:text-sm"
+              className="hard-sm hidden whitespace-nowrap rounded-lg border-2 border-[#161412] bg-[#ffd23f] px-4 py-2 text-sm font-bold transition hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none sm:inline-block"
             >
               Începe acum
             </a>

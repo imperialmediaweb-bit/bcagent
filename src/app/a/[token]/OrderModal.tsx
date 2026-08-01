@@ -33,7 +33,7 @@ interface Line {
 }
 
 const EMPTY_LINE: Line = { produs: "", cantitate: "", um: "bax", pret: "" };
-const UMS = ["buc", "bax", "cartus", "pachet", "kg", "l"];
+const UMS = ["buc", "bax", "cartus", "pachet", "naveta", "cutie", "kg", "l"];
 const DRAFT_KEY = "bcagent:order-draft";
 
 export default function OrderModal({
@@ -315,7 +315,7 @@ export default function OrderModal({
               <input
                 value={l.produs}
                 onChange={(e) => set(i, "produs", e.target.value)}
-                placeholder="Produs (ex: Marlboro Red)"
+                placeholder="Produs (ex: Cola 2L, Marlboro...)"
                 className="min-w-0 flex-1 rounded-md border border-slate-200 px-2.5 py-2 text-sm focus:border-emerald-400 focus:outline-none"
               />
               <input

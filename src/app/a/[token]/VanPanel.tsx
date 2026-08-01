@@ -21,7 +21,7 @@ interface Line {
   um: string;
 }
 
-const UMS = ["buc", "bax", "cartus", "pachet", "kg", "l"];
+const UMS = ["buc", "bax", "cartus", "pachet", "naveta", "cutie", "kg", "l"];
 const EMPTY: Line = { produs: "", cantitate: "", um: "bax" };
 
 export default function VanPanel({ token }: { token: string }) {
@@ -189,7 +189,7 @@ export default function VanPanel({ token }: { token: string }) {
                 <input
                   value={l.produs}
                   onChange={(e) => set(i, "produs", e.target.value)}
-                  placeholder="Produs (ex: Kent Blue)"
+                  placeholder="Produs (ex: Apă plată 0,5L)"
                   className="min-w-0 flex-1 rounded-md border border-slate-200 px-2.5 py-2 text-sm focus:border-emerald-400 focus:outline-none"
                 />
                 <input

@@ -11,7 +11,7 @@ export const runtime = "nodejs";
  * fiecărei dube în panoul agenției.
  */
 
-const UMS = new Set(["buc", "bax", "cartus", "pachet", "kg", "l"]);
+const UMS = new Set(["buc", "bax", "cartus", "pachet", "naveta", "cutie", "kg", "l"]);
 
 interface StockLine {
   produs: string;

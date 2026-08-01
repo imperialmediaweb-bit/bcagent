@@ -16,7 +16,7 @@ export interface OrderLine {
   pret: number | null;
 }
 
-const UMS = new Set(["buc", "bax", "cartus", "pachet", "kg", "l"]);
+const UMS = new Set(["buc", "bax", "cartus", "pachet", "naveta", "cutie", "kg", "l"]);
 
 function sanitizeLines(raw: unknown): OrderLine[] {
   if (!Array.isArray(raw)) return [];

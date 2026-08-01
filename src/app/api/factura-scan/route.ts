@@ -20,7 +20,7 @@ Răspunde DOAR cu un obiect JSON valid, fără alt text, în formatul:
 {
   "client": "numele clientului de pe document sau null",
   "lines": [
-    {"produs": "...", "cantitate": 5, "um": "buc|bax|cartus|pachet|kg|l", "pret": 12.5}
+    {"produs": "...", "cantitate": 5, "um": "buc|bax|cartus|pachet|naveta|cutie|kg|l", "pret": 12.5}
   ],
   "total": 62.5,
   "scris_de_mana": false,
@@ -112,7 +112,7 @@ export async function POST(req: Request) {
       scris_de_mana?: boolean;
       observatii?: string | null;
     };
-    const UMS = new Set(["buc", "bax", "cartus", "pachet", "kg", "l"]);
+    const UMS = new Set(["buc", "bax", "cartus", "pachet", "naveta", "cutie", "kg", "l"]);
     const lines = (parsed.lines ?? [])
       .map((l) => ({
         produs: String(l.produs ?? "").trim().slice(0, 120),
