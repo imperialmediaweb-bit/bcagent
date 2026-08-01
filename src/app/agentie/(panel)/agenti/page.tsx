@@ -631,7 +631,7 @@ function SalaryModal({
           </Field>
         </div>
         <p className="text-xs text-slate-500">
-          Vizibil doar pentru patron. Comisionul se leagă de calculatorul din
+          Vizibil doar pentru administrator. Comisionul se leagă de calculatorul din
           rapoartele de vânzări.
         </p>
         {error && <Alert>{error}</Alert>}

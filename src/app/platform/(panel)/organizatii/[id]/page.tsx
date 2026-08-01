@@ -581,7 +581,7 @@ function UsersCard({
                 onChange={(e) => setRole(e.target.value as "owner" | "manager")}
                 className={inputClass}
               >
-                <option value="owner">Owner (patron)</option>
+                <option value="owner">Owner (administrator)</option>
                 <option value="manager">Manager</option>
               </select>
             </Field>

@@ -56,8 +56,8 @@ export default function AgentieLogin() {
       }}
     >
       <div className="w-full max-w-sm">
-        <Link href="/" className="mb-8 flex items-center justify-center gap-2.5">
-          <Logo />
+        <Link href="/" className="mb-8 flex flex-wrap items-center justify-center gap-2.5">
+          <Logo iconSize={38} textClassName="text-lg" />
           <span className="rounded-full border-2 border-[#161412] bg-[#ffd23f] px-2 py-0.5 text-[10px] font-black uppercase tracking-widest text-[#161412]">
             beta
           </span>

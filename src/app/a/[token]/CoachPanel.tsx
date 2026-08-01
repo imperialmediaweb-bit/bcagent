@@ -35,7 +35,7 @@ const OBIECTII = [
   "Mi-a zis că e prea scump — ce-i răspund?",
   "Zice că lucrează deja cu altă firmă",
   "Zice că nu se vinde, că n-are rost — cum îl conving?",
-  "Cum abordez un patron nou, prima vizită?",
+  "Cum abordez un client nou, prima vizită?",
 ];
 
 /** Recunoaștere vocală prin Web Speech API (Android Chrome o are nativ). */

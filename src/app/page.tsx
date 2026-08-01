@@ -208,7 +208,7 @@ const FEATURES = [
 
 const ROLES = [
   {
-    tag: "PATRONUL",
+    tag: "ADMINISTRATORUL",
     color: "#ff4d00",
     lines: [
       "Briefingul de dimineață: 5 fraze, 3 acțiuni, zero timp pierdut",
@@ -391,21 +391,21 @@ export default function HomePage() {
 
       {/* NAV */}
       <header className="sticky top-0 z-40 border-b-2 border-[#161412] bg-[#f5efe4]/95 backdrop-blur">
-        <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-3 sm:px-6">
-          <Logo iconSize={44} textClassName="text-xl" />
+        <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-x-3 gap-y-2 px-4 py-3 sm:px-6">
+          <Logo iconSize={36} textClassName="text-lg sm:text-xl" />
           <nav className="hidden items-center gap-7 text-sm font-semibold md:flex">
             <a href="#functii" className="hover:text-[#ff4d00]">Funcții</a>
             <a href="#roluri" className="hover:text-[#ff4d00]">Pentru cine</a>
             <a href="#preturi" className="hover:text-[#ff4d00]">Prețuri</a>
             <a href="#faq" className="hover:text-[#ff4d00]">Întrebări</a>
           </nav>
-          <div className="flex items-center gap-3">
+          <div className="flex shrink-0 items-center gap-3">
             <Link href="/agentie/login" className="hidden text-sm font-semibold hover:text-[#ff4d00] sm:block">
               Intră în cont
             </Link>
             <a
-              href="#preturi"
-              className="hard-sm rounded-lg border-2 border-[#161412] bg-[#ffd23f] px-4 py-2 text-sm font-bold transition hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none"
+              href="/agentie/inregistrare"
+              className="hard-sm whitespace-nowrap rounded-lg border-2 border-[#161412] bg-[#ffd23f] px-3 py-2 text-[13px] font-bold transition hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none sm:px-4 sm:text-sm"
             >
               Începe acum
             </a>
@@ -553,15 +553,15 @@ export default function HomePage() {
 
       {/* STATS pe negru */}
       <section className="border-y-2 border-[#161412] bg-[#161412] py-10 text-[#f5efe4]">
-        <div className="mx-auto grid max-w-6xl grid-cols-2 gap-8 px-4 text-center sm:px-6 lg:grid-cols-4">
+        <div className="mx-auto grid max-w-6xl grid-cols-1 gap-8 px-4 text-center sm:grid-cols-2 sm:px-6 lg:grid-cols-4">
           {[
             [1300000, "", "firme active pe hartă"],
             [3, "", "AI-uri, fiecare cu treaba lui"],
             [30, " sec", "de la client la depozit"],
             [0, "", "instalări — merge din link"],
           ].map(([n, s, label]) => (
-            <div key={label as string}>
-              <p className="display text-4xl font-extrabold text-[#ffd23f] sm:text-5xl">
+            <div key={label as string} className="min-w-0">
+              <p className="display break-words text-4xl font-extrabold text-[#ffd23f] sm:text-5xl">
                 <CountUp to={n as number} suffix={s as string} />
               </p>
               <p className="mt-1 text-sm text-[#f5efe4]/60">{label}</p>

@@ -227,7 +227,7 @@ function DemoCard() {
         <div className="mt-4 space-y-3">
           <Alert kind="success">Demo gata! Datele de acces (o singură dată):</Alert>
           <CopyBox
-            label={`Patron — ${result.owner.email}`}
+            label={`Administrator — ${result.owner.email}`}
             value={result.owner.password}
           />
           <CopyBox
