@@ -23,6 +23,7 @@ Răspunde DOAR cu un obiect JSON valid, fără alt text, în formatul:
     {"produs": "...", "cantitate": 5, "um": "buc|bax|cartus|pachet|kg|l", "pret": 12.5}
   ],
   "total": 62.5,
+  "scris_de_mana": false,
   "observatii": "ce nu ai putut citi sau e neclar, altfel null"
 }
 
@@ -31,7 +32,16 @@ Reguli:
 - Numerele românești: virgula e zecimală (12,50 = 12.5).
 - Dacă UM nu se vede, pune "buc".
 - Dacă o linie e ilizibilă, sari peste ea și noteaz-o la "observatii".
-- Nu adăuga produse care nu apar pe document.`;
+- Nu adăuga produse care nu apar pe document.
+
+SCRIS DE MÂNĂ — atenție dublă:
+- Pune "scris_de_mana": true dacă documentul e completat de mână (măcar parțial).
+- La scris de mână, recitește FIECARE cifră a doua oară înainte să răspunzi:
+  1 se confundă cu 7, 4 cu 9, 0 cu 6, iar virgula zecimală se pierde ușor.
+- Verifică-te singur cu totalul: cantitate × preț adunat pe linii trebuie să
+  dea totalul de pe document; dacă nu iese, recitește liniile, nu ajusta cifrele.
+- Orice cifră sau cuvânt de care NU ești sigur → spune-o explicit la
+  "observatii" (ex: "cantitatea de la Kent poate fi 4 sau 9"). NU ghici în tăcere.`;
 
 export async function POST(req: Request) {
   if (!isDBEnabled()) return Response.json({ enabled: false }, { status: 503 });
@@ -99,6 +109,7 @@ export async function POST(req: Request) {
         pret?: number;
       }>;
       total?: number;
+      scris_de_mana?: boolean;
       observatii?: string | null;
     };
     const UMS = new Set(["buc", "bax", "cartus", "pachet", "kg", "l"]);
@@ -117,11 +128,27 @@ export async function POST(req: Request) {
         { status: 422 },
       );
     }
+    // Verificare aritmetică pe server (nu ne bazăm doar pe AI): dacă suma
+    // liniilor citite nu bate cu totalul de pe document, agentul e anunțat.
+    const docTotal = typeof parsed.total === "number" ? parsed.total : null;
+    let totalMismatch: string | null = null;
+    if (
+      docTotal !== null &&
+      docTotal > 0 &&
+      lines.every((l) => l.pret !== null)
+    ) {
+      const sum = lines.reduce((s, l) => s + l.cantitate * (l.pret ?? 0), 0);
+      if (Math.abs(sum - docTotal) > Math.max(1, docTotal * 0.02)) {
+        totalMismatch = `Suma produselor citite (${sum.toFixed(2)} RON) nu bate cu totalul de pe document (${docTotal.toFixed(2)} RON) — compară linie cu linie cu factura.`;
+      }
+    }
     return Response.json({
       ok: true,
       client: parsed.client ?? null,
       lines,
-      total: typeof parsed.total === "number" ? parsed.total : null,
+      total: docTotal,
+      scrisDeMana: parsed.scris_de_mana === true,
+      totalMismatch,
       observatii: parsed.observatii ?? null,
     });
   } catch (e) {

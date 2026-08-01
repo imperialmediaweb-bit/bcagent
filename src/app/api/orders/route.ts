@@ -59,6 +59,7 @@ export async function POST(req: Request) {
     tip?: string;
     plata?: string;
     foto?: string;
+    fotos?: string[];
   };
   try {
     body = await req.json();
@@ -105,14 +106,19 @@ export async function POST(req: Request) {
   const total = hasPrices
     ? lines.reduce((s, l) => s + l.cantitate * (l.pret ?? 0), 0)
     : null;
-  // Poza facturii (opțională): JPEG mic făcut pe telefon, ca dovadă.
-  // Se criptează AES-256-GCM înainte de stocare (dacă DATA_KEY e setat).
-  const rawFoto = String(body.foto ?? "");
+  // Pozele facturilor (opționale): JPEG-uri mici făcute pe telefon, ca
+  // dovadă. O livrare poate avea MAI MULTE facturi — prima merge în
+  // orders.foto, restul în order_fotos. Toate se criptează AES-256-GCM
+  // înainte de stocare (dacă DATA_KEY e setat).
+  const rawFotos = (
+    Array.isArray(body.fotos) ? body.fotos : [String(body.foto ?? "")]
+  )
+    .map((f) => String(f ?? ""))
+    .filter((f) => f.startsWith("data:image/") && f.length <= 1_500_000)
+    .slice(0, 10);
   const { encryptData } = await import("@/lib/crypto-data");
-  const foto =
-    rawFoto.startsWith("data:image/") && rawFoto.length <= 1_500_000
-      ? await encryptData(rawFoto)
-      : "";
+  const encFotos = await Promise.all(rawFotos.map((f) => encryptData(f)));
+  const foto = encFotos[0] ?? "";
 
   const db = getDB();
   if (!db) return Response.json({ enabled: false }, { status: 503 });
@@ -130,6 +136,9 @@ export async function POST(req: Request) {
               ${isVan ? "van" : "comanda"}, ${plata},
               ${isVan ? "livrata" : "noua"}, ${foto})
     `;
+    for (const enc of encFotos.slice(1)) {
+      await db`INSERT INTO order_fotos (order_id, foto) VALUES (${id}, ${enc})`;
+    }
     if (isVan) {
       // Scădem stocul din mașină (potrivire pe nume, indiferent de
       // majuscule/spații). Dacă produsul nu e în stoc, vânzarea NU se

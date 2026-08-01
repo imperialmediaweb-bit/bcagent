@@ -248,6 +248,18 @@ async function main() {
   const extras = await sql`SELECT foto FROM order_fotos WHERE order_id = ${oid}`;
   check("pozele extra sunt criptate în DB",
     extras.length === 2 && extras.every((e: any) => String(e.foto).startsWith("enc1:")));
+  // Agentul trimite DIRECT mai multe facturi la creare (fotos: []).
+  r = await req("POST", "/api/orders", {
+    token: tok1, cui: "888111002", denumire: "QA BAR DOI SRL", tip: "van",
+    plata: "numerar",
+    fotos: ["data:image/jpeg;base64,QUJD", "data:image/jpeg;base64,REVG", "bad-nu-e-poza"],
+    lines: [{ produs: "Kent", cantitate: 1, um: "cartus", pret: 100 }],
+  });
+  check("comandă cu 2 poze de la agent ok", r.status === 200);
+  const oid2 = r.data.id;
+  r = await req("GET", `/api/agentie/orders?foto=${oid2}`, undefined, ck1);
+  check("ambele poze ale agentului se văd (cea invalidă ignorată)",
+    r.status === 200 && r.data.fotos?.length === 2);
 
   console.log("\n══ Import universul de clienți ══");
   r = await req("POST", "/api/agentie/clients-import", {

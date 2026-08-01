@@ -121,8 +121,11 @@ export default function GhidPage() {
           </Row>
           <Row icon="📷" name="Poză la factură">
             Fotografiezi factura (tipărită sau de mână) și AI-ul o citește:
-            completează singur produsele, cantitățile și prețurile. Tu doar
-            verifici și salvezi. Poza rămâne atașată ca dovadă.
+            completează singur produsele, cantitățile și prețurile. La scris de
+            mână citește cu dublă verificare și te avertizează să compari tu
+            fiecare cifră cu factura înainte să salvezi. Ai mai multe facturi
+            pe aceeași livrare? Apeși „＋ Încă o factură" și produsele se pun
+            unele sub altele. Toate pozele rămân atașate ca dovadă.
           </Row>
           <Row icon="📂" name="Încarcă fișier de vânzări">
             Tragi XLS/CSV-ul cu vânzările tale și toate analizele se calculează
@@ -202,7 +205,11 @@ export default function GhidPage() {
             În fereastra de comandă apasă <B>„📷 Poză la factură"</B> →
             fotografiază factura (merge și scrisă de mână) → în 3 secunde
             AI-ul completează singur produsele, cantitățile și prețurile → tu
-            doar verifici și salvezi. Poza rămâne atașată ca dovadă.
+            doar verifici și salvezi. <B>Important la scrisul de mână:</B>{" "}
+            aplicația te avertizează cu galben — compară TU fiecare cifră cu
+            factura din mână (1 seamănă cu 7, 4 cu 9) înainte să salvezi.
+            Mai ai o factură pentru aceeași livrare? <B>„＋ Încă o factură"</B>{" "}
+            — produsele se adaugă dedesubt și toate pozele rămân atașate.
           </Row>
           <Row icon="📦" name="Cum trimit COMANDĂ la depozit">
             La fel ca vânzarea pe loc, dar lași selectat{" "}

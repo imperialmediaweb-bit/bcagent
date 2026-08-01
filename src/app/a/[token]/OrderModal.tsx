@@ -61,9 +61,14 @@ export default function OrderModal({
   const [tip, setTip] = useState<"comanda" | "van">("comanda");
   const [plata, setPlata] = useState<"numerar" | "card" | "termen">("numerar");
   // POZĂ LA FACTURĂ: AI-ul o citește și completează liniile singur.
+  // O livrare poate avea MAI MULTE facturi — fiecare poză se adaugă,
+  // produsele se pun unele sub altele.
   const [scanning, setScanning] = useState(false);
-  const [foto, setFoto] = useState<string | null>(null);
+  const [fotos, setFotos] = useState<string[]>([]);
   const [scanInfo, setScanInfo] = useState<string | null>(null);
+  // Avertisment care NU dispare: la scris de mână sau total care nu bate,
+  // agentul trebuie să verifice el, cu factura în mână.
+  const [scanWarn, setScanWarn] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement | null>(null);
 
   async function scanFactura(file: File) {
@@ -88,25 +93,42 @@ export default function OrderModal({
           um: string;
           pret: number | null;
         }>;
+        scrisDeMana?: boolean;
+        totalMismatch?: string | null;
         observatii?: string | null;
       };
       if (!res.ok || !d.lines) {
         setError(d.error ?? `Eroare ${res.status}`);
         return;
       }
-      setLines(
-        d.lines.map((l) => ({
-          produs: l.produs,
-          cantitate: String(l.cantitate),
-          um: l.um,
-          pret: l.pret === null ? "" : String(l.pret),
-        })),
-      );
-      setFoto(img.dataUrl);
+      const readLines = d.lines.map((l) => ({
+        produs: l.produs,
+        cantitate: String(l.cantitate),
+        um: l.um,
+        pret: l.pret === null ? "" : String(l.pret),
+      }));
+      // Prima factură înlocuiește liniile goale; următoarele se ADAUGĂ
+      // dedesubt — o livrare poate avea mai multe facturi.
+      setLines((ls) => {
+        const existing = ls.filter((l) => l.produs.trim() !== "");
+        return existing.length === 0 ? readLines : [...existing, ...readLines];
+      });
+      setFotos((fs) => [...fs, img.dataUrl].slice(0, 10));
+      const nr = fotos.length + 1;
       setScanInfo(
-        `Am citit ${d.lines.length} produse din poză — verifică-le și salvează.` +
+        (nr > 1
+          ? `Am adăugat ${d.lines.length} produse de pe factura ${nr}.`
+          : `Am citit ${d.lines.length} produse din poză — verifică-le și salvează.`) +
           (d.observatii ? ` Atenție: ${d.observatii}` : ""),
       );
+      const warns: string[] = [];
+      if (d.scrisDeMana) {
+        warns.push(
+          "Factura e scrisă de mână — am citit-o cu dublă verificare, dar cifrele scrise de mână pot păcăli. VERIFICĂ TU fiecare produs, cantitatea și prețul, cu factura în mână, înainte să salvezi.",
+        );
+      }
+      if (d.totalMismatch) warns.push(d.totalMismatch);
+      if (warns.length) setScanWarn(warns.join(" "));
     } catch {
       setError("Nu am putut citi poza — încearcă din nou.");
     } finally {
@@ -147,6 +169,9 @@ export default function OrderModal({
     setLines([{ ...EMPTY_LINE }]);
     setNote("");
     setError(null);
+    setFotos([]);
+    setScanInfo(null);
+    setScanWarn(null);
   }, [firm]);
 
   useEffect(() => {
@@ -192,7 +217,8 @@ export default function OrderModal({
           note,
           tip,
           plata: tip === "van" ? plata : "",
-          foto: foto ?? "",
+          foto: fotos[0] ?? "",
+          fotos,
           lines: validLines.map((l) => ({
             produs: l.produs.trim(),
             cantitate: parseFloat(l.cantitate),
@@ -356,6 +382,10 @@ export default function OrderModal({
               <>
                 <Loader2 className="h-4 w-4 animate-spin" /> Citesc factura...
               </>
+            ) : fotos.length > 0 ? (
+              <>
+                <Camera className="h-4 w-4" /> ＋ Încă o factură
+              </>
             ) : (
               <>
                 <Camera className="h-4 w-4" /> Poză la factură
@@ -381,13 +411,32 @@ export default function OrderModal({
             📷 {scanInfo}
           </p>
         )}
-        {foto && (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={foto}
-            alt="Factura fotografiată"
-            className="mt-2 max-h-32 rounded-lg border border-slate-200"
-          />
+        {scanWarn && (
+          <p className="mt-2 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-800">
+            ✍️ {scanWarn}
+          </p>
+        )}
+        {fotos.length > 0 && (
+          <div className="mt-2 flex flex-wrap items-start gap-2">
+            {fotos.map((f, i) => (
+              <div key={i} className="relative">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={f}
+                  alt={`Factura ${i + 1}`}
+                  className="max-h-28 rounded-lg border border-slate-200"
+                />
+                <button
+                  type="button"
+                  onClick={() => setFotos((fs) => fs.filter((_, j) => j !== i))}
+                  className="absolute -right-1.5 -top-1.5 rounded-full bg-slate-900 px-1.5 text-xs font-bold text-white shadow"
+                  aria-label={`Șterge factura ${i + 1}`}
+                >
+                  ✕
+                </button>
+              </div>
+            ))}
+          </div>
         )}
 
         <div className="mt-3 flex items-center gap-1.5">
