@@ -26,6 +26,7 @@ import {
 } from "@/modules/prospects";
 import OrderModal from "./OrderModal";
 import MicButton from "./MicButton";
+import { planRoute } from "@/lib/route-nav";
 
 const fmt = (n: number) =>
   new Intl.NumberFormat("ro-RO", { maximumFractionDigits: 0 }).format(n);
@@ -134,18 +135,6 @@ function gmapsDir(address: string): string {
   return `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(address)}&travelmode=driving`;
 }
 
-/** Link Google Maps cu toate opririle rutei (max ~10 waypoints suportate). */
-function gmapsRoute(stops: Stop[], judet: string): string {
-  const addrs = stops.map((s) =>
-    navAddress({ adresa: s.adresa, localitate: s.localitate, judet }),
-  );
-  const destination = addrs[addrs.length - 1];
-  const waypoints = addrs.slice(0, -1).slice(0, 9).join("|");
-  return `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(destination)}${
-    waypoints ? `&waypoints=${encodeURIComponent(waypoints)}` : ""
-  }&travelmode=driving`;
-}
-
 export default function MapPanel({
   token,
   clients,
@@ -170,8 +159,14 @@ export default function MapPanel({
   const [visitsToday, setVisitsToday] = useState(0);
   const [dueClients, setDueClients] = useState<DueClient[]>([]);
   const [toast, setToast] = useState<string | null>(null);
+  // CUI-urile bifate azi („Am fost") — o rută lungă se continuă a doua zi
+  // exact de unde a rămas, fără opririle deja făcute.
+  const [doneToday, setDoneToday] = useState<string[]>([]);
 
   const mapRef = useRef<HTMLDivElement | null>(null);
+  // Cardul hărții: când alegi o localitate din listele de jos, ecranul
+  // urcă la hartă — altfel pare că butonul „nu face nimic".
+  const mapCardRef = useRef<HTMLDivElement | null>(null);
   const leafletRef = useRef<{
     L: typeof LType;
     map: LType.Map;
@@ -243,16 +238,45 @@ export default function MapPanel({
       .catch(() => {});
   }, [token]);
 
+  // Ce am bifat AZI — ca „Continuă ruta" să sară peste ce e deja făcut.
+  const loadDoneToday = useCallback(() => {
+    fetch(`/api/visits?token=${encodeURIComponent(token)}&limit=100`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then(
+        (
+          d: {
+            today?: number;
+            visits?: Array<{ cui: string; visitedAt: string }>;
+          } | null,
+        ) => {
+          if (!d) return;
+          if (d.today !== undefined) setVisitsToday(d.today);
+          const startOfDay = new Date();
+          startOfDay.setHours(0, 0, 0, 0);
+          setDoneToday(
+            (d.visits ?? [])
+              .filter((v) => new Date(v.visitedAt) >= startOfDay)
+              .map((v) => v.cui),
+          );
+        },
+      )
+      .catch(() => {});
+  }, [token]);
+
   useEffect(() => {
     loadRoutes();
     loadDue();
-    fetch(`/api/visits?token=${encodeURIComponent(token)}&limit=1`)
-      .then((r) => (r.ok ? r.json() : null))
-      .then((d: { today?: number } | null) => {
-        if (d?.today !== undefined) setVisitsToday(d.today);
-      })
-      .catch(() => {});
-  }, [token, loadRoutes, loadDue]);
+    loadDoneToday();
+  }, [token, loadRoutes, loadDue, loadDoneToday]);
+
+  /** Deschide localitatea în panoul hărții și urcă ecranul la hartă. */
+  const openLocality = useCallback((loc: string) => {
+    setSelectedLoc(loc);
+    // lăsăm React să randeze panoul, apoi urcăm la hartă
+    setTimeout(() => {
+      mapCardRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 60);
+  }, []);
 
   /* ── datele hărții + geocodare progresivă ── */
   const loadGeo = useCallback(
@@ -360,7 +384,7 @@ export default function MapPanel({
           `${loc.localitate} — ${fmt(loc.count)} firme` +
             (isCovered ? ` · ${clientCount} clienți` : " · pată albă"),
         );
-        marker.on("click", () => setSelectedLoc(loc.localitate));
+        marker.on("click", () => setSelectedLoc(loc.localitate));  // deja pe hartă
         marker.addTo(layer);
         bounds.push([loc.lat, loc.lng]);
       }
@@ -451,7 +475,7 @@ export default function MapPanel({
 
   return (
     <div className="space-y-4">
-      <div className="card overflow-hidden">
+      <div ref={mapCardRef} className="card overflow-hidden scroll-mt-4">
         {/* Controale */}
         <div className="flex flex-wrap items-center gap-3 border-b border-slate-100 p-4">
           <select
@@ -552,15 +576,18 @@ export default function MapPanel({
                 Ruta: {basket.length} opriri
               </span>
               <div className="ml-auto flex flex-wrap gap-2">
-                <a
-                  href={gmapsRoute(basket, judet)}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1.5 rounded-md bg-indigo-600 px-3 py-1.5 text-xs font-medium text-white shadow-sm hover:bg-indigo-700"
-                >
-                  <Navigation className="h-3.5 w-3.5" />
-                  Pornește ruta
-                </a>
+                {planRoute(basket, doneToday, judet).urls.map((u, i, all) => (
+                  <a
+                    key={i}
+                    href={u}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1.5 rounded-md bg-indigo-600 px-3 py-1.5 text-xs font-medium text-white shadow-sm hover:bg-indigo-700"
+                  >
+                    <Navigation className="h-3.5 w-3.5" />
+                    {all.length > 1 ? `Pornește etapa ${i + 1}` : "Pornește ruta"}
+                  </a>
+                ))}
                 <button
                   type="button"
                   onClick={() => setShowSave(true)}
@@ -680,7 +707,11 @@ export default function MapPanel({
                 const today = TODAY_KEY;
                 return (b.day === today ? 1 : 0) - (a.day === today ? 1 : 0);
               })
-              .map((r) => (
+              .map((r) => {
+              // Ruta ține cont de ce ai bifat azi: pornește/continuă doar
+              // cu ce a rămas, în etape de 10 (limita Google Maps).
+              const plan = planRoute(r.stops, doneToday, judet);
+              return (
               <li
                 key={r.id}
                 className={`rounded-lg border px-3 py-2 ${
@@ -711,17 +742,35 @@ export default function MapPanel({
                     </p>
                     <p className="text-xs text-slate-500">
                       {DAY_LABELS[r.day] ?? r.day} · {r.stops.length} opriri
+                      {plan.done > 0 && !plan.finished && (
+                        <span className="font-semibold text-emerald-700">
+                          {" "}
+                          · {plan.done} făcute, {plan.remaining.length} rămase
+                        </span>
+                      )}
+                      {plan.finished && (
+                        <span className="font-semibold text-emerald-700">
+                          {" "}
+                          · gata ✓
+                        </span>
+                      )}
                     </p>
                   </button>
-                  <a
-                    href={gmapsRoute(r.stops, judet)}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="rounded-md p-1.5 text-indigo-600 hover:bg-indigo-50"
-                    title="Pornește"
-                  >
-                    <Navigation className="h-4 w-4" />
-                  </a>
+                  {!plan.finished && plan.urls[0] && (
+                    <a
+                      href={plan.urls[0]}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="rounded-md p-1.5 text-indigo-600 hover:bg-indigo-50"
+                      title={
+                        plan.done > 0
+                          ? "Continuă ruta cu opririle rămase"
+                          : "Pornește ruta"
+                      }
+                    >
+                      <Navigation className="h-4 w-4" />
+                    </a>
+                  )}
                   <button
                     type="button"
                     onClick={() => deleteRoute(r.id)}
@@ -731,8 +780,27 @@ export default function MapPanel({
                     <Trash2 className="h-4 w-4" />
                   </button>
                 </div>
+                {plan.legs.length > 1 && (
+                  <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                    <span className="text-[11px] text-slate-500">
+                      Nu încap într-un drum — {plan.legs.length} etape:
+                    </span>
+                    {plan.urls.map((u, i) => (
+                      <a
+                        key={i}
+                        href={u}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="rounded-full bg-indigo-50 px-2 py-0.5 text-[11px] font-semibold text-indigo-700 ring-1 ring-inset ring-indigo-200 hover:bg-indigo-100"
+                      >
+                        {i + 1}: {plan.legs[i].length} opriri
+                      </a>
+                    ))}
+                  </div>
+                )}
               </li>
-            ))}
+              );
+            })}
           </ul>
         </div>
       )}
@@ -754,7 +822,7 @@ export default function MapPanel({
             <li key={l.localitate}>
               <button
                 type="button"
-                onClick={() => setSelectedLoc(l.localitate)}
+                onClick={() => openLocality(l.localitate)}
                 className="w-full rounded-lg border border-amber-200 bg-amber-50/60 px-3 py-2 text-left transition hover:bg-amber-100/70"
               >
                 <p className="flex items-center justify-between gap-1 truncate text-sm font-medium text-slate-800">

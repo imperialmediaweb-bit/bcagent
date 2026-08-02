@@ -9,6 +9,7 @@ import {
   ShoppingCart,
   Target,
 } from "lucide-react";
+import { planRoute } from "@/lib/route-nav";
 
 /**
  * „Ziua mea" — cockpitul agentului: deschide telefonul dimineața și vede
@@ -42,6 +43,8 @@ export default function DayPanel({ token }: { token: string }) {
   const [due, setDue] = useState<number | null>(null);
   const [ordersToday, setOrdersToday] = useState<number | null>(null);
   const [route, setRoute] = useState<{ name: string; stops: Stop[] } | null>(null);
+  // Ce ai bifat azi: ruta continuă de unde ai rămas, nu de la capăt.
+  const [doneToday, setDoneToday] = useState<string[]>([]);
   const [target, setTarget] = useState<{
     pct: number | null;
     elapsed: number;
@@ -49,11 +52,26 @@ export default function DayPanel({ token }: { token: string }) {
 
   useEffect(() => {
     const q = (p: string) => `${p}token=${encodeURIComponent(token)}`;
-    fetch(`/api/visits?${q("")}&limit=1`)
+    fetch(`/api/visits?${q("")}&limit=100`)
       .then((r) => (r.ok ? r.json() : null))
-      .then((d: { today?: number } | null) => {
-        if (d?.today !== undefined) setVisitsToday(d.today);
-      })
+      .then(
+        (
+          d: {
+            today?: number;
+            visits?: Array<{ cui: string; visitedAt: string }>;
+          } | null,
+        ) => {
+          if (!d) return;
+          if (d.today !== undefined) setVisitsToday(d.today);
+          const startOfDay = new Date();
+          startOfDay.setHours(0, 0, 0, 0);
+          setDoneToday(
+            (d.visits ?? [])
+              .filter((v) => new Date(v.visitedAt) >= startOfDay)
+              .map((v) => v.cui),
+          );
+        },
+      )
       .catch(() => {});
     fetch(`/api/visits?${q("")}&due=1&limit=100`)
       .then((r) => (r.ok ? r.json() : null))
@@ -97,6 +115,9 @@ export default function DayPanel({ token }: { token: string }) {
   const anything =
     visitsToday !== null || due !== null || route !== null || target !== null;
   if (!anything) return null;
+
+  // Ruta de azi: doar ce a rămas, în etape de 10 (limita Google Maps).
+  const plan = planRoute(route?.stops ?? [], doneToday, "");
 
   const dayLabel = new Date().toLocaleDateString("ro-RO", {
     weekday: "long",
@@ -188,33 +209,41 @@ export default function DayPanel({ token }: { token: string }) {
 
         {route && route.stops.length > 0 && (
           <div className="mt-3 flex flex-wrap items-center gap-2">
-            <a
-              href={`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(
-                `${route.stops[route.stops.length - 1].adresa}, ${route.stops[route.stops.length - 1].localitate}, Romania`,
-              )}${
-                route.stops.length > 1
-                  ? `&waypoints=${encodeURIComponent(
-                      route.stops
-                        .slice(0, -1)
-                        .slice(0, 9)
-                        .map((s) => `${s.adresa}, ${s.localitate}, Romania`)
-                        .join("|"),
-                    )}`
-                  : ""
-              }&travelmode=driving`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-1.5 rounded-lg bg-indigo-600 px-3 py-2 text-sm font-medium text-white shadow-sm hover:bg-indigo-700"
-            >
-              <Navigation className="h-4 w-4" />
-              Pornește ruta de azi
-            </a>
+            {plan.finished ? (
+              <span className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-50 px-3 py-2 text-sm font-semibold text-emerald-700 ring-1 ring-inset ring-emerald-200">
+                ✓ Ruta de azi e făcută toată ({plan.total} opriri)
+              </span>
+            ) : (
+              plan.urls.map((u, i, all) => (
+                <a
+                  key={i}
+                  href={u}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1.5 rounded-lg bg-indigo-600 px-3 py-2 text-sm font-medium text-white shadow-sm hover:bg-indigo-700"
+                >
+                  <Navigation className="h-4 w-4" />
+                  {all.length > 1
+                    ? `Etapa ${i + 1} (${plan.legs[i].length} opriri)`
+                    : plan.done > 0
+                      ? `Continuă ruta (${plan.remaining.length} rămase)`
+                      : "Pornește ruta de azi"}
+                </a>
+              ))
+            )}
             <p className="text-xs text-slate-500">
-              {route.stops
+              {plan.done > 0 && !plan.finished && (
+                <span className="font-semibold text-emerald-700">
+                  {plan.done} din {plan.total} făcute ·{" "}
+                </span>
+              )}
+              {plan.remaining
                 .slice(0, 3)
                 .map((s) => s.denumire)
                 .join(" → ")}
-              {route.stops.length > 3 ? ` → +${route.stops.length - 3}` : ""}
+              {plan.remaining.length > 3
+                ? ` → +${plan.remaining.length - 3}`
+                : ""}
             </p>
           </div>
         )}

@@ -183,9 +183,24 @@ export default function GhidPage() {
           </Row>
           <Row icon="🚗" name="Cum pornesc NAVIGAREA">
             Din „Ziua mea" apasă <B>„Pornește ruta de azi"</B> → se deschide
-            Google Maps cu toate opririle în ordine; apeși Start și te duce
-            din client în client. Pentru o singură firmă: butonul{" "}
+            Google Maps cu opririle în ordine; apeși Start și te duce din
+            client în client. Pentru o singură firmă: butonul{" "}
             <B>„Navighează"</B> de pe firmă.
+          </Row>
+          <Row icon="🌗" name="Dacă ruta NU încape într-o zi">
+            Google Maps ia maximum 10 opriri într-un drum, așa că ruta lungă
+            se împarte singură în <B>etape</B>: „Etapa 1 (10 opriri)", „Etapa
+            2 (…)" — le pornești pe rând, nu se pierde niciun client. Iar dacă
+            te prinde seara la jumătate: fiecare client la care ai apăsat{" "}
+            <B>„Am fost"</B> iese din rută, iar butonul devine{" "}
+            <B>„Continuă ruta (X rămase)"</B> — a doua zi pleci exact de unde
+            ai rămas. Când termini tot, ruta se marchează <B>gata ✓</B>.
+          </Row>
+          <Row icon="🏳️" name="Cum sar din zonele neacoperite direct pe firme">
+            Sub hartă ai <B>„Cele mai mari zone neacoperite"</B> — apeși pe o
+            localitate și ecranul urcă singur la hartă, cu lista firmelor de
+            acolo deschisă în dreapta: telefon, navigare, fișă, comandă,
+            „+ Rută".
           </Row>
           <Row icon="✍️" name="Cum marchez VIZITA (obligatoriu la fiecare client)">
             Pe firma la care ai fost apasă <B>„Am fost"</B> și alege:{" "}
