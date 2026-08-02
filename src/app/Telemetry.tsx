@@ -11,6 +11,14 @@ import { useEffect } from "react";
  * Reguli de siguranță: fire-and-forget (nu blochează nimic), dedupe pe
  * sesiune (max 25 de rapoarte), orice defect al paznicului e înghițit.
  */
+/**
+ * Statusuri care NU sunt erori — sunt răspunsuri normale, pe care
+ * aplicația le tratează singură. Dacă le-am raporta, lista de erori a
+ * adminului s-ar umple de zgomot („sesiune expirată”, „planul nu include”,
+ * „prea multe cereri”) și n-ar mai vedea problemele adevărate.
+ */
+const ASTEPTATE = new Set([401, 402, 403, 409, 423, 429]);
+
 export default function Telemetry() {
   useEffect(() => {
     const seen = new Set<string>();
@@ -72,6 +80,7 @@ export default function Telemetry() {
         const path = url.startsWith("http") ? new URL(url).pathname : url.split("?")[0];
         if (
           res.status >= 400 &&
+          !ASTEPTATE.has(res.status) &&
           path.startsWith("/api/") &&
           !path.startsWith("/api/telemetry")
         ) {

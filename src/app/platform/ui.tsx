@@ -327,6 +327,16 @@ export async function api<T>(
     throw new Error(`Răspuns invalid de la server (${res.status})`);
   }
   if (!res.ok) {
+    // Sesiunea a expirat (panoul se reîmprospătează singur la un minut):
+    // nu e o eroare de arătat, ci un motiv să te ducem la login.
+    if (
+      res.status === 401 &&
+      typeof window !== "undefined" &&
+      !window.location.pathname.startsWith("/platform/login")
+    ) {
+      window.location.href = "/platform/login";
+      throw new Error("Sesiune expirată — te ducem la autentificare.");
+    }
     const msg =
       data && typeof data === "object" && "error" in data
         ? String((data as { error: unknown }).error)

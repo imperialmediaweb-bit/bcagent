@@ -30,6 +30,13 @@ export async function POST(req: Request) {
   const kind = body.kind === "api_error" ? "api_error" : "js_error";
   const message = String(body.message ?? "").slice(0, 500);
   if (message.length < 3) return Response.json({ ok: false }, { status: 400 });
+  // Aceeași plasă și pe server (browserele vechi pot avea codul vechi):
+  // sesiune expirată, plan fără funcția aia, prea multe cereri — sunt
+  // răspunsuri normale, nu erori. Nu umplem lista adminului cu ele.
+  const ASTEPTATE = [401, 402, 403, 409, 423, 429];
+  if (typeof body.status === "number" && ASTEPTATE.includes(body.status)) {
+    return Response.json({ ok: true, ignored: true });
+  }
 
   const db = getDB();
   if (!db) return Response.json({ ok: false }, { status: 503 });
