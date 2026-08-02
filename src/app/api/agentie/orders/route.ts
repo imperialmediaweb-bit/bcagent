@@ -11,6 +11,20 @@ export const runtime = "nodejs";
 
 const STATUSES = ["noua", "pregatita", "livrata", "anulata"] as const;
 
+/**
+ * O celulă de CSV, făcută inofensivă.
+ *
+ * Excel execută ca formulă orice celulă care începe cu = + - @ (sau tab).
+ * Un client cu numele „=cmd|'/c calc'!A1" ar rula cod pe calculatorul
+ * contabilei când deschide exportul. Punem un apostrof în față: Excel
+ * afișează textul, nu-l mai execută.
+ */
+function csvCell(value: unknown): string {
+  let s = String(value ?? "").replace(/[\r\n]+/g, " ").replace(/;/g, ",");
+  if (/^[=+\-@\t\r]/.test(s)) s = "'" + s;
+  return s;
+}
+
 interface OrderLine {
   produs: string;
   cantitate: number;
@@ -143,7 +157,7 @@ export async function GET(req: Request) {
               r.plata,
               r.note.replace(/[\r\n;]+/g, " "),
             ]
-              .map((v) => String(v).replace(/;/g, ","))
+              .map((v) => csvCell(v))
               .join(";"),
           ),
         )

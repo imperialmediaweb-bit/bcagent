@@ -3,6 +3,16 @@ import { audit, listOrgAgents, requireOrgUser } from "@/modules/platform";
 
 export const runtime = "nodejs";
 
+/**
+ * Celulă de CSV inofensivă: Excel execută ca formulă orice text care
+ * începe cu = + - @, deci îl prefixăm cu apostrof.
+ */
+function csvCell(value: unknown): string {
+  let s = String(value ?? "").replace(/[\r\n]+/g, " ").replace(/;/g, ",");
+  if (/^[=+\-@\t\r]/.test(s)) s = "'" + s;
+  return s;
+}
+
 /** Deconturile echipei: managerul aprobă/respinge, contabila exportă. */
 
 const STATUSES = new Set(["in_asteptare", "aprobat", "respins"]);
@@ -58,8 +68,10 @@ export async function GET(req: Request) {
             r.category,
             (r.amount_cents / 100).toFixed(2),
             r.status,
-            r.note.replace(/[\r\n;]+/g, " "),
-          ].join(";"),
+            r.note,
+          ]
+            .map((v) => csvCell(v))
+            .join(";"),
         )
         .join("\n");
       return new Response("﻿" + head + body, {

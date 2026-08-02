@@ -1,4 +1,4 @@
-import { verifyToken } from "@/lib/signed-token";
+import { verifyFieldToken } from "@/lib/agent-guard";
 import { ensureSchema, getDB, isDBEnabled } from "@/lib/db";
 
 export const runtime = "nodejs";
@@ -41,7 +41,7 @@ export async function POST(req: Request) {
       { status: 400 },
     );
   }
-  const payload = await verifyToken(body.token, tokenSecret);
+  const payload = await verifyFieldToken(body.token, tokenSecret);
   if (!payload) {
     return Response.json({ error: "Token invalid" }, { status: 401 });
   }

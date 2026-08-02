@@ -1,4 +1,4 @@
-import { verifyToken } from "@/lib/signed-token";
+import { verifyFieldToken } from "@/lib/agent-guard";
 import { ensureSchema, getDB, isDBEnabled } from "@/lib/db";
 import { isAIEnabled, streamCompletion } from "@/lib/llm";
 import { clientIP, rateLimit } from "@/lib/rate-limit";
@@ -53,7 +53,7 @@ export async function POST(req: Request) {
     reporter = orgSession.email;
     role = orgSession.role;
   } else if (body.token && process.env.TOKEN_SECRET) {
-    const p = await verifyToken(body.token, process.env.TOKEN_SECRET);
+    const p = await verifyFieldToken(body.token, process.env.TOKEN_SECRET);
     if (p) {
       reporter = p.agentName;
       role = "agent";

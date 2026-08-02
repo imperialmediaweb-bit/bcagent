@@ -1,4 +1,4 @@
-import { verifyToken } from "@/lib/signed-token";
+import { verifyFieldToken } from "@/lib/agent-guard";
 import { ensureSchema, getDB, isDBEnabled } from "@/lib/db";
 import { clientIP, rateLimit } from "@/lib/rate-limit";
 
@@ -40,7 +40,7 @@ async function authorize(req: Request, tokenFromBody?: string) {
   const token =
     tokenFromBody ?? new URL(req.url).searchParams.get("token") ?? "";
   if (!token) return null;
-  return verifyToken(token, secret);
+  return verifyFieldToken(token, secret);
 }
 
 interface RouteRow {

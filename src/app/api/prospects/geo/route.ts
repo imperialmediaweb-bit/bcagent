@@ -1,4 +1,4 @@
-import { verifyToken } from "@/lib/signed-token";
+import { verifyFieldToken } from "@/lib/agent-guard";
 import { ensureSchema, getDB, isDBEnabled } from "@/lib/db";
 import { clientIP, rateLimit } from "@/lib/rate-limit";
 import { countyName } from "@/modules/prospects";
@@ -75,7 +75,7 @@ export async function GET(req: Request) {
   }
   const url = new URL(req.url);
   const token = url.searchParams.get("token");
-  if (!token || !(await verifyToken(token, tokenSecret))) {
+  if (!token || !(await verifyFieldToken(token, tokenSecret))) {
     return Response.json({ error: "Token invalid sau expirat" }, { status: 401 });
   }
 

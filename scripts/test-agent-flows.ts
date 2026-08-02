@@ -13,6 +13,10 @@ import crypto from "node:crypto";
 import postgres from "postgres";
 
 const BASE = process.env.BASE_URL ?? "http://127.0.0.1:3131";
+
+// IP unic per RULARE: rulările consecutive nu se lovesc de limitele
+// anti-abuz pe IP (alea sunt testate separat, intenționat).
+const RUN_IP = `10.77.${Math.floor(Math.random() * 250)}.${Math.floor(Math.random() * 250)}`;
 const SECRET = process.env.TOKEN_SECRET ?? "";
 const DB_URL = process.env.DATABASE_URL ?? "";
 if (!SECRET || !DB_URL) {
@@ -47,7 +51,10 @@ async function req(
 ): Promise<{ status: number; data: any }> {
   const res = await fetch(`${BASE}${path}`, {
     method,
-    headers: body !== undefined ? { "Content-Type": "application/json" } : {},
+    headers: {
+      "X-Forwarded-For": RUN_IP,
+      ...(body !== undefined ? { "Content-Type": "application/json" } : {}),
+    },
     body: body !== undefined ? JSON.stringify(body) : undefined,
     redirect: "manual",
   });

@@ -90,6 +90,9 @@ async function main() {
   }
   await sql`DELETE FROM batches WHERE agent_id LIKE 'org:%' AND file_name LIKE 'qa-boss%'`;
   await sql`DELETE FROM prospects WHERE cui LIKE '666333%'`;
+  // Suita testează intenționat o parolă greșită; la rulări repetate s-ar
+  // atinge blocarea pe cont (5 greșeli/15 min) — curățăm istoricul propriu.
+  await sql`DELETE FROM login_events WHERE email LIKE '%@qa-boss.ro' OR email LIKE '%@qa-rival.ro'`;
 
   const now = new Date();
   const mkid = (p: string) => `${p}_${crypto.randomUUID().replace(/-/g, "").slice(0, 12)}`;

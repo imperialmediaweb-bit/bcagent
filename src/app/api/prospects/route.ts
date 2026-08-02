@@ -1,4 +1,4 @@
-import { verifyToken } from "@/lib/signed-token";
+import { verifyFieldToken } from "@/lib/agent-guard";
 import { ensureSchema, getDB, isDBEnabled } from "@/lib/db";
 import { clientIP, rateLimit } from "@/lib/rate-limit";
 import {
@@ -15,7 +15,7 @@ async function authorize(req: Request, tokenFromBody?: string) {
   const url = new URL(req.url);
   const token = tokenFromBody ?? url.searchParams.get("token");
   if (!token) return { error: "token lipsește", status: 400 as const };
-  const payload = await verifyToken(token, tokenSecret);
+  const payload = await verifyFieldToken(token, tokenSecret);
   if (!payload) return { error: "Token invalid sau expirat", status: 401 as const };
   return { agentId: payload.agentId, agentName: payload.agentName };
 }

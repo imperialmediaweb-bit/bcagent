@@ -1,4 +1,4 @@
-import { verifyToken } from "@/lib/signed-token";
+import { verifyFieldToken } from "@/lib/agent-guard";
 import { isAIEnabled, streamCompletion, SYSTEM_PROMPT } from "@/lib/llm";
 import { clientIP, rateLimit } from "@/lib/rate-limit";
 
@@ -57,7 +57,7 @@ export async function POST(req: Request) {
     );
   }
 
-  const payload = await verifyToken(body.token, tokenSecret);
+  const payload = await verifyFieldToken(body.token, tokenSecret);
   if (!payload) {
     return Response.json(
       { error: "Token invalid sau expirat" },

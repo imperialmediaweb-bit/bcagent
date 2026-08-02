@@ -834,6 +834,70 @@ async function main() {
     `${vanCash?.salesToday}`,
   );
 
+  section("CRITIC · Agentul blocat moare INSTANT, și pe aplicația deschisă");
+  // Managerul apasă „blochează" pentru agentul 2. Cine are deja aplicația
+  // deschisă în telefon NU mai are voie să trimită nimic prin API.
+  const ag2row = (await get("/api/agentie/agents", ck)).data.agents?.find(
+    (a: any) => a.agentId === AG2,
+  );
+  r = await req("PATCH", "/api/agentie/agents", { agentRowId: ag2row?.id, active: false }, ck);
+  check("managerul blochează agentul", r.status === 200, r.text.slice(0, 140));
+  // fără așteptare: blocarea golește instant starea din memorie
+  const blocate: Array<[string, string, unknown]> = [
+    ["comandă nouă", "POST /api/orders", { token: TOK2, cui: "77710001", denumire: "X", lines: [{ produs: "P", cantitate: 1, um: "buc", pret: 1 }] }],
+    ["vizită", "POST /api/visits", { token: TOK2, cui: "77710001", denumire: "X", result: "client" }],
+    ["încărcare dubă", "POST /api/van", { token: TOK2, action: "load", lines: [{ produs: "P", cantitate: 1, um: "buc" }] }],
+    ["decont", "POST /api/expenses", { token: TOK2, spentOn: "2026-08-01", category: "alte", amount: 10 }],
+  ];
+  for (const [name, route, payload] of blocate) {
+    const [, path] = route.split(" ");
+    const rr = await req("POST", path, payload);
+    check(`agent blocat: ${name} → refuzat`, rr.status === 401 || rr.status === 403, `${rr.status}`);
+  }
+  for (const [name, path] of [
+    ["hartă", `/api/prospects/geo?token=${TOK2}&judet=SV&geocode=0`],
+    ["firme", `/api/prospects?token=${TOK2}&limit=5`],
+    ["rute", `/api/routes?token=${TOK2}`],
+    ["comenzile mele", `/api/orders?token=${TOK2}`],
+  ] as const) {
+    const rr = await get(path);
+    check(`agent blocat: ${name} → refuzat`, rr.status === 401 || rr.status === 403, `${rr.status}`);
+  }
+  // Agentul 1 (neblocat) merge mai departe — blocarea e țintită, nu globală.
+  r = await get(`/api/orders?token=${TOK1}`);
+  check("agentul NEblocat lucrează normal", r.status === 200);
+  // Deblocarea se face tot din panou (nu direct în bază) — ca să verificăm
+  // că agentul își recapătă accesul la fel de repede cum l-a pierdut.
+  r = await req("PATCH", "/api/agentie/agents", { agentRowId: ag2row?.id, active: true }, ck);
+  check("managerul deblochează agentul", r.status === 200);
+  r = await get(`/api/orders?token=${TOK2}`);
+  check("agentul deblocat lucrează IMEDIAT din nou", r.status === 200, `${r.status}`);
+
+  section("CRITIC · Export CSV fără formule executabile (CSV injection)");
+  await req("POST", "/api/orders", {
+    token: TOK1,
+    cui: "77710004",
+    denumire: "=cmd|'/c calc'!A1",
+    localitate: "QA POIANA",
+    clientId: "csv-inject-1",
+    note: "@SUM(1+1)",
+    lines: [{ produs: "+1234;periculos", cantitate: 1, um: "buc", pret: 1 }],
+  });
+  r = await get("/api/agentie/orders?export=csv&days=7", ck);
+  const csv = r.text;
+  check("exportul conține rândul periculos", csv.includes("cmd|"));
+  const linesCsv = csv.split("\n").slice(1).filter(Boolean);
+  const cells = linesCsv.flatMap((l) => l.split(";"));
+  check(
+    "nicio celulă nu începe cu = + - @ (Excel n-o execută)",
+    cells.every((c) => !/^[=+\-@\t]/.test(c)),
+    cells.filter((c) => /^[=+\-@\t]/.test(c)).slice(0, 3).join(" | "),
+  );
+  check(
+    "textul rămâne lizibil (doar prefixat cu apostrof)",
+    csv.includes("'=cmd|") && csv.includes("'@SUM(1+1)"),
+  );
+
   section("Curățenie");
   await cleanup();
   await sql.end();

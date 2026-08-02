@@ -164,10 +164,17 @@ export async function PATCH(req: Request) {
     const orgId = auth.session.orgId;
 
     if (typeof body.active === "boolean") {
-      await db`
+      const [changed] = await db<Array<{ agent_id: string }>>`
         UPDATE org_agents SET active = ${body.active}
         WHERE id = ${rowId} AND org_id = ${orgId}
+        RETURNING agent_id
       `;
+      // Blocarea trebuie să muște INSTANT, inclusiv pe telefonul care are
+      // aplicația deja deschisă — golim starea ținută în memorie.
+      if (changed?.agent_id) {
+        const { forgetAgentBlockState } = await import("@/lib/agent-guard");
+        forgetAgentBlockState(changed.agent_id);
+      }
       await audit(
         auth.session.email,
         body.active ? "agent.activate" : "agent.deactivate",

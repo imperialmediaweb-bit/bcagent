@@ -1,4 +1,4 @@
-import { verifyToken } from "@/lib/signed-token";
+import { verifyFieldToken } from "@/lib/agent-guard";
 import { ensureSchema, getDB, isDBEnabled } from "@/lib/db";
 import { clientIP, rateLimit } from "@/lib/rate-limit";
 
@@ -91,7 +91,7 @@ export async function POST(req: Request) {
   } catch {
     return Response.json({ error: "Invalid JSON" }, { status: 400 });
   }
-  if (!body.token || !(await verifyToken(body.token, tokenSecret))) {
+  if (!body.token || !(await verifyFieldToken(body.token, tokenSecret))) {
     return Response.json({ error: "Token invalid sau expirat" }, { status: 401 });
   }
   if (!Array.isArray(body.clients)) {

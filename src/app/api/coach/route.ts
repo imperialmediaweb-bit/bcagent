@@ -1,4 +1,4 @@
-import { verifyToken } from "@/lib/signed-token";
+import { verifyFieldToken } from "@/lib/agent-guard";
 import {
   isAIEnabled,
   streamCompletion,
@@ -83,7 +83,7 @@ export async function POST(req: Request) {
   } catch {
     return Response.json({ error: "Invalid JSON" }, { status: 400 });
   }
-  const payload = body.token ? await verifyToken(body.token, secret) : null;
+  const payload = body.token ? await verifyFieldToken(body.token, secret) : null;
   if (!payload) {
     return Response.json({ error: "Token invalid sau expirat" }, { status: 401 });
   }

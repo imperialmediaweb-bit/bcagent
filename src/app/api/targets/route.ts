@@ -1,4 +1,4 @@
-import { verifyToken } from "@/lib/signed-token";
+import { verifyFieldToken } from "@/lib/agent-guard";
 import { ensureSchema, getDB, isDBEnabled } from "@/lib/db";
 
 export const runtime = "nodejs";
@@ -13,7 +13,7 @@ export async function GET(req: Request) {
   if (!secret) return Response.json({ error: "Server not configured" }, { status: 500 });
   const url = new URL(req.url);
   const token = url.searchParams.get("token") ?? "";
-  const payload = await verifyToken(token, secret);
+  const payload = await verifyFieldToken(token, secret);
   if (!payload) {
     return Response.json({ error: "Token invalid sau expirat" }, { status: 401 });
   }
