@@ -60,6 +60,7 @@ export async function POST(req: Request) {
     plata?: string;
     foto?: string;
     fotos?: string[];
+    clientId?: string;
   };
   try {
     body = await req.json();
@@ -124,17 +125,64 @@ export async function POST(req: Request) {
   if (!db) return Response.json({ enabled: false }, { status: 503 });
   try {
     await ensureSchema();
+
+    // ANTI-DUBLARE. Comanda plecată de două ori (semnal prost, dublu tap,
+    // coada offline retrimisă) ar intra de două ori la depozit și ar scădea
+    // stocul din dubă de două ori. Două plase de siguranță:
+    //   1. clientId — id-ul generat de telefon O SINGURĂ dată per comandă;
+    //   2. pentru aplicațiile vechi, fără clientId: aceeași comandă (client
+    //      + produse + total) trimisă de același agent în ultimele 3 minute.
+    const clientId = String(body.clientId ?? "").slice(0, 64) || null;
+    const linesKey = JSON.stringify(
+      lines.map((l) => [l.produs.toLowerCase().trim(), l.cantitate, l.um, l.pret]),
+    );
+    if (clientId) {
+      const seen = await db<Array<{ id: string; total_value: number | null }>>`
+        SELECT id, total_value FROM orders
+        WHERE agent_id = ${payload.agentId} AND client_id = ${clientId}
+        LIMIT 1
+      `;
+      if (seen.length > 0) {
+        return Response.json({
+          ok: true,
+          duplicate: true,
+          id: seen[0].id,
+          total: seen[0].total_value,
+        });
+      }
+    } else {
+      const seen = await db<Array<{ id: string; total_value: number | null }>>`
+        SELECT id, total_value FROM orders
+        WHERE agent_id = ${payload.agentId}
+          AND denumire = ${denumire}
+          AND created_at > NOW() - INTERVAL '3 minutes'
+          AND lines::text = ${db.json(lines as unknown as Parameters<typeof db.json>[0])}::text
+        ORDER BY created_at DESC
+        LIMIT 1
+      `;
+      if (seen.length > 0) {
+        return Response.json({
+          ok: true,
+          duplicate: true,
+          id: seen[0].id,
+          total: seen[0].total_value,
+        });
+      }
+    }
+    void linesKey;
+
     const id = `ord_${crypto.randomUUID().replace(/-/g, "").slice(0, 16)}`;
     await db`
       INSERT INTO orders (id, agent_id, agent_name, cui, denumire, localitate,
-                          lines, note, total_value, tip, plata, status, foto)
+                          lines, note, total_value, tip, plata, status, foto,
+                          client_id)
       VALUES (${id}, ${payload.agentId}, ${payload.agentName},
               ${String(body.cui ?? "").replace(/\D/g, "").slice(0, 12)},
               ${denumire}, ${String(body.localitate ?? "").slice(0, 120)},
               ${db.json(lines as unknown as Parameters<typeof db.json>[0])},
               ${String(body.note ?? "").slice(0, 1000)}, ${total},
               ${isVan ? "van" : "comanda"}, ${plata},
-              ${isVan ? "livrata" : "noua"}, ${foto})
+              ${isVan ? "livrata" : "noua"}, ${foto}, ${clientId})
     `;
     for (const enc of encFotos.slice(1)) {
       await db`INSERT INTO order_fotos (order_id, foto) VALUES (${id}, ${enc})`;

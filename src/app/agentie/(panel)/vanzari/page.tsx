@@ -100,7 +100,9 @@ function UploadCard({ onUploaded }: { onUploaded: () => void }) {
         rows: number;
         dateMin: string;
         dateMax: string;
-        agentsUnknown: string[];
+        agentsUnknown?: string[];
+        duplicate?: boolean;
+        message?: string;
       }>("/api/agentie/upload", {
         method: "POST",
         json: {
@@ -115,12 +117,25 @@ function UploadCard({ onUploaded }: { onUploaded: () => void }) {
           })),
         },
       });
+      if (res.duplicate) {
+        // Protecție: fișierul e deja încărcat — dacă l-am mai băga o dată,
+        // toate cifrele s-ar dubla.
+        setMsg({
+          kind: "info",
+          text:
+            res.message ??
+            "Fișierul ăsta e deja încărcat — nu am dublat nimic.",
+        });
+        loadBatches();
+        return;
+      }
+      const unknown = res.agentsUnknown ?? [];
       const warn =
-        res.agentsUnknown.length > 0
-          ? ` ⚠ Agenți din fișier fără cont în firmă: ${res.agentsUnknown.join(", ")} — adaugă-i din pagina Agenți cu EXACT numele ăsta ca să se lege rapoartele.`
+        unknown.length > 0
+          ? ` ⚠ Agenți din fișier fără cont în firmă: ${unknown.join(", ")} — adaugă-i din pagina Agenți cu EXACT numele ăsta ca să se lege rapoartele.`
           : "";
       setMsg({
-        kind: res.agentsUnknown.length ? "info" : "success",
+        kind: unknown.length ? "info" : "success",
         text: `Import reușit: ${res.rows.toLocaleString("ro-RO")} rânduri (${res.dateMin} → ${res.dateMax}). Cifrele s-au actualizat automat în Vânzări, Targeturi și Briefing.${warn}`,
       });
       loadBatches();

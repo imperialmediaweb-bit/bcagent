@@ -56,8 +56,22 @@ export async function POST(req: Request) {
 
   try {
     await ensureSchema();
+    // Același fișier urcat de două ori ar dubla analizele agentului —
+    // îl recunoaștem după conținut, nu după nume sau id.
+    const { rowsFingerprint } = await import("@/lib/fingerprint");
+    const fingerprint = rowsFingerprint(
+      b.rows as unknown as Array<{ date: string; agent: string }>,
+    );
+    const dup = await db<Array<{ id: string; file_name: string }>>`
+      SELECT id, file_name FROM batches
+      WHERE agent_id = ${payload.agentId} AND content_hash = ${fingerprint}
+      LIMIT 1
+    `;
+    if (dup.length > 0) {
+      return Response.json({ ok: true, duplicate: true, id: dup[0].id });
+    }
     await db`
-      INSERT INTO batches (id, agent_id, file_name, uploaded_at, row_count, date_min, date_max, rows)
+      INSERT INTO batches (id, agent_id, file_name, uploaded_at, row_count, date_min, date_max, rows, content_hash)
       VALUES (
         ${b.id},
         ${payload.agentId},
@@ -66,7 +80,8 @@ export async function POST(req: Request) {
         ${b.rowCount},
         ${b.dateRange.min},
         ${b.dateRange.max},
-        ${db.json(b.rows)}
+        ${db.json(b.rows)},
+        ${fingerprint}
       )
       ON CONFLICT (id) DO NOTHING
     `;

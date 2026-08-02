@@ -71,13 +71,35 @@ export async function POST(req: Request) {
   if (!db) return Response.json({ enabled: false }, { status: 503 });
   try {
     await ensureSchema();
+    // Același raport încărcat de două ori ar dubla TOATE cifrele — îl
+    // recunoaștem după conținut (nu după nume) și nu-l mai băgăm o dată.
+    const { rowsFingerprint } = await import("@/lib/fingerprint");
+    const fingerprint = rowsFingerprint(rows);
+    const ownerId = "org:" + auth.session.orgId;
+    const dup = await db<Array<{ id: string; file_name: string }>>`
+      SELECT id, file_name FROM batches
+      WHERE agent_id = ${ownerId} AND content_hash = ${fingerprint}
+      LIMIT 1
+    `;
+    if (dup.length > 0) {
+      return Response.json({
+        ok: true,
+        duplicate: true,
+        id: dup[0].id,
+        rows: rows.length,
+        dateMin: dates[0],
+        dateMax: dates[dates.length - 1],
+        message: `Fișierul ăsta e deja încărcat (${dup[0].file_name}) — nu am dublat nimic.`,
+      });
+    }
     const id = `bo_${crypto.randomUUID().replace(/-/g, "").slice(0, 16)}`;
     await db`
-      INSERT INTO batches (id, agent_id, file_name, row_count, date_min, date_max, rows)
-      VALUES (${id}, ${"org:" + auth.session.orgId},
+      INSERT INTO batches (id, agent_id, file_name, row_count, date_min, date_max, rows, content_hash)
+      VALUES (${id}, ${ownerId},
               ${String(body.fileName ?? "raport").slice(0, 200)},
               ${rows.length}, ${dates[0]}, ${dates[dates.length - 1]},
-              ${db.json(rows as unknown as Parameters<typeof db.json>[0])})
+              ${db.json(rows as unknown as Parameters<typeof db.json>[0])},
+              ${fingerprint})
     `;
     await audit(auth.session.email, "upload.raport", id, {
       orgId: auth.session.orgId,

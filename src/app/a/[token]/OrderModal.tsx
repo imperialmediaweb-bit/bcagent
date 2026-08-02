@@ -70,6 +70,16 @@ export default function OrderModal({
   // agentul trebuie să verifice el, cu factura în mână.
   const [scanWarn, setScanWarn] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement | null>(null);
+  // ANTI-DUBLARE: un id generat O SINGURĂ dată pentru comanda asta. Dacă
+  // pică semnalul și se retrimite, sau agentul apasă de două ori, serverul
+  // recunoaște că e aceeași comandă și n-o mai bagă încă o dată.
+  const clientIdRef = useRef<string>("");
+  if (!clientIdRef.current) {
+    clientIdRef.current =
+      typeof crypto !== "undefined" && "randomUUID" in crypto
+        ? crypto.randomUUID()
+        : `o${Date.now()}${Math.random().toString(36).slice(2, 10)}`;
+  }
 
   async function scanFactura(file: File) {
     setScanning(true);
@@ -172,6 +182,10 @@ export default function OrderModal({
     setFotos([]);
     setScanInfo(null);
     setScanWarn(null);
+    clientIdRef.current =
+      typeof crypto !== "undefined" && "randomUUID" in crypto
+        ? crypto.randomUUID()
+        : `o${Date.now()}${Math.random().toString(36).slice(2, 10)}`;
   }, [firm]);
 
   useEffect(() => {
@@ -219,6 +233,7 @@ export default function OrderModal({
           plata: tip === "van" ? plata : "",
           foto: fotos[0] ?? "",
           fotos,
+          clientId: clientIdRef.current,
           lines: validLines.map((l) => ({
             produs: l.produs.trim(),
             cantitate: parseFloat(l.cantitate),

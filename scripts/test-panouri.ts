@@ -129,6 +129,7 @@ async function cleanup() {
   ]) {
     await sql.unsafe(`DELETE FROM ${t} WHERE agent_id LIKE 'qap-%'`);
   }
+  await sql`DELETE FROM batches WHERE agent_id LIKE 'org:%' AND file_name LIKE '%qa%'`;
   await sql`DELETE FROM prospects WHERE cui LIKE '7771%'`;
   await sql`DELETE FROM targets WHERE agent_name LIKE 'QA Agent%'`;
 }
@@ -678,6 +679,159 @@ async function main() {
   check(
     "o singură oprire → link fără waypoints",
     !legMapsUrl([s12[0]], "SV").includes("waypoints="),
+  );
+
+  /* ───────── 5. CELE 6 SCENARII CRITICE (checklist QA extern) ───────── */
+
+  section("CRITIC · Același fișier încărcat de 2 ori NU dublează cifrele");
+  const salesRows = [
+    { date: "2026-06-01", agent: "QA Agent Unu", producer: "BRAND X", client: "QA MAGAZIN UNU SRL", volume: 100, value: 1000 },
+    { date: "2026-06-02", agent: "QA Agent Unu", producer: "BRAND X", client: "QA MAGAZIN UNU SRL", volume: 50, value: 500 },
+  ];
+  r = await req("POST", "/api/agentie/upload", { fileName: "raport-qa.xlsx", rows: salesRows }, ck);
+  check("primul import trece", r.status === 200 && !r.data.duplicate, r.text.slice(0, 140));
+  r = await req("POST", "/api/agentie/upload", { fileName: "raport-qa.xlsx", rows: salesRows }, ck);
+  check("al doilea import identic e marcat duplicat", r.status === 200 && r.data.duplicate === true);
+  r = await req(
+    "POST",
+    "/api/agentie/upload",
+    { fileName: "ALT-NUME.xlsx", rows: [...salesRows].reverse() },
+    ck,
+  );
+  check(
+    "același conținut cu ALT NUME tot e prins ca duplicat",
+    r.status === 200 && r.data.duplicate === true,
+  );
+  const [nBatches] = await sql<Array<{ n: string }>>`
+    SELECT COUNT(*)::text AS n FROM batches WHERE agent_id = ${"org:" + orgId}
+  `;
+  check("există un SINGUR lot în baza de date", nBatches?.n === "1", `${nBatches?.n}`);
+  const [sumRows] = await sql<Array<{ v: string }>>`
+    SELECT COALESCE(SUM((r->>'value')::float), 0)::text AS v
+    FROM batches b, jsonb_array_elements(b.rows) r
+    WHERE b.agent_id = ${"org:" + orgId}
+  `;
+  check("valoarea totală e 1500, nu 3000", Math.round(Number(sumRows?.v)) === 1500, sumRows?.v);
+  r = await req(
+    "POST",
+    "/api/agentie/upload",
+    {
+      fileName: "raport-luna-noua.xlsx",
+      rows: [{ date: "2026-07-01", agent: "QA Agent Unu", producer: "BRAND X", client: "QA MAGAZIN UNU SRL", volume: 10, value: 100 }],
+    },
+    ck,
+  );
+  check("un fișier DIFERIT intră normal", r.status === 200 && !r.data.duplicate);
+
+  section("CRITIC · Stocul din dubă nu poate intra pe minus");
+  await req("POST", "/api/van", {
+    token: TOK2,
+    action: "load",
+    lines: [{ produs: "Bere 0,5", cantitate: 5, um: "buc" }],
+  });
+  r = await req("POST", "/api/orders", {
+    token: TOK2,
+    cui: "77710001",
+    denumire: "QA MAGAZIN UNU SRL",
+    tip: "van",
+    plata: "numerar",
+    lines: [{ produs: "Bere 0,5", cantitate: 50, um: "buc", pret: 5 }],
+  });
+  check("vânzarea peste stoc NU e blocată (agentul știe mai bine)", r.status === 200);
+  const [vs] = await sql<Array<{ cantitate: number }>>`
+    SELECT cantitate FROM van_stock WHERE agent_id = ${AG2} AND produs = 'Bere 0,5'
+  `;
+  check("dar stocul se oprește la 0, nu merge pe minus", Number(vs?.cantitate) === 0, `${vs?.cantitate}`);
+
+  section("CRITIC · PIN-ul agentului are limită la încercări");
+  const pinAgent = "qap-pin";
+  const pinTok = mkToken(pinAgent, "QA Agent PIN");
+  await sql`DELETE FROM agent_pin WHERE agent_id = ${pinAgent}`;
+  r = await req("POST", "/api/agent-access", { token: pinTok, pin: "1234", action: "setup" });
+  check("agentul își setează PIN-ul", r.status === 200, r.text.slice(0, 140));
+  r = await req("POST", "/api/agent-access", { token: pinTok, pin: "9999", action: "verify" });
+  check("PIN greșit → refuz", r.status >= 400);
+  let blocked = false;
+  for (let i = 0; i < 25; i++) {
+    const rr = await req("POST", "/api/agent-access", {
+      token: pinTok,
+      pin: "8888",
+      action: "verify",
+    });
+    if (rr.status === 429 || rr.status === 423) {
+      blocked = true;
+      break;
+    }
+  }
+  check("ghicitul repetat al PIN-ului e oprit (429/423)", blocked);
+  await sql`DELETE FROM agent_pin WHERE agent_id = ${pinAgent}`;
+
+  section("CRITIC · Comanda offline nu se pierde și nu se trimite de 2 ori");
+  // Aceeași comandă retrimisă (agentul apasă de 2 ori / revine semnalul).
+  const dupOrder = {
+    token: TOK1,
+    cui: "77710004",
+    denumire: "QA CHIOSC PATRU SRL",
+    localitate: "QA POIANA",
+    lines: [{ produs: "Test dublu", cantitate: 2, um: "buc", pret: 10 }],
+  };
+  const o1 = await req("POST", "/api/orders", dupOrder);
+  const o2 = await req("POST", "/api/orders", dupOrder);
+  check("ambele cereri răspund OK (agentul nu vede eroare)", o1.status === 200 && o2.status === 200);
+  const [dupCount] = await sql<Array<{ n: string }>>`
+    SELECT COUNT(*)::text AS n FROM orders
+    WHERE agent_id = ${AG1} AND denumire = 'QA CHIOSC PATRU SRL'
+  `;
+  check(
+    "comanda retrimisă NU se dublează în depozit",
+    dupCount?.n === "1",
+    `sunt ${dupCount?.n} comenzi`,
+  );
+
+  section("CRITIC · Banii de predat = banii din buzunar (la leu)");
+  // Cel mai important test din tot setul: dacă suma din aplicație nu bate
+  // cu numerarul agentului, agenții abandonează aplicația a doua zi.
+  const cashAgent = AG2;
+  await sql`DELETE FROM orders WHERE agent_id = ${cashAgent}`;
+  const vanzari: Array<[string, number, number, "numerar" | "card" | "termen"]> = [
+    ["Cola 2L", 3, 9.5, "numerar"],
+    ["Apă 5L", 2, 11.25, "numerar"],
+    ["Cafea 250g", 1, 27.9, "card"],
+    ["Bere 0,5", 6, 4.35, "numerar"],
+    ["Suc 1L", 4, 6.15, "termen"],
+  ];
+  let asteptatNumerar = 0;
+  for (const [produs, cant, pret, plata2] of vanzari) {
+    const rr = await req("POST", "/api/orders", {
+      token: TOK2,
+      cui: "77710001",
+      denumire: "QA MAGAZIN UNU SRL",
+      tip: "van",
+      plata: plata2,
+      clientId: `cash-${produs}`,
+      lines: [{ produs, cantitate: cant, um: "buc", pret }],
+    });
+    if (rr.status !== 200) check(`vânzarea ${produs} a intrat`, false, rr.text.slice(0, 100));
+    if (plata2 === "numerar") asteptatNumerar += cant * pret;
+  }
+  // 3*9.5 + 2*11.25 + 6*4.35 = 28.5 + 22.5 + 26.1 = 77.10 RON
+  check("calculul nostru de control e 77.10 RON", Math.abs(asteptatNumerar - 77.1) < 0.001);
+  r = await get("/api/agentie/van", ck);
+  const vanCash = (r.data.vans ?? []).find((v: any) => v.agentId === cashAgent);
+  check(
+    "aplicația arată EXACT aceeași sumă de predat (la bani)",
+    !!vanCash && Math.abs(Number(vanCash.numerarToday) - asteptatNumerar) < 0.01,
+    `aplicația: ${vanCash?.numerarToday} vs corect: ${asteptatNumerar.toFixed(2)}`,
+  );
+  check(
+    "cardul și termenul NU intră în numerarul de predat",
+    !!vanCash && Number(vanCash.totalToday) > Number(vanCash.numerarToday),
+    `total ${vanCash?.totalToday} / numerar ${vanCash?.numerarToday}`,
+  );
+  check(
+    "numărul de vânzări pe loc e corect",
+    Number(vanCash?.salesToday) === vanzari.length,
+    `${vanCash?.salesToday}`,
   );
 
   section("Curățenie");

@@ -21,6 +21,10 @@ if (!SECRET || !DB_URL) {
 }
 const sql = postgres(DB_URL, { ssl: false, max: 2 });
 
+// IP unic per RULARE: rulările consecutive nu se lovesc de
+// limitele anti-abuz pe IP (alea au testele lor dedicate).
+const RUN_IP = `10.88.${Math.floor(Math.random() * 250)}.${Math.floor(Math.random() * 250)}`;
+
 let passed = 0;
 let failed = 0;
 function check(name: string, cond: boolean, detail = "") {
@@ -56,6 +60,7 @@ async function req(
   const res = await fetch(`${BASE}${path}`, {
     method,
     headers: {
+      "X-Forwarded-For": RUN_IP,
       ...(body !== undefined ? { "Content-Type": "application/json" } : {}),
       ...(cookie ? { Cookie: cookie } : {}),
     },
@@ -75,7 +80,7 @@ async function req(
 async function orgLogin(email: string, password: string): Promise<string> {
   const res = await fetch(`${BASE}/api/agentie/login`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", "X-Forwarded-For": RUN_IP },
     body: JSON.stringify({ email, password }),
   });
   if (!res.ok) throw new Error(`login ${email}: ${res.status}`);

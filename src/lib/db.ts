@@ -40,6 +40,10 @@ export async function ensureSchema(): Promise<void> {
       rows JSONB NOT NULL
     );
     CREATE INDEX IF NOT EXISTS batches_agent_id ON batches(agent_id);
+    -- Amprenta conținutului: același raport încărcat de două ori NU mai
+    -- dublează cifrele (se întâmplă des — „nu știu dacă a mers, mai încarc").
+    ALTER TABLE batches ADD COLUMN IF NOT EXISTS content_hash TEXT;
+    CREATE INDEX IF NOT EXISTS batches_hash ON batches(agent_id, content_hash);
     CREATE TABLE IF NOT EXISTS agent_settings (
       agent_id TEXT PRIMARY KEY,
       default_rate REAL DEFAULT 5,
@@ -170,6 +174,12 @@ export async function ensureSchema(): Promise<void> {
     ALTER TABLE orders ADD COLUMN IF NOT EXISTS plata TEXT NOT NULL DEFAULT '';
     -- Poza facturii/bonului (JPEG mic, data-URL) — dovada vânzării pe loc.
     ALTER TABLE orders ADD COLUMN IF NOT EXISTS foto TEXT NOT NULL DEFAULT '';
+    -- IDEMPOTENȚĂ: telefonul generează un id o singură dată per comandă.
+    -- Dacă pică semnalul și se retrimite (sau agentul apasă de două ori),
+    -- comanda NU se dublează în depozit și stocul din dubă NU scade de 2 ori.
+    ALTER TABLE orders ADD COLUMN IF NOT EXISTS client_id TEXT;
+    CREATE UNIQUE INDEX IF NOT EXISTS orders_client_id
+      ON orders(agent_id, client_id) WHERE client_id IS NOT NULL;
     -- O comandă poate avea MAI MULTE facturi: prima rămâne în orders.foto,
     -- restul aici (criptate identic, AES-256-GCM prin DATA_KEY).
     CREATE TABLE IF NOT EXISTS order_fotos (
