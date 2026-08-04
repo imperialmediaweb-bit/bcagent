@@ -172,6 +172,7 @@ export default function MapPanel({
     map: LType.Map;
     layer: LType.LayerGroup;
   } | null>(null);
+  const resizeObsRef = useRef<ResizeObserver | null>(null);
   const geocodeRound = useRef(0);
 
   const caenParam = useMemo(() => {
@@ -360,6 +361,23 @@ export default function MapPanel({
             '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
         }).addTo(map);
         leafletRef.current = { L, map, layer: L.layerGroup().addTo(map) };
+
+        // Harta se construiește uneori cât timp secțiunea e ascunsă (agentul
+        // e pe alt meniu) sau într-un chenar care abia apoi capătă lățime.
+        // Leaflet rămâne cu dimensiunea veche și încarcă doar câteva pătrate
+        // de hartă — restul rămâne gri. Urmărim mărimea chenarului și îi
+        // spunem hărții să se recalculeze de fiecare dată când se schimbă.
+        const el = mapRef.current;
+        if (el && typeof ResizeObserver !== "undefined") {
+          const ro = new ResizeObserver(() => {
+            if (el.offsetParent === null) return; // ascunsă — nu are rost
+            map.invalidateSize();
+          });
+          ro.observe(el);
+          resizeObsRef.current = ro;
+        }
+        // Și o dată la început, după ce se așază chenarul.
+        setTimeout(() => map.invalidateSize(), 250);
       }
 
       const { map, layer } = leafletRef.current;
@@ -399,11 +417,42 @@ export default function MapPanel({
 
   useEffect(
     () => () => {
+      resizeObsRef.current?.disconnect();
+      resizeObsRef.current = null;
       leafletRef.current?.map.remove();
       leafletRef.current = null;
     },
     [],
   );
+
+  // Când agentul comută pe meniul „Harta pieței”, chenarul trece din
+  // ascuns în vizibil — momentul în care harta trebuie recalculată, altfel
+  // rămâne gri. Prindem și revenirea în tab, și rotirea telefonului.
+  useEffect(() => {
+    let lastW = 0;
+    let lastH = 0;
+    const refresh = () => {
+      const map = leafletRef.current?.map;
+      const el = mapRef.current;
+      if (!map || !el || el.offsetParent === null) return;
+      const w = el.clientWidth;
+      const h = el.clientHeight;
+      if (w === lastW && h === lastH) return; // nimic nu s-a schimbat
+      lastW = w;
+      lastH = h;
+      map.invalidateSize();
+    };
+    const t = setInterval(refresh, 1200);
+    window.addEventListener("resize", refresh);
+    window.addEventListener("orientationchange", refresh);
+    document.addEventListener("visibilitychange", refresh);
+    return () => {
+      clearInterval(t);
+      window.removeEventListener("resize", refresh);
+      window.removeEventListener("orientationchange", refresh);
+      document.removeEventListener("visibilitychange", refresh);
+    };
+  }, []);
 
   /* ── coșul de rută ── */
   const inBasket = useMemo(() => new Set(basket.map((s) => s.cui)), [basket]);
