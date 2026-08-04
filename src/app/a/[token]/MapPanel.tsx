@@ -625,7 +625,11 @@ export default function MapPanel({
                 Ruta: {basket.length} opriri
               </span>
               <div className="ml-auto flex flex-wrap gap-2">
-                {planRoute(basket, doneToday, judet).urls.map((u, i, all) => (
+                {/* Coșul e ce a ales agentul ACUM, cu mâna lui: pleacă TOATE
+                    opririle, chiar dacă a fost azi pe la vreuna (se întoarce
+                    cu marfă, a lipsit patronul etc.). Doar rutele salvate
+                    sar peste ce e deja bifat. */}
+                {planRoute(basket, [], judet).urls.map((u, i, all) => (
                   <a
                     key={i}
                     href={u}

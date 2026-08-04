@@ -676,6 +676,20 @@ async function main() {
       "Str 1, Vatra Dornei, Suceava, Romania",
   );
   check("etapă goală → link gol", legMapsUrl([], "SV") === "");
+  // Coșul făcut cu mâna: TOATE opririle pleacă, chiar dacă agentul a fost
+  // azi pe la vreuna (bug prins în teren: puneai 3 firme, plecau 2).
+  const cos = s12.slice(0, 3);
+  const planCos = planRoute(cos, [cos[0].cui], "SV");
+  check(
+    "ruta salvată sare peste ce e bifat azi",
+    planCos.remaining.length === 2,
+  );
+  const planCosManual = planRoute(cos, [], "SV");
+  check(
+    "coșul manual trimite TOATE opririle alese",
+    planCosManual.remaining.length === 3 &&
+      planCosManual.legs[0].length === 3,
+  );
   check(
     "o singură oprire → link fără waypoints",
     !legMapsUrl([s12[0]], "SV").includes("waypoints="),
