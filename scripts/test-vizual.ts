@@ -275,6 +275,84 @@ async function panouAgent(browser: Browser) {
         `coș ${ruta.nrCos} vs link ${ruta.nrLink}`,
       );
     }
+
+    // Ruta trebuie să se VADĂ pe hartă, nu doar în lista de dedesubt.
+    await page.waitForTimeout(1200);
+    const peHarta = await page.evaluate(() => {
+      const el = document.querySelector(".leaflet-container");
+      if (!el) return null;
+      // Un pin per LOCALITATE, etichetat cu numerele opririlor de acolo:
+      // „2” dacă e una singură, „1-3” sau „1,4” dacă sunt mai multe.
+      const etichete: string[] = [];
+      el.querySelectorAll(".leaflet-marker-icon").forEach((m) => {
+        const t = (m.textContent || "").trim();
+        if (/^\d+([-,]\d+)*$/.test(t)) etichete.push(t);
+      });
+      const linii = el.querySelectorAll("path[stroke-dasharray]").length;
+      return { etichete, linii };
+    });
+    // Numerele acoperite de pini, indiferent cum sunt grupate.
+    const acoperite = new Set<number>();
+    for (const e of peHarta?.etichete ?? []) {
+      if (e.includes("-")) {
+        const [a, b] = e.split("-").map(Number);
+        for (let i = a; i <= b; i++) acoperite.add(i);
+      } else {
+        for (const n of e.split(",").map(Number)) acoperite.add(n);
+      }
+    }
+    check(
+      "ruta apare pe hartă cu pini numerotați",
+      (peHarta?.etichete.length ?? 0) > 0,
+      `etichete: ${(peHarta?.etichete ?? []).join(" | ")}`,
+    );
+    check(
+      "pinii acoperă toate opririle din coș",
+      acoperite.size === deAdaugat,
+      `pe hartă ${[...acoperite].join(",")} vs coș ${deAdaugat}`,
+    );
+    if ((peHarta?.etichete.length ?? 0) > 1) {
+      check("localitățile rutei sunt legate cu o linie", (peHarta?.linii ?? 0) > 0);
+    }
+  }
+
+  section("PANOUL AGENTULUI — ruta salvată se DESENEAZĂ pe hartă");
+  const rutaSalvata = page.locator("button").filter({ hasText: /opriri$/ }).first();
+  if ((await rutaSalvata.count()) > 0) {
+    await rutaSalvata.click();
+    await page.waitForTimeout(3000);
+    const desen = await page.evaluate(() => {
+      const el = document.querySelector(".leaflet-container");
+      if (!el) return null;
+      const pini: string[] = [];
+      el.querySelectorAll(".leaflet-marker-icon").forEach((m) => {
+        const t = (m.textContent || "").trim();
+        if (t) pini.push(t);
+      });
+      const cos = [...document.querySelectorAll("span")].find((e) =>
+        /^Ruta:\s*\d+/.test(e.textContent || ""),
+      );
+      return {
+        pini,
+        linii: el.querySelectorAll("path[stroke-dasharray]").length,
+        opriri: parseInt(
+          (cos?.textContent || "").replace(/\D+/g, "") || "0",
+          10,
+        ),
+      };
+    });
+    check("ruta salvată se încarcă în coș", (desen?.opriri ?? 0) > 0);
+    check(
+      "opririle apar ca pini numerotați pe hartă",
+      (desen?.pini.length ?? 0) > 0,
+      `${desen?.pini.length ?? 0} pini`,
+    );
+    check(
+      "pinii sunt legați cu linia rutei",
+      (desen?.pini.length ?? 0) < 2 || (desen?.linii ?? 0) > 0,
+    );
+  } else {
+    console.log("  · fără rute salvate în datele demo — sar peste");
   }
 
   section("PANOUL AGENTULUI — zonele neacoperite duc la firme");

@@ -173,6 +173,8 @@ export default function MapPanel({
     layer: LType.LayerGroup;
   } | null>(null);
   const resizeObsRef = useRef<ResizeObserver | null>(null);
+  // Câte opriri avea ruta ultima dată când am centrat harta pe ea.
+  const ruteFit = useRef(-1);
   const geocodeRound = useRef(0);
 
   const caenParam = useMemo(() => {
@@ -406,14 +408,92 @@ export default function MapPanel({
         marker.addTo(layer);
         bounds.push([loc.lat, loc.lng]);
       }
-      if (bounds.length > 0 && !selectedLoc) {
+      // RUTA, DESENATĂ PE HARTĂ. Opririle din coș primesc pini numerotați,
+      // în ordinea de mers, legați cu o linie — agentul vede drumul înainte
+      // să pornească navigarea, nu doar o listă de nume dedesubt.
+      if (basket.length > 0) {
+        const coordLoc = new Map<string, [number, number]>();
+        for (const l of localities) {
+          if (l.lat === null || l.lng === null) continue;
+          coordLoc.set(normLoc(l.localitate), [l.lat, l.lng]);
+        }
+        // Coordonatele le avem pe LOCALITATE, nu pe fiecare firmă. Deci
+        // grupăm opririle pe localitate și punem un singur pin, cu numerele
+        // opririlor de acolo („1-3”, „2, 5”). Nimic inventat pe hartă.
+        const grupuri = new Map<
+          string,
+          { punct: [number, number]; nr: number[]; nume: string[]; primul: number }
+        >();
+        basket.forEach((s, i) => {
+          const key = normLoc(s.localitate);
+          const c = coordLoc.get(key);
+          if (!c) return;
+          const g = grupuri.get(key);
+          if (g) {
+            g.nr.push(i + 1);
+            g.nume.push(`${i + 1}. ${s.denumire}`);
+          } else {
+            grupuri.set(key, {
+              punct: c,
+              nr: [i + 1],
+              nume: [`${i + 1}. ${s.denumire}`],
+              primul: i,
+            });
+          }
+        });
+        const ordonate = [...grupuri.values()].sort((a, b) => a.primul - b.primul);
+        const puncte = ordonate.map((g) => g.punct);
+        for (const g of ordonate) {
+          // „1-3” dacă numerele sunt consecutive, altfel „1, 4, 7”
+          const consecutive = g.nr.every((n, k) => k === 0 || n === g.nr[k - 1] + 1);
+          const eticheta =
+            g.nr.length === 1
+              ? String(g.nr[0])
+              : consecutive
+                ? `${g.nr[0]}-${g.nr[g.nr.length - 1]}`
+                : g.nr.join(",");
+          const lat = g.nr.length > 2 ? 34 : g.nr.length > 1 ? 32 : 28;
+          L.marker(g.punct, {
+            zIndexOffset: 1000,
+            icon: L.divIcon({
+              className: "",
+              html:
+                `<div style="min-width:${lat}px;height:28px;padding:0 6px;` +
+                `border-radius:14px;background:#4338ca;color:#fff;` +
+                `font:700 13px/28px system-ui;text-align:center;` +
+                `border:2px solid #fff;box-shadow:0 1px 5px rgba(0,0,0,.45)">` +
+                `${eticheta}</div>`,
+              iconSize: [lat, 28],
+              iconAnchor: [lat / 2, 14],
+            }),
+          })
+            .bindTooltip(g.nume.join("<br>"))
+            .addTo(layer);
+        }
+        if (puncte.length > 1) {
+          L.polyline(puncte, {
+            color: "#4338ca",
+            weight: 3,
+            opacity: 0.85,
+            dashArray: "7 7",
+          }).addTo(layer);
+        }
+        // Harta se așază pe rută DOAR când o încarci gata făcută (din
+        // „Programul meu” sau din scadenți). Cât timp răsfoiești firmele
+        // unei localități și adaugi opriri, harta stă pe loc — altfel ar
+        // sări de sub deget și n-ai mai nimeri bula următoare.
+        if (puncte.length > 0 && !selectedLoc && ruteFit.current !== basket.length) {
+          ruteFit.current = basket.length;
+          map.fitBounds(puncte, { padding: [60, 60], maxZoom: 13 });
+        }
+      } else if (bounds.length > 0 && !selectedLoc) {
         map.fitBounds(bounds, { padding: [30, 30], maxZoom: 11 });
       }
     })();
     return () => {
       disposed = true;
     };
-  }, [localities, clientLocalities, selectedLoc]);
+  }, [localities, clientLocalities, selectedLoc, basket]);
 
   useEffect(
     () => () => {
