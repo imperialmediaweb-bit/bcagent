@@ -44,9 +44,17 @@ export async function ensureSchema(): Promise<void> {
     -- dublează cifrele (se întâmplă des — „nu știu dacă a mers, mai încarc").
     ALTER TABLE batches ADD COLUMN IF NOT EXISTS content_hash TEXT;
     -- UNIC pe (agent, amprentă): două tab-uri sau două retrimiteri cu
-    -- exact același fișier nu mai pot trece amândouă de verificare — a
-    -- doua inserare cade pe conflict, nu dublează cifrele. Vechiul index
-    -- ne-unic (dacă exista) se aruncă întâi, ca migrarea să conteze.
+    -- exact același fișier nu mai pot trece amândouă de verificare.
+    -- ÎNAINTE de a face indexul unic, ștergem duplicatele deja existente
+    -- (păstrăm cea mai veche intrare) — altfel CREATE UNIQUE INDEX ar
+    -- pica pe bazele care au acumulat dubluri, exact cele care au nevoie
+    -- de fix, și ar bloca toată aplicația. E idempotent: după curățare
+    -- nu mai are ce șterge.
+    DELETE FROM batches WHERE content_hash IS NOT NULL AND id NOT IN (
+      SELECT MIN(id) FROM batches
+      WHERE content_hash IS NOT NULL
+      GROUP BY agent_id, content_hash
+    );
     DROP INDEX IF EXISTS batches_hash;
     CREATE UNIQUE INDEX IF NOT EXISTS batches_hash
       ON batches(agent_id, content_hash) WHERE content_hash IS NOT NULL;

@@ -78,9 +78,12 @@ export default function DayPanel({ token }: { token: string }) {
         .catch(() => {});
     };
     reloadVizite();
-    const onFocus = () => reloadVizite();
-    window.addEventListener("focus", onFocus);
-    document.addEventListener("visibilitychange", onFocus);
+    // Doar la REVENIRE în tab/aplicație — nu și când o ascunzi.
+    const onVizibil = () => {
+      if (!document.hidden) reloadVizite();
+    };
+    window.addEventListener("focus", onVizibil);
+    document.addEventListener("visibilitychange", onVizibil);
     fetch(`/api/visits?${q("")}&due=1&limit=100`)
       .then((r) => (r.ok ? r.json() : null))
       .then((d: { due?: unknown[] } | null) => {
@@ -118,8 +121,8 @@ export default function DayPanel({ token }: { token: string }) {
       )
       .catch(() => {});
     return () => {
-      window.removeEventListener("focus", onFocus);
-      document.removeEventListener("visibilitychange", onFocus);
+      window.removeEventListener("focus", onVizibil);
+      document.removeEventListener("visibilitychange", onVizibil);
     };
   }, [token]);
 

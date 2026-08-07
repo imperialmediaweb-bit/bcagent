@@ -70,26 +70,36 @@ export async function POST(req: Request) {
     if (dup.length > 0) {
       return Response.json({ ok: true, duplicate: true, id: dup[0].id });
     }
-    // Indexul unic pe (agent, amprentă) prinde și cursele: două încărcări
-    // simultane ale aceluiași fișier nu mai pot intra amândouă.
-    const inserted = await db<Array<{ id: string }>>`
-      INSERT INTO batches (id, agent_id, file_name, uploaded_at, row_count, date_min, date_max, rows, content_hash)
-      VALUES (
-        ${b.id},
-        ${payload.agentId},
-        ${b.fileName},
-        ${new Date(b.uploadedAt)},
-        ${b.rowCount},
-        ${b.dateRange.min},
-        ${b.dateRange.max},
-        ${db.json(b.rows)},
-        ${fingerprint}
-      )
-      ON CONFLICT (agent_id, content_hash) WHERE content_hash IS NOT NULL
-      DO NOTHING
-      RETURNING id
-    `;
-    return Response.json({ ok: true, duplicate: inserted.length === 0 });
+    // Idempotență pe id: coada offline din telefon reia ACELAȘI id la
+    // retrimitere, deci un id repetat trebuie să fie no-op, nu eroare.
+    // Cursele pe conținut (același fișier, id diferit, simultan) le prinde
+    // indexul unic pe (agent, amprentă) — dacă aruncă 23505, îl tratăm ca
+    // duplicat, nu ca eroare 500.
+    try {
+      const inserted = await db<Array<{ id: string }>>`
+        INSERT INTO batches (id, agent_id, file_name, uploaded_at, row_count, date_min, date_max, rows, content_hash)
+        VALUES (
+          ${b.id},
+          ${payload.agentId},
+          ${b.fileName},
+          ${new Date(b.uploadedAt)},
+          ${b.rowCount},
+          ${b.dateRange.min},
+          ${b.dateRange.max},
+          ${db.json(b.rows)},
+          ${fingerprint}
+        )
+        ON CONFLICT (id) DO NOTHING
+        RETURNING id
+      `;
+      return Response.json({ ok: true, duplicate: inserted.length === 0 });
+    } catch (e) {
+      if (e && typeof e === "object" && (e as { code?: string }).code === "23505") {
+        // conflict pe indexul de amprentă (cursă) — deja există, e ok
+        return Response.json({ ok: true, duplicate: true });
+      }
+      throw e;
+    }
   } catch (e) {
     return Response.json(
       { error: e instanceof Error ? e.message : String(e) },

@@ -18,20 +18,17 @@ export interface NavStop {
   localitate: string;
 }
 
-import { countyName } from "@/modules/prospects";
+import { countyName, normalizeCounty } from "@/modules/prospects";
 
 /** Adresa completă, așa cum o înțelege Google Maps. Numele județului vine
  *  din lista COMPLETĂ (toate cele 42), nu dintr-o copie parțială — altfel
- *  agentul din Timiș/Constanța ar fi navigat greșit. */
+ *  agentul din Timiș/Constanța ar fi navigat greșit. Acceptăm și cod, și
+ *  nume, și cod numeric (normalizeCounty le duce pe toate la cod). */
 export function navAddress(
   f: { adresa: string; localitate: string; judet?: string },
 ): string {
-  return [
-    f.adresa,
-    f.localitate,
-    f.judet ? countyName(f.judet.toUpperCase()) : "",
-    "Romania",
-  ]
+  const judetNume = f.judet ? countyName(normalizeCounty(f.judet)) : "";
+  return [f.adresa, f.localitate, judetNume, "Romania"]
     .filter(Boolean)
     .join(", ");
 }
