@@ -70,7 +70,9 @@ export async function POST(req: Request) {
     if (dup.length > 0) {
       return Response.json({ ok: true, duplicate: true, id: dup[0].id });
     }
-    await db`
+    // Indexul unic pe (agent, amprentă) prinde și cursele: două încărcări
+    // simultane ale aceluiași fișier nu mai pot intra amândouă.
+    const inserted = await db<Array<{ id: string }>>`
       INSERT INTO batches (id, agent_id, file_name, uploaded_at, row_count, date_min, date_max, rows, content_hash)
       VALUES (
         ${b.id},
@@ -83,9 +85,11 @@ export async function POST(req: Request) {
         ${db.json(b.rows)},
         ${fingerprint}
       )
-      ON CONFLICT (id) DO NOTHING
+      ON CONFLICT (agent_id, content_hash) WHERE content_hash IS NOT NULL
+      DO NOTHING
+      RETURNING id
     `;
-    return Response.json({ ok: true });
+    return Response.json({ ok: true, duplicate: inserted.length === 0 });
   } catch (e) {
     return Response.json(
       { error: e instanceof Error ? e.message : String(e) },

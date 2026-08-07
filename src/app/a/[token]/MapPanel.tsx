@@ -681,6 +681,9 @@ export default function MapPanel({
                 onVisitSaved={() => {
                   setVisitsToday((v) => v + 1);
                   loadDue();
+                  // Clientul tocmai bifat „Am fost” trebuie să iasă din
+                  // rută pe loc — reîncărcăm ce e făcut azi.
+                  loadDoneToday();
                 }}
                 showToast={showToast}
               />

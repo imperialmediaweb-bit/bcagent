@@ -1,4 +1,4 @@
-import { verifyToken } from "@/lib/signed-token";
+import { verifyFieldToken } from "@/lib/agent-guard";
 import { ensureSchema, getDB, isDBEnabled } from "@/lib/db";
 
 export const runtime = "nodejs";
@@ -19,7 +19,7 @@ export async function DELETE(
   if (!token) {
     return Response.json({ error: "token lipsește" }, { status: 400 });
   }
-  const payload = await verifyToken(token, tokenSecret);
+  const payload = await verifyFieldToken(token, tokenSecret);
   if (!payload) {
     return Response.json({ error: "Token invalid" }, { status: 401 });
   }

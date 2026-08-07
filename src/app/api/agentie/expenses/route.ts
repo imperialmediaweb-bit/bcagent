@@ -1,17 +1,8 @@
 import { ensureSchema, isDBEnabled, getDB } from "@/lib/db";
+import { csvCell } from "@/lib/csv";
 import { audit, listOrgAgents, requireOrgUser } from "@/modules/platform";
 
 export const runtime = "nodejs";
-
-/**
- * Celulă de CSV inofensivă: Excel execută ca formulă orice text care
- * începe cu = + - @, deci îl prefixăm cu apostrof.
- */
-function csvCell(value: unknown): string {
-  let s = String(value ?? "").replace(/[\r\n]+/g, " ").replace(/;/g, ",");
-  if (/^[=+\-@\t\r]/.test(s)) s = "'" + s;
-  return s;
-}
 
 /** Deconturile echipei: managerul aprobă/respinge, contabila exportă. */
 

@@ -133,8 +133,8 @@ export async function POST(req: Request) {
     //   2. pentru aplicațiile vechi, fără clientId: aceeași comandă (client
     //      + produse + total) trimisă de același agent în ultimele 3 minute.
     const clientId = String(body.clientId ?? "").slice(0, 64) || null;
-    const linesKey = JSON.stringify(
-      lines.map((l) => [l.produs.toLowerCase().trim(), l.cantitate, l.um, l.pret]),
+    const linesJson = db.json(
+      lines as unknown as Parameters<typeof db.json>[0],
     );
     if (clientId) {
       const seen = await db<Array<{ id: string; total_value: number | null }>>`
@@ -151,12 +151,16 @@ export async function POST(req: Request) {
         });
       }
     } else {
+      // Aplicații vechi, fără clientId: aceeași comandă (client + produse
+      // identice) în ultimele 3 minute e retrimitere. Comparăm jsonb cu
+      // jsonb (NU text: reprezentarea text a jsonb diferă de JSON.stringify
+      // și n-ar potrivi niciodată).
       const seen = await db<Array<{ id: string; total_value: number | null }>>`
         SELECT id, total_value FROM orders
         WHERE agent_id = ${payload.agentId}
           AND denumire = ${denumire}
           AND created_at > NOW() - INTERVAL '3 minutes'
-          AND lines::text = ${db.json(lines as unknown as Parameters<typeof db.json>[0])}::text
+          AND lines = ${linesJson}
         ORDER BY created_at DESC
         LIMIT 1
       `;
@@ -169,7 +173,6 @@ export async function POST(req: Request) {
         });
       }
     }
-    void linesKey;
 
     const id = `ord_${crypto.randomUUID().replace(/-/g, "").slice(0, 16)}`;
     await db`

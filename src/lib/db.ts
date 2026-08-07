@@ -43,7 +43,13 @@ export async function ensureSchema(): Promise<void> {
     -- Amprenta conținutului: același raport încărcat de două ori NU mai
     -- dublează cifrele (se întâmplă des — „nu știu dacă a mers, mai încarc").
     ALTER TABLE batches ADD COLUMN IF NOT EXISTS content_hash TEXT;
-    CREATE INDEX IF NOT EXISTS batches_hash ON batches(agent_id, content_hash);
+    -- UNIC pe (agent, amprentă): două tab-uri sau două retrimiteri cu
+    -- exact același fișier nu mai pot trece amândouă de verificare — a
+    -- doua inserare cade pe conflict, nu dublează cifrele. Vechiul index
+    -- ne-unic (dacă exista) se aruncă întâi, ca migrarea să conteze.
+    DROP INDEX IF EXISTS batches_hash;
+    CREATE UNIQUE INDEX IF NOT EXISTS batches_hash
+      ON batches(agent_id, content_hash) WHERE content_hash IS NOT NULL;
     CREATE TABLE IF NOT EXISTS agent_settings (
       agent_id TEXT PRIMARY KEY,
       default_rate REAL DEFAULT 5,

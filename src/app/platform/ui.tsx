@@ -327,14 +327,25 @@ export async function api<T>(
     throw new Error(`Răspuns invalid de la server (${res.status})`);
   }
   if (!res.ok) {
-    // Sesiunea a expirat (panoul se reîmprospătează singur la un minut):
-    // nu e o eroare de arătat, ci un motiv să te ducem la login.
+    // Sesiunea a expirat (panourile se reîmprospătează singure la un
+    // minut): nu e o eroare de arătat, ci un motiv să te ducem la login.
+    // DAR: doar la endpoint-urile care cer sesiune, nu la cele care pot
+    // răspunde 401 din alt motiv (parola curentă greșită la schimbarea
+    // parolei) — acolo utilizatorul trebuie să vadă eroarea, nu să fie
+    // aruncat afară din formular. Și mereu la login-ul panoului potrivit.
+    const calePanou =
+      typeof window !== "undefined" &&
+      window.location.pathname.startsWith("/agentie")
+        ? "/agentie/login"
+        : "/platform/login";
+    const eSchimbareParola = /\/password$/.test(url.split("?")[0]);
     if (
       res.status === 401 &&
+      !eSchimbareParola &&
       typeof window !== "undefined" &&
-      !window.location.pathname.startsWith("/platform/login")
+      !window.location.pathname.endsWith("/login")
     ) {
-      window.location.href = "/platform/login";
+      window.location.href = calePanou;
       throw new Error("Sesiune expirată — te ducem la autentificare.");
     }
     const msg =

@@ -52,27 +52,35 @@ export default function DayPanel({ token }: { token: string }) {
 
   useEffect(() => {
     const q = (p: string) => `${p}token=${encodeURIComponent(token)}`;
-    fetch(`/api/visits?${q("")}&limit=100`)
-      .then((r) => (r.ok ? r.json() : null))
-      .then(
-        (
-          d: {
-            today?: number;
-            visits?: Array<{ cui: string; visitedAt: string }>;
-          } | null,
-        ) => {
-          if (!d) return;
-          if (d.today !== undefined) setVisitsToday(d.today);
-          const startOfDay = new Date();
-          startOfDay.setHours(0, 0, 0, 0);
-          setDoneToday(
-            (d.visits ?? [])
-              .filter((v) => new Date(v.visitedAt) >= startOfDay)
-              .map((v) => v.cui),
-          );
-        },
-      )
-      .catch(() => {});
+    // Ce am bifat azi — reîncărcat și la revenirea pe „Ziua mea”, ca ruta
+    // să scoată clienții vizitați între timp pe hartă.
+    const reloadVizite = () => {
+      fetch(`/api/visits?${q("")}&limit=100`)
+        .then((r) => (r.ok ? r.json() : null))
+        .then(
+          (
+            d: {
+              today?: number;
+              visits?: Array<{ cui: string; visitedAt: string }>;
+            } | null,
+          ) => {
+            if (!d) return;
+            if (d.today !== undefined) setVisitsToday(d.today);
+            const startOfDay = new Date();
+            startOfDay.setHours(0, 0, 0, 0);
+            setDoneToday(
+              (d.visits ?? [])
+                .filter((v) => new Date(v.visitedAt) >= startOfDay)
+                .map((v) => v.cui),
+            );
+          },
+        )
+        .catch(() => {});
+    };
+    reloadVizite();
+    const onFocus = () => reloadVizite();
+    window.addEventListener("focus", onFocus);
+    document.addEventListener("visibilitychange", onFocus);
     fetch(`/api/visits?${q("")}&due=1&limit=100`)
       .then((r) => (r.ok ? r.json() : null))
       .then((d: { due?: unknown[] } | null) => {
@@ -109,6 +117,10 @@ export default function DayPanel({ token }: { token: string }) {
         },
       )
       .catch(() => {});
+    return () => {
+      window.removeEventListener("focus", onFocus);
+      document.removeEventListener("visibilitychange", onFocus);
+    };
   }, [token]);
 
   // Fără DB / fără nimic de arătat → nu ocupăm ecranul degeaba.

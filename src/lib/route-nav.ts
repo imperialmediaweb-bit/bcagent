@@ -18,31 +18,18 @@ export interface NavStop {
   localitate: string;
 }
 
-const COUNTY_NAMES: Record<string, string> = {
-  SV: "Suceava",
-  BT: "Botosani",
-  NT: "Neamt",
-  IS: "Iasi",
-  BC: "Bacau",
-  VS: "Vaslui",
-  GL: "Galati",
-  VN: "Vrancea",
-  MM: "Maramures",
-  BN: "Bistrita-Nasaud",
-  HR: "Harghita",
-  MS: "Mures",
-  CJ: "Cluj",
-  B: "Bucuresti",
-};
+import { countyName } from "@/modules/prospects";
 
-/** Adresa completă, așa cum o înțelege Google Maps. */
+/** Adresa completă, așa cum o înțelege Google Maps. Numele județului vine
+ *  din lista COMPLETĂ (toate cele 42), nu dintr-o copie parțială — altfel
+ *  agentul din Timiș/Constanța ar fi navigat greșit. */
 export function navAddress(
   f: { adresa: string; localitate: string; judet?: string },
 ): string {
   return [
     f.adresa,
     f.localitate,
-    f.judet ? COUNTY_NAMES[f.judet.toUpperCase()] ?? f.judet : "",
+    f.judet ? countyName(f.judet.toUpperCase()) : "",
     "Romania",
   ]
     .filter(Boolean)

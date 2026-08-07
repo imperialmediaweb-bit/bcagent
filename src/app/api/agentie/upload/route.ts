@@ -93,14 +93,30 @@ export async function POST(req: Request) {
       });
     }
     const id = `bo_${crypto.randomUUID().replace(/-/g, "").slice(0, 16)}`;
-    await db`
+    // ON CONFLICT: dacă două încărcări simultane (două tab-uri, retrimitere)
+    // trec amândouă de verificarea de mai sus, indexul unic prinde a doua
+    // și nu inserează — nimic dublat. inserted ne spune care a fost.
+    const inserted = await db<Array<{ id: string }>>`
       INSERT INTO batches (id, agent_id, file_name, row_count, date_min, date_max, rows, content_hash)
       VALUES (${id}, ${ownerId},
               ${String(body.fileName ?? "raport").slice(0, 200)},
               ${rows.length}, ${dates[0]}, ${dates[dates.length - 1]},
               ${db.json(rows as unknown as Parameters<typeof db.json>[0])},
               ${fingerprint})
+      ON CONFLICT (agent_id, content_hash) WHERE content_hash IS NOT NULL
+      DO NOTHING
+      RETURNING id
     `;
+    if (inserted.length === 0) {
+      return Response.json({
+        ok: true,
+        duplicate: true,
+        rows: rows.length,
+        dateMin: dates[0],
+        dateMax: dates[dates.length - 1],
+        message: "Fișierul ăsta e deja încărcat — nu am dublat nimic.",
+      });
+    }
     await audit(auth.session.email, "upload.raport", id, {
       orgId: auth.session.orgId,
       rows: rows.length,

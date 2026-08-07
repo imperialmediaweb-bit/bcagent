@@ -801,6 +801,50 @@ async function main() {
     dupCount?.n === "1",
     `sunt ${dupCount?.n} comenzi`,
   );
+  // Fără clientId (aplicație veche): retrimiterea aceleiași comenzi în 3
+  // minute e recunoscută prin compararea jsonb, nu se dublează.
+  const legacyOrder = {
+    token: TOK1,
+    cui: "77710003",
+    denumire: "QA ALIMENTARA TREI SRL",
+    localitate: "QA POIANA",
+    lines: [{ produs: "Legacy X", cantitate: 4, um: "bax", pret: 7 }],
+  };
+  const l1 = await req("POST", "/api/orders", legacyOrder);
+  const l2 = await req("POST", "/api/orders", legacyOrder);
+  check("aplicație veche: ambele răspund OK", l1.status === 200 && l2.status === 200);
+  check("a doua e marcată duplicat (dedup jsonb funcționează)", l2.data?.duplicate === true);
+  const [legCount] = await sql<Array<{ n: string }>>`
+    SELECT COUNT(*)::text AS n FROM orders
+    WHERE agent_id = ${AG1} AND denumire = 'QA ALIMENTARA TREI SRL'
+  `;
+  check("comanda fără clientId NU se dublează nici ea", legCount?.n === "1", `${legCount?.n}`);
+
+  section("CRITIC · Agentul blocat nu poate ȘTERGE fișiere prin API");
+  // Bug prins de review: DELETE /api/batches și /api/agent-access lipseau
+  // din poarta de blocare. Blocăm prin API-ul managerului (golește instant
+  // cache-ul serverului), apoi verificăm că nu mai poate distruge date.
+  const [agBlokRow] = await sql<Array<{ id: string }>>`
+    SELECT id FROM org_agents WHERE agent_id = ${AG1} LIMIT 1
+  `;
+  await sql`
+    INSERT INTO batches (id, agent_id, file_name, row_count, date_min, date_max, rows)
+    VALUES ('bo_qablock', ${AG1}, 'qa-block.xlsx', 1, '2026-06-01', '2026-06-01', '[]'::jsonb)
+    ON CONFLICT (id) DO NOTHING
+  `;
+  r = await req("PATCH", "/api/agentie/agents", { agentRowId: agBlokRow?.id, active: false }, ck);
+  check("managerul blochează agentul 1", r.status === 200);
+  r = await req("DELETE", `/api/batches/bo_qablock?token=${TOK1}`);
+  check("agent blocat: DELETE fișier → refuzat", r.status === 401 || r.status === 403, `${r.status}`);
+  const [stillThere] = await sql<Array<{ n: string }>>`
+    SELECT COUNT(*)::text AS n FROM batches WHERE id = 'bo_qablock'
+  `;
+  check("fișierul agentului blocat NU a fost șters", stillThere?.n === "1");
+  r = await req("POST", "/api/agent-access", { token: TOK1, pin: "1234", action: "setup" });
+  check("agent blocat: nu-și mai setează PIN → refuzat", r.status === 403);
+  r = await req("PATCH", "/api/agentie/agents", { agentRowId: agBlokRow?.id, active: true }, ck);
+  check("managerul deblochează agentul 1", r.status === 200);
+  await sql`DELETE FROM batches WHERE id = 'bo_qablock'`;
 
   section("CRITIC · Banii de predat = banii din buzunar (la leu)");
   // Cel mai important test din tot setul: dacă suma din aplicație nu bate

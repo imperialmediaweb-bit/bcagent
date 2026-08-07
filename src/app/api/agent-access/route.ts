@@ -53,6 +53,15 @@ export async function POST(req: Request) {
   if (!payload) {
     return Response.json({ error: "Token invalid sau expirat" }, { status: 401 });
   }
+  // Agentul blocat de firmă nu-și mai poate seta/verifica PIN-ul — accesul
+  // e tăiat aici, nu doar în pagină.
+  const { isAgentBlocked } = await import("@/lib/agent-guard");
+  if (await isAgentBlocked(payload.agentId)) {
+    return Response.json(
+      { error: "Accesul tău a fost oprit de firmă.", blocked: true },
+      { status: 403 },
+    );
+  }
   const agentId = payload.agentId;
   const db = getDB();
   if (!db) return Response.json({ enabled: false }, { status: 503 });
