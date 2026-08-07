@@ -47,7 +47,15 @@ export async function POST(req: Request) {
   }
 
   const b = body.batch;
-  if (!b.id || !b.fileName || !Array.isArray(b.rows)) {
+  if (
+    !b.id ||
+    !b.fileName ||
+    !Array.isArray(b.rows) ||
+    typeof b.rowCount !== "number" ||
+    !b.dateRange ||
+    !b.dateRange.min ||
+    !b.dateRange.max
+  ) {
     return Response.json({ error: "batch incomplet" }, { status: 400 });
   }
 
@@ -94,8 +102,11 @@ export async function POST(req: Request) {
       `;
       return Response.json({ ok: true, duplicate: inserted.length === 0 });
     } catch (e) {
-      if (e && typeof e === "object" && (e as { code?: string }).code === "23505") {
-        // conflict pe indexul de amprentă (cursă) — deja există, e ok
+      // DOAR conflictul pe indexul de amprentă (cursă cu conținut identic)
+      // e tratat ca duplicat. Orice altă violare de constrângere rămâne
+      // eroare reală — nu pierdem un lot în tăcere.
+      const err = e as { code?: string; constraint_name?: string };
+      if (err?.code === "23505" && err?.constraint_name === "batches_hash") {
         return Response.json({ ok: true, duplicate: true });
       }
       throw e;

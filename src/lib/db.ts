@@ -45,19 +45,26 @@ export async function ensureSchema(): Promise<void> {
     ALTER TABLE batches ADD COLUMN IF NOT EXISTS content_hash TEXT;
     -- UNIC pe (agent, amprentă): două tab-uri sau două retrimiteri cu
     -- exact același fișier nu mai pot trece amândouă de verificare.
-    -- ÎNAINTE de a face indexul unic, ștergem duplicatele deja existente
-    -- (păstrăm cea mai veche intrare) — altfel CREATE UNIQUE INDEX ar
-    -- pica pe bazele care au acumulat dubluri, exact cele care au nevoie
-    -- de fix, și ar bloca toată aplicația. E idempotent: după curățare
-    -- nu mai are ce șterge.
-    DELETE FROM batches WHERE content_hash IS NOT NULL AND id NOT IN (
-      SELECT MIN(id) FROM batches
-      WHERE content_hash IS NOT NULL
-      GROUP BY agent_id, content_hash
-    );
-    DROP INDEX IF EXISTS batches_hash;
-    CREATE UNIQUE INDEX IF NOT EXISTS batches_hash
-      ON batches(agent_id, content_hash) WHERE content_hash IS NOT NULL;
+    -- Migrarea (curățare duplicate + index unic) rulează O SINGURĂ DATĂ —
+    -- gardată de existența indexului unic. După ce el există, blocul de mai
+    -- jos devine doar o verificare ieftină în catalog, nu mai atinge datele.
+    -- Fără gardă, DELETE-ul greu ar rula la fiecare pornire pe bazele mari.
+    DO $$
+    BEGIN
+      IF NOT EXISTS (
+        SELECT 1 FROM pg_indexes
+        WHERE indexname = 'batches_hash' AND indexdef ILIKE '%UNIQUE%'
+      ) THEN
+        DELETE FROM batches WHERE content_hash IS NOT NULL AND id NOT IN (
+          SELECT MIN(id) FROM batches
+          WHERE content_hash IS NOT NULL
+          GROUP BY agent_id, content_hash
+        );
+        DROP INDEX IF EXISTS batches_hash;
+        CREATE UNIQUE INDEX batches_hash
+          ON batches(agent_id, content_hash) WHERE content_hash IS NOT NULL;
+      END IF;
+    END $$;
     CREATE TABLE IF NOT EXISTS agent_settings (
       agent_id TEXT PRIMARY KEY,
       default_rate REAL DEFAULT 5,
