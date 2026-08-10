@@ -440,10 +440,12 @@ async function main() {
     JSON.stringify(r.data).includes("QA MAGAZIN UNU"),
   );
 
-  // VOCEA CLIENTULUI (analiza notelor). AI-ul nu e pornit în mediul de
-  // test, deci verificăm poarta: fără sesiune → 401; cu sesiune dar fără
-  // AI → 503 (nu 500, nu date scurse). Izolarea între firme e implicită
-  // prin sesiune.
+  // VOCEA CLIENTULUI (analiza notelor). AI-ul nu e pornit în test, deci
+  // pentru analiza propriu-zisă verificăm doar POARTA (fără sesiune → 401,
+  // fără AI → 503). Izolarea REALĂ o testăm pe datele care chiar se
+  // interoghează: notele de vizită pe care s-ar baza analiza. Punem o
+  // notă la agentul nostru și verificăm că rivalul NU o vede în vizitele
+  // lui — dacă scoping-ul pe agent s-ar strica, testul ăsta pică.
   r = await req("POST", "/api/agentie/client-voice", { days: 30 });
   check("vocea clientului fără sesiune → 401", r.status === 401);
   r = await req("POST", "/api/agentie/client-voice", { days: 30 }, ck);
@@ -452,11 +454,22 @@ async function main() {
     r.status === 503 || r.status === 402,
     `${r.status}`,
   );
-  r = await req("POST", "/api/agentie/client-voice", { days: 30 }, ckRival);
+  await req("POST", "/api/visits", {
+    token: TOK1,
+    cui: "77710002",
+    denumire: "QA BAR DOI SRL",
+    result: "gandeste",
+    note: "SECRET-VOCE-FIRMA-1: clientul vrea rabat 5%",
+  });
+  r = await get("/api/agentie/visits?days=30", ck);
   check(
-    "rivalul nu poate cere analiza firmei noastre (tot prin sesiunea lui)",
-    r.status === 503 || r.status === 402 || r.status === 401,
-    `${r.status}`,
+    "nota (baza analizei) apare la firma noastră",
+    JSON.stringify(r.data).includes("SECRET-VOCE-FIRMA-1"),
+  );
+  r = await get("/api/agentie/visits?days=30", ckRival);
+  check(
+    "rivalul NU vede nota noastră (izolarea datelor analizei ține)",
+    !JSON.stringify(r.data).includes("SECRET-VOCE-FIRMA-1"),
   );
 
   section("FIRMĂ · Comenzi (stări, facturi, export CSV, dube)");

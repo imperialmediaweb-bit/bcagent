@@ -1,6 +1,6 @@
 import { ensureSchema, isDBEnabled, getDB } from "@/lib/db";
 import { isAIEnabled, streamCompletion } from "@/lib/llm";
-import { clientIP, rateLimit } from "@/lib/rate-limit";
+import { rateLimit } from "@/lib/rate-limit";
 import { listOrgAgents, orgAIFeatures, requireOrgUser } from "@/modules/platform";
 
 export const runtime = "nodejs";
@@ -38,7 +38,12 @@ export async function POST(req: Request) {
   }
   const auth = await requireOrgUser();
   if ("response" in auth) return auth.response;
-  const rl = rateLimit(`client-voice:${clientIP(req)}`, { max: 6, windowMs: 60_000 });
+  // Limita pe FIRMĂ, nu pe IP: managerul și adminii dintr-un birou ies pe
+  // același IP (NAT) — pe IP și-ar mânca bugetul unul altuia.
+  const rl = rateLimit(`client-voice:${auth.session.orgId}`, {
+    max: 10,
+    windowMs: 60_000,
+  });
   if (!rl.ok) return Response.json({ error: "Prea multe cereri" }, { status: 429 });
   if (!isAIEnabled()) {
     return Response.json(
@@ -60,7 +65,8 @@ export async function POST(req: Request) {
   } catch {
     body = {};
   }
-  const days = Math.min(180, Math.max(1, Number(body.days) || 30));
+  // Aceleași opțiuni ca filtrul din pagină (până la 365 = „Ultimul an").
+  const days = Math.min(365, Math.max(1, Number(body.days) || 30));
 
   const db = getDB();
   if (!db) return Response.json({ enabled: false }, { status: 503 });
@@ -127,7 +133,17 @@ export async function POST(req: Request) {
       "analiza",
     );
 
-    return Response.json({ ok: true, enough: true, count: rows.length, text: out.trim() });
+    const text = out.trim();
+    if (!text) {
+      // AI-ul a răspuns gol (rar) — nu lăsăm butonul „mort".
+      return Response.json({
+        ok: true,
+        enough: true,
+        count: rows.length,
+        text: "Nu am putut scoate ceva clar din note de data asta. Încearcă din nou sau alege o perioadă mai mare.",
+      });
+    }
+    return Response.json({ ok: true, enough: true, count: rows.length, text });
   } catch (e) {
     console.error("[client-voice]", e);
     return Response.json({ error: "Eroare la analiza notelor" }, { status: 500 });
