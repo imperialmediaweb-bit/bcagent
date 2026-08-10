@@ -79,7 +79,7 @@ export async function POST(req: Request) {
     500,
     Math.max(1, Number(body.agentLimit) || 5),
   );
-  const trialDays = Math.min(180, Math.max(0, Number(body.trialDays ?? 14)));
+  const trialDays = Math.min(180, Math.max(0, Number(body.trialDays ?? 30)));
 
   try {
     const org = await createOrg({

@@ -9,7 +9,7 @@ import { ArrowRight, Loader2 } from "lucide-react";
 
 /**
  * ÎNREGISTRARE: firma își face singură contul, în 30 de secunde,
- * și primește automat 14 zile de probă cu tot inclus.
+ * și primește automat 30 de zile de probă cu tot inclus.
  */
 export default function InregistrarePage() {
   const router = useRouter();
@@ -78,7 +78,7 @@ export default function InregistrarePage() {
             Creează contul firmei
           </h1>
           <p className="mt-1 text-sm font-medium text-[#161412]/60">
-            14 zile de probă, cu tot inclus. Fără card.
+            30 de zile de probă, cu tot inclus. Fără card.
           </p>
 
           <form onSubmit={submit} className="mt-6 space-y-4">
