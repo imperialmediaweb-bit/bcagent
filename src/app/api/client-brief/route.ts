@@ -148,6 +148,7 @@ export async function POST(req: Request) {
     const readable = new ReadableStream({
       async start(controller) {
         try {
+          void (await import("@/modules/platform")).recordAiUsage({ kind: "brief_client", agentId: payload.agentId });
           await streamCompletion(
             {
               system: BRIEF_SYSTEM,

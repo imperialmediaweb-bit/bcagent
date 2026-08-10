@@ -40,7 +40,24 @@ interface OrgDetail {
   users: OrgUser[];
   agents: Array<{ id: string; agentId: string; name: string; active: boolean }>;
   invoices: Invoice[];
+  aiUsage?: {
+    days: number;
+    totalCalls: number;
+    totalBani: number;
+    byKind: Array<{ kind: string; calls: number; bani: number }>;
+  };
 }
+
+const AI_KIND_LABEL: Record<string, string> = {
+  ocr: "📷 Poze la factură (OCR)",
+  analiza: "📊 Analize vânzări",
+  briefing: "🧠 Briefing firmă",
+  client_voice: "🗣️ Vocea clientului",
+  coach: "🎓 Antrenor",
+  chat: "💬 Chat agent",
+  brief_client: "👤 Fișe client",
+  issue: "🐛 Triaj probleme",
+};
 
 export default function OrgDetailPage() {
   const params = useParams<{ id: string }>();
@@ -185,6 +202,7 @@ export default function OrgDetailPage() {
 
         <div className="space-y-4">
           <BillingCard org={org} plans={plans} busy={busy} onAction={billing} />
+          <AiUsageCard usage={data.aiUsage} />
           <InvoicesCard invoices={data.invoices} />
         </div>
       </div>
@@ -912,6 +930,63 @@ function InvoicesCard({ invoices }: { invoices: Invoice[] }) {
             </li>
           ))}
         </ul>
+      )}
+    </Card>
+  );
+}
+
+/** Consumul AI al firmei pe 30 de zile — cât te costă clientul ăsta. */
+function AiUsageCard({
+  usage,
+}: {
+  usage?: {
+    days: number;
+    totalCalls: number;
+    totalBani: number;
+    byKind: Array<{ kind: string; calls: number; bani: number }>;
+  };
+}) {
+  const lei = (bani: number) => (bani / 100).toFixed(2);
+  return (
+    <Card>
+      <h2 className="mb-1 text-sm font-semibold text-slate-800">
+        🤖 Consum AI (30 zile)
+      </h2>
+      <p className="mb-3 text-xs text-slate-500">
+        Cât te costă firma asta la AI — estimare, calibrată pe modelele
+        folosite. Semnal pentru preț, nu factura exactă a furnizorului.
+      </p>
+      {!usage || usage.totalCalls === 0 ? (
+        <p className="text-sm text-slate-400">
+          Fără consum AI în ultimele 30 de zile.
+        </p>
+      ) : (
+        <>
+          <div className="mb-3 flex items-baseline gap-2">
+            <span className="text-2xl font-bold text-slate-900">
+              {lei(usage.totalBani)} lei
+            </span>
+            <span className="text-xs text-slate-500">
+              din {usage.totalCalls.toLocaleString("ro-RO")} apeluri AI
+            </span>
+          </div>
+          <ul className="divide-y divide-slate-100">
+            {usage.byKind.map((k) => (
+              <li
+                key={k.kind}
+                className="flex items-center justify-between py-1.5 text-sm"
+              >
+                <span className="text-slate-700">
+                  {AI_KIND_LABEL[k.kind] ?? k.kind}
+                </span>
+                <span className="text-slate-500">
+                  {k.calls.toLocaleString("ro-RO")} ·{" "}
+                  <strong className="text-slate-700">{lei(k.bani)} lei</strong>
+                </span>
+              </li>
+            ))}
+          </ul>
+        </>
       )}
     </Card>
   );

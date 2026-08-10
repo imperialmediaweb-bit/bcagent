@@ -104,6 +104,7 @@ ${instructions}`;
   const readable = new ReadableStream({
     async start(controller) {
       try {
+        void (await import("@/modules/platform")).recordAiUsage({ kind: "analiza", agentId: payload.agentId });
         await streamCompletion({
           system: SYSTEM_PROMPT,
           messages: [{ role: "user", content: userPrompt }],

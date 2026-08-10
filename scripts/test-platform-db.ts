@@ -38,6 +38,7 @@ import {
   upsertPlan,
 } from "../src/modules/platform/repo";
 import { verifyPassword } from "../src/modules/platform/passwords";
+import { recordAiUsage, aiUsageForOrg } from "../src/modules/platform/ai-usage";
 
 let passed = 0;
 let failed = 0;
@@ -340,6 +341,28 @@ async function main() {
     (await listInvoices({ orgId: org.id })).total === 0,
   );
   check("celelalte organizații rămân", (await listOrgs()).total === 3);
+
+  console.log("\n══ Contor de consum AI ══");
+  const aiOrg = await createOrg({ name: "QA AI Usage SRL", email: "aiusage@test.ro" });
+  await addOrgAgent(aiOrg.id, "ag-ai-test", "Test AI");
+  // Direct pe org
+  await recordAiUsage({ kind: "briefing", orgId: aiOrg.id });
+  await recordAiUsage({ kind: "client_voice", orgId: aiOrg.id });
+  // Prin agent (trebuie să afle firma singur)
+  await recordAiUsage({ kind: "ocr", agentId: "ag-ai-test" });
+  await recordAiUsage({ kind: "ocr", agentId: "ag-ai-test" });
+  await recordAiUsage({ kind: "coach", agentId: "ag-ai-test" });
+  const usage = await aiUsageForOrg(aiOrg.id, 30);
+  check("consumul numără toate apelurile (5)", usage.totalCalls === 5, `${usage.totalCalls}`);
+  check(
+    "apelul prin agent s-a legat de firmă (2 ocr)",
+    (usage.byKind.find((k) => k.kind === "ocr")?.calls ?? 0) === 2,
+  );
+  // ocr=2×1 + briefing=12 + client_voice=12 + coach=15 = 41 bani
+  check("costul estimat e însumat corect (41 bani)", usage.totalBani === 41, `${usage.totalBani}`);
+  check("fără consum pe altă firmă", (await aiUsageForOrg("org-inexistent", 30)).totalCalls === 0);
+  await getDB()!`DELETE FROM ai_usage WHERE org_id = ${aiOrg.id}`;
+  await deleteOrg(aiOrg.id);
 
   console.log(
     `\n${failed === 0 ? "✅" : "❌"} ${passed} verificări trecute, ${failed} eșuate\n`,

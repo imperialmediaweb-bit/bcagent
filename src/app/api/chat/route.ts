@@ -111,6 +111,7 @@ ${JSON.stringify(body.summary, null, 2)}
   const readable = new ReadableStream({
     async start(controller) {
       try {
+        void (await import("@/modules/platform")).recordAiUsage({ kind: "chat", agentId: payload.agentId });
         await streamCompletion({
           system: fullSystem,
           messages: cleanMessages,

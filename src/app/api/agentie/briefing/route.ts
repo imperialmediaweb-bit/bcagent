@@ -175,6 +175,7 @@ export async function POST(req: Request) {
     const readable = new ReadableStream({
       async start(controller) {
         try {
+          void (await import("@/modules/platform")).recordAiUsage({ kind: "briefing", orgId: auth.session.orgId });
           await streamCompletion(
             {
               system: BRIEFING_SYSTEM,

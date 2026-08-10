@@ -142,6 +142,7 @@ export async function POST(req: Request) {
         totalMismatch = `Suma produselor citite (${sum.toFixed(2)} RON) nu bate cu totalul de pe document (${docTotal.toFixed(2)} RON) — compară linie cu linie cu factura.`;
       }
     }
+    void (await import("@/modules/platform")).recordAiUsage({ kind: "ocr", agentId: payload.agentId });
     return Response.json({
       ok: true,
       client: parsed.client ?? null,

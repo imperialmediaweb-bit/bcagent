@@ -155,6 +155,7 @@ export async function POST(req: Request) {
     async start(controller) {
       try {
         if (imageData) {
+          void (await import("@/modules/platform")).recordAiUsage({ kind: "coach", agentId: payload.agentId });
           const transcript = messages
             .slice(0, -1)
             .slice(-6)
@@ -181,6 +182,7 @@ Scurt, concret, în română.`,
           });
           controller.enqueue(encoder.encode(text || "Nu am putut citi poza."));
         } else {
+          void (await import("@/modules/platform")).recordAiUsage({ kind: "coach", agentId: payload.agentId });
           await streamCompletion(
             {
               system: system + dataContext,

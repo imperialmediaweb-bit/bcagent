@@ -127,3 +127,5 @@ export {
   verifyPlanPrices,
   webhookConfigured,
 } from "./stripe";
+export { recordAiUsage, aiUsageForOrg } from "./ai-usage";
+export type { AiKind, AiUsageSummary } from "./ai-usage";

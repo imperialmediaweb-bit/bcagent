@@ -26,16 +26,19 @@ export async function GET(_req: Request, ctx: Ctx) {
   try {
     const org = await getOrg(id);
     if (!org) return Response.json({ error: "Inexistent" }, { status: 404 });
-    const [users, agents, invoices] = await Promise.all([
+    const { aiUsageForOrg } = await import("@/modules/platform");
+    const [users, agents, invoices, aiUsage] = await Promise.all([
       listOrgUsers(id),
       listOrgAgents(id),
       listInvoices({ orgId: id, limit: 50 }),
+      aiUsageForOrg(id, 30),
     ]);
     return Response.json({
       org,
       users,
       agents,
       invoices: invoices.invoices,
+      aiUsage,
     });
   } catch (e) {
     console.error("[org GET]", e);

@@ -125,6 +125,20 @@ export async function ensurePlatformSchema(): Promise<void> {
     );
     CREATE INDEX IF NOT EXISTS app_events_time ON app_events(created_at DESC);
 
+    -- CONSUM AI per firmă: fiecare apel AI (OCR factură, analize, antrenor)
+    -- lasă un rând cu un cost estimat. Adminul vede cât îl costă un client
+    -- — ca să nu vândă în pierdere.
+    CREATE TABLE IF NOT EXISTS ai_usage (
+      id BIGSERIAL PRIMARY KEY,
+      org_id TEXT,
+      agent_id TEXT,
+      kind TEXT NOT NULL,            -- 'ocr' | 'analiza' | 'coach' | 'chat' | ...
+      cost_bani INTEGER NOT NULL DEFAULT 0,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS ai_usage_org ON ai_usage(org_id, created_at DESC);
+    CREATE INDEX IF NOT EXISTS ai_usage_time ON ai_usage(created_at DESC);
+
     CREATE TABLE IF NOT EXISTS org_agents (
       id TEXT PRIMARY KEY,
       org_id TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,

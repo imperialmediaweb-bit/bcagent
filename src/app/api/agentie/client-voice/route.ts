@@ -133,6 +133,10 @@ export async function POST(req: Request) {
       "analiza",
     );
 
+    void (await import("@/modules/platform")).recordAiUsage({
+      kind: "client_voice",
+      orgId: auth.session.orgId,
+    });
     const text = out.trim();
     if (!text) {
       // AI-ul a răspuns gol (rar) — nu lăsăm butonul „mort".
