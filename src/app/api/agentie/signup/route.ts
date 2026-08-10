@@ -84,6 +84,17 @@ export async function POST(req: Request) {
     await handleDeviceOnLogin("org", email, req, ip);
     await audit(email, "org.signup", org.id, { firma });
 
+    // Email de bun venit — fire-and-forget: dacă nu pleacă, contul rămâne
+    // creat, utilizatorul e deja logat. Nu blocăm răspunsul pe el.
+    const { requestOrigin } = await import("@/lib/request-origin");
+    const { sendWelcomeEmail } = await import("@/lib/welcome-email");
+    void sendWelcomeEmail({
+      to: email,
+      firma,
+      name,
+      appUrl: requestOrigin(req),
+    });
+
     return Response.json({ ok: true, org: { name: org.name } });
   } catch (e) {
     console.error("[agentie signup]", e);

@@ -125,6 +125,9 @@ export default function SetariPage() {
               );
             })}
           </ul>
+          <div className="mt-4 border-t border-slate-100 pt-4">
+            <EmailTest />
+          </div>
         </Card>
       </div>
 
@@ -300,6 +303,61 @@ function ChangePassword() {
       <Button type="submit" disabled={saving}>
         {saving ? "Se schimbă..." : "Schimbă parola"}
       </Button>
+    </form>
+  );
+}
+
+/** Test de email: trimite un mesaj de probă și arată exact ce zice Resend. */
+function EmailTest() {
+  const [to, setTo] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<{ kind: "success" | "error"; text: string } | null>(null);
+
+  async function run(e: React.FormEvent) {
+    e.preventDefault();
+    setBusy(true);
+    setMsg(null);
+    try {
+      const r = await api<{
+        ok: boolean;
+        motiv?: string;
+        nota?: string;
+        sugestie?: string;
+      }>("/api/platform/email-test", { method: "POST", json: { to } });
+      if (r.ok) {
+        setMsg({ kind: "success", text: `Trimis ✓ — ${r.nota ?? ""}` });
+      } else {
+        setMsg({ kind: "error", text: `${r.motiv ?? "Eroare"} ${r.sugestie ?? ""}` });
+      }
+    } catch (err) {
+      setMsg({ kind: "error", text: err instanceof Error ? err.message : String(err) });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <form onSubmit={run} className="space-y-2">
+      <p className="text-sm font-medium text-slate-800">Test de email</p>
+      <p className="text-xs text-slate-500">
+        Trimite un email de probă și vezi pe loc dacă pleacă. Dacă nu ajunge,
+        cel mai des e Resend: până verifici domeniul, livrează doar către
+        adresa contului tău.
+      </p>
+      <div className="flex flex-wrap items-center gap-2">
+        <input
+          type="email"
+          value={to}
+          onChange={(e) => setTo(e.target.value)}
+          required
+          placeholder="unde trimit testul"
+          className={`${inputClass} mt-0 flex-1`}
+        />
+        <Button type="submit" disabled={busy}>
+          {busy ? "Trimit..." : "Trimite test"}
+        </Button>
+      </div>
+      {msg && <Alert kind={msg.kind}>{msg.text}</Alert>}
     </form>
   );
 }
