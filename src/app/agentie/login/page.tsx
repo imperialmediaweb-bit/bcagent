@@ -151,7 +151,7 @@ export default function AgentieLogin() {
           className="mt-4 block rounded-xl border-2 border-[#161412] bg-white py-3 text-center text-[15px] font-black text-[#161412] transition hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none"
           style={{ boxShadow: "4px 4px 0 #161412" }}
         >
-          ✨ Nu ai cont? Creează-l singur — 30 de zile gratuit
+          ✨ Nu ai cont? Creează-l singur — 14 zile gratuit
         </Link>
 
         <div

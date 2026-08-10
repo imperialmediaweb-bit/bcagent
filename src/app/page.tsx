@@ -267,7 +267,7 @@ const REVIEWS = [
 const FAQ = [
   {
     q: "Cât durează până suntem funcționali?",
-    a: "10 minute, la propriu. Îți creezi contul singur (30 de zile gratuit), trimiți linkurile agenților pe WhatsApp și primul agent poate lucra de pe teren în aceeași zi. Nu se instalează nimic, nu trebuie server, nu trebuie IT-ist.",
+    a: "10 minute, la propriu. Îți creezi contul singur (14 zile gratuit), trimiți linkurile agenților pe WhatsApp și primul agent poate lucra de pe teren în aceeași zi. Nu se instalează nimic, nu trebuie server, nu trebuie IT-ist.",
   },
   {
     q: "Agenții mei nu sunt tehnici. Se descurcă?",
@@ -287,7 +287,7 @@ const FAQ = [
   },
   {
     q: "Pot anula oricând?",
-    a: "Da. Fără contract pe termen, fără penalizări. Primele 30 de zile sunt gratuite, cu tot inclus, fără card la înscriere.",
+    a: "Da. Fără contract pe termen, fără penalizări. Primele 14 zile sunt gratuite, cu tot inclus, fără card la înscriere.",
   },
 ];
 
@@ -475,7 +475,7 @@ export default function HomePage() {
                   href="/agentie/inregistrare"
                   className="hard group inline-flex items-center gap-2 rounded-xl border-2 border-[#161412] bg-[#ff4d00] px-7 py-4 text-lg font-bold text-white transition hover:translate-x-[3px] hover:translate-y-[3px] hover:shadow-none"
                 >
-                  30 de zile gratuite
+                  14 zile gratuite
                   <ArrowRight className="h-5 w-5 transition group-hover:translate-x-1" />
                 </a>
                 <Link
@@ -691,7 +691,7 @@ export default function HomePage() {
           </Reveal>
           <div className="mt-12 grid gap-6 sm:grid-cols-3">
             {[
-              ["01", "Îți creezi contul în 30 de secunde", "Singur, de pe provendi.ro — 30 de zile de probă cu tot inclus, fără card. Fără instalare, fără server, fără IT-ist."],
+              ["01", "Îți creezi contul în 30 de secunde", "Singur, de pe provendi.ro — 14 zile de probă cu tot inclus, fără card. Fără instalare, fără server, fără IT-ist."],
               ["02", "Trimiți linkurile agenților", "Fiecare agent primește un link pe WhatsApp. Îl deschide pe telefon și are tot: harta, rutele, comenzile."],
               ["03", "Firma rulează singură", "Comenzile ajung la depozit, vizitele în rapoarte, iar AI-ul îți livrează în fiecare dimineață analiza și prognoza."],
             ].map(([n, t, d], i) => (
@@ -789,7 +789,7 @@ export default function HomePage() {
               corporație.
             </h2>
             <p className="mx-auto mt-4 max-w-xl text-center text-[#161412]/60">
-              30 de zile gratuite cu tot inclus. Fără card la înscriere.
+              14 zile gratuite cu tot inclus. Fără card la înscriere.
             </p>
           </Reveal>
           <div className="mt-14 grid gap-8 lg:grid-cols-3">

@@ -180,7 +180,7 @@ export default function GhidPage() {
           </h3>
           <Pas n={1} titlu="Îți faci contul">
             Intri pe <B>provendi.ro</B> → butonul portocaliu{" "}
-            <B>30 de zile gratuite</B> → scrii numele firmei, numele tău, un email
+            <B>14 zile gratuite</B> → scrii numele firmei, numele tău, un email
             și o parolă de minim 8 caractere → <B>Creează contul</B>. Ești
             înăuntru. Nu trebuie card.
           </Pas>
@@ -363,7 +363,7 @@ Dacă ceva nu merge, apeși butonul 💬 din aplicație și scrii — se rezolv�
 · 1,3 milioane de firme pe hartă: unde avem clienți și unde e piață liberă.
 · Pleacă un agent? Un buton: portofoliul trece la altul, linkul lui moare instant.
 
-30 de zile gratuit, fără card: provendi.ro
+14 zile gratuit, fără card: provendi.ro
 Vrei să vezi înainte cum arată? Intri în demo, fără cont: provendi.ro/prezentare`}
           </DeCopiat>
 
@@ -617,7 +617,7 @@ Vrei să vezi înainte cum arată? Intri în demo, fără cont: provendi.ro/prez
             <Link href="/agentie/inregistrare" className="font-bold underline">
               /agentie/inregistrare
             </Link>{" "}
-            (30 de secunde, 30 de zile gratuit). 2) <B>Clienți</B> → tragi
+            (30 de secunde, 14 zile gratuit). 2) <B>Clienți</B> → tragi
             fișierul tău de clienți — agenții din fișier primesc automat cont
             și link. N-ai fișier? Îi adaugi din <B>Agenți</B>, cu mâna. 3)
             Trimiți fiecărui agent linkul lui pe WhatsApp. 4) <B>Vânzări</B> →
@@ -626,7 +626,7 @@ Vrei să vezi înainte cum arată? Intri în demo, fără cont: provendi.ro/prez
             targetul lunii. De aici totul curge singur din teren.
           </Row>
           <Row icon="🎁" name="Perioada de probă">
-            30 de zile cu tot inclus, fără card. Vezi permanent în panou câte
+            14 zile cu tot inclus, fără card. Vezi permanent în panou câte
             zile mai ai. Nu ai apucat să testezi? Scrie-ne din butonul 💬 și
             o prelungim — nimic nu se șterge și nimeni nu e blocat automat.
           </Row>
@@ -810,7 +810,7 @@ Vrei să vezi înainte cum arată? Intri în demo, fără cont: provendi.ro/prez
             <Link href="/agentie/inregistrare" className="font-bold underline">
               /agentie/inregistrare
             </Link>{" "}
-            — 30 de zile de probă cu tot inclus. Ai deja cont? Intri pe{" "}
+            — 14 zile de probă cu tot inclus. Ai deja cont? Intri pe{" "}
             <Link href="/agentie/login" className="font-bold underline">
               /agentie/login
             </Link>{" "}

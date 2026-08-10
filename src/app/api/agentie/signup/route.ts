@@ -15,7 +15,7 @@ export const runtime = "nodejs";
 
 /**
  * ÎNREGISTRARE SINGUR (self-signup): firma își face singură contul și
- * primește automat 30 de zile de probă cu tot inclus — fără să aștepte
+ * primește automat 14 zile de probă cu tot inclus — fără să aștepte
  * pe nimeni. Contul creat e "owner" (administrator); administratorul
  * platformei vede firma nouă instant în /platform → Organizații și
  * poate prelungi proba oricând de acolo.
@@ -66,7 +66,7 @@ export async function POST(req: Request) {
     const org = await createOrg({
       name: firma,
       email,
-      trialDays: 30,
+      trialDays: 14,
       agentLimit: 5,
       note: "Cont creat singur (self-signup)",
     });
