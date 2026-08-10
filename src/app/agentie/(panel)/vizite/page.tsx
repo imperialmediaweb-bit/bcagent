@@ -1,8 +1,10 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { Sparkles } from "lucide-react";
 import {
   Alert,
+  Button,
   Card,
   EmptyState,
   api,
@@ -105,6 +107,8 @@ export default function VizitePage() {
         </div>
       </Card>
 
+      <ClientVoice agent={agent} days={days} />
+
       {error && <Alert>{error}</Alert>}
 
       {loading ? (
@@ -142,5 +146,125 @@ export default function VizitePage() {
         </Card>
       )}
     </div>
+  );
+}
+
+/**
+ * VOCEA CLIENTULUI: AI-ul citește notele dictate de agenți la vizite și
+ * scoate ce cere piața — ce vor clienții, de ce se plâng, oportunități,
+ * urgențe. Aceeași analiză pentru manager și administrator; se poate filtra
+ * pe agent și perioadă (moștenite din filtrele de sus).
+ */
+function ClientVoice({ agent, days }: { agent: string; days: number }) {
+  const [busy, setBusy] = useState(false);
+  const [text, setText] = useState<string | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+  const [count, setCount] = useState(0);
+
+  async function run() {
+    setBusy(true);
+    setErr(null);
+    setText(null);
+    try {
+      const d = await api<{ text: string; count: number; enough: boolean }>(
+        "/api/agentie/client-voice",
+        { method: "POST", json: { agent, days } },
+      );
+      setText(d.text);
+      setCount(d.count);
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Card className="border-indigo-100 bg-indigo-50/40 p-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="min-w-0">
+          <h2 className="flex items-center gap-2 text-sm font-semibold text-indigo-900">
+            <Sparkles className="h-4 w-4 text-indigo-500" />
+            Vocea clientului — ce zic clienții, pe scurt
+          </h2>
+          <p className="mt-0.5 text-xs text-indigo-800/70">
+            AI-ul citește notele dictate de agenți la vizite și scoate ce
+            cer, de ce se plâng, oportunități și pe cine să suni repede.
+          </p>
+        </div>
+        <Button onClick={run} disabled={busy}>
+          {busy ? "Analizez notele..." : text ? "Reanalizează" : "Analizează notele"}
+        </Button>
+      </div>
+      {err && (
+        <p className="mt-3 rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700">
+          {err}
+        </p>
+      )}
+      {text && (
+        <div className="voice-md mt-3 rounded-lg border border-indigo-100 bg-white p-4 text-sm leading-relaxed text-slate-800">
+          {count > 0 && (
+            <p className="mb-2 text-xs font-medium text-indigo-600">
+              Din {count} note de vizită.
+            </p>
+          )}
+          {renderMarkdown(text)}
+        </div>
+      )}
+    </Card>
+  );
+}
+
+/** Markdown minimal (##, - , **bold**) → JSX, fără librărie. */
+function renderMarkdown(md: string): React.ReactNode {
+  const lines = md.split("\n");
+  const out: React.ReactNode[] = [];
+  let list: string[] = [];
+  const flush = (key: number) => {
+    if (list.length) {
+      out.push(
+        <ul key={`ul${key}`} className="my-1.5 list-disc space-y-0.5 pl-5">
+          {list.map((li, i) => (
+            <li key={i}>{inline(li)}</li>
+          ))}
+        </ul>,
+      );
+      list = [];
+    }
+  };
+  lines.forEach((raw, i) => {
+    const line = raw.trimEnd();
+    if (/^#{1,6}\s/.test(line)) {
+      flush(i);
+      out.push(
+        <p key={i} className="mt-3 text-sm font-bold text-indigo-900">
+          {line.replace(/^#{1,6}\s/, "")}
+        </p>,
+      );
+    } else if (/^[-*]\s/.test(line)) {
+      list.push(line.replace(/^[-*]\s/, ""));
+    } else if (line.trim() === "") {
+      flush(i);
+    } else {
+      flush(i);
+      out.push(
+        <p key={i} className="my-1">
+          {inline(line)}
+        </p>,
+      );
+    }
+  });
+  flush(lines.length);
+  return out;
+}
+
+function inline(s: string): React.ReactNode {
+  const parts = s.split(/(\*\*[^*]+\*\*)/g);
+  return parts.map((p, i) =>
+    /^\*\*[^*]+\*\*$/.test(p) ? (
+      <strong key={i}>{p.slice(2, -2)}</strong>
+    ) : (
+      <span key={i}>{p}</span>
+    ),
   );
 }

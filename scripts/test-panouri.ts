@@ -440,6 +440,25 @@ async function main() {
     JSON.stringify(r.data).includes("QA MAGAZIN UNU"),
   );
 
+  // VOCEA CLIENTULUI (analiza notelor). AI-ul nu e pornit în mediul de
+  // test, deci verificăm poarta: fără sesiune → 401; cu sesiune dar fără
+  // AI → 503 (nu 500, nu date scurse). Izolarea între firme e implicită
+  // prin sesiune.
+  r = await req("POST", "/api/agentie/client-voice", { days: 30 });
+  check("vocea clientului fără sesiune → 401", r.status === 401);
+  r = await req("POST", "/api/agentie/client-voice", { days: 30 }, ck);
+  check(
+    "vocea clientului fără AI → 503 (poarta ține)",
+    r.status === 503 || r.status === 402,
+    `${r.status}`,
+  );
+  r = await req("POST", "/api/agentie/client-voice", { days: 30 }, ckRival);
+  check(
+    "rivalul nu poate cere analiza firmei noastre (tot prin sesiunea lui)",
+    r.status === 503 || r.status === 402 || r.status === 401,
+    `${r.status}`,
+  );
+
   section("FIRMĂ · Comenzi (stări, facturi, export CSV, dube)");
   r = await get("/api/agentie/orders?days=7", ck);
   const firmOrders = r.data.orders ?? [];

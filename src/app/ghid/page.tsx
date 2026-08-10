@@ -682,7 +682,11 @@ Vrei să vezi înainte cum arată? Intri în demo, fără cont: provendi.ro/prez
           </Row>
           <Row icon="📅" name="Vizite">
             Jurnalul complet al echipei pe teren: cine, unde, când, cu ce
-            rezultat.
+            rezultat. Sus ai <B>„Vocea clientului"</B>: apeși un buton și AI-ul
+            citește notele dictate de agenți la vizite și îți spune ce cer
+            clienții, de ce se plâng, ce oportunități și pe cine să suni
+            repede — filtrabil pe agent și perioadă. Managerul și
+            administratorul văd aceeași analiză.
           </Row>
           <Row icon="📬" name="Raportul săptămânal">
             Toată săptămâna în o pagină: vizite, conversii, comenzi, target,
