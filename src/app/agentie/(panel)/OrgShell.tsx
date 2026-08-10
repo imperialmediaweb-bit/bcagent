@@ -151,20 +151,31 @@ export default function OrgShell({
       </aside>
 
       <main className="px-4 py-6 sm:px-6 lg:ml-60 lg:px-8">
-        {trialDaysLeft !== null && (
-          <p className="mb-4 rounded-xl border border-amber-300 bg-amber-50 px-4 py-2.5 text-sm font-medium text-amber-800">
-            🎁 Perioadă de probă —{" "}
-            {trialDaysLeft > 0 ? (
-              <>
-                mai ai <strong>{trialDaysLeft} {trialDaysLeft === 1 ? "zi" : "zile"}</strong> cu
-                tot inclus.
-              </>
-            ) : (
-              <>proba a expirat.</>
-            )}{" "}
-            Ai nevoie de mai mult timp? Scrie-ne din butonul 💬 și o prelungim.
-          </p>
-        )}
+        {trialDaysLeft !== null &&
+          (trialDaysLeft > 0 ? (
+            <p className="mb-4 rounded-xl border border-amber-300 bg-amber-50 px-4 py-2.5 text-sm font-medium text-amber-800">
+              🎁 Perioadă de probă — mai ai{" "}
+              <strong>
+                {trialDaysLeft} {trialDaysLeft === 1 ? "zi" : "zile"}
+              </strong>{" "}
+              cu tot inclus. Ai nevoie de mai mult timp? Scrie-ne din butonul 💬.
+            </p>
+          ) : (
+            // Proba s-a terminat, dar NU tăiem accesul (platformă la început):
+            // îi lăsăm să lucreze mai departe și le cerem frumos un feedback.
+            <div className="mb-4 rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-3 text-sm text-indigo-900">
+              <p className="font-semibold">
+                🙌 Perioada de probă s-a încheiat — dar poți lucra în
+                continuare, nu-ți oprim nimic.
+              </p>
+              <p className="mt-1 text-indigo-800">
+                Suntem la început și feedbackul tău contează enorm: ce ți-a
+                plăcut, ce lipsește, ce te-a enervat? Ne spui în două rânduri
+                din butonul <strong>💬 Sugestii / erori</strong> din colț.
+                Mulțumim că testezi Provendi!
+              </p>
+            </div>
+          ))}
         {children}
       </main>
       <ReportIssue />
