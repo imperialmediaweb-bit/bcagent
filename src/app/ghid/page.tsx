@@ -265,10 +265,12 @@ export default function GhidPage() {
             Maps cu toate opririle, în ordine.
           </Pas>
           <Pas n={4} titlu="La client: marchează vizita">
-            Pe firmă apasă <B>Am fost</B> și alege ce s-a întâmplat:{" "}
-            <B>client</B> / <B>se mai gândește</B> / <B>ne sună</B> /{" "}
-            <B>nu vrea</B>. Poate dicta o notă cu microfonul, nu trebuie să
-            scrie.
+            Pe firmă apasă <B>Am fost</B>. Se deschide dictarea rapidă: apeși
+            pe <B>🎤</B> și <B>spui repede tot ce a zis clientul</B> — textul
+            se scrie singur, live, cât vorbești (nu trebuie să tastezi nimic).
+            Apeși din nou pe microfon când ai terminat. Apoi alegi ce s-a
+            întâmplat: <B>client</B> / <B>se mai gândește</B> /{" "}
+            <B>ne sună</B> / <B>nu vrea</B> — și nota dictată se salvează cu el.
             <Atentie>
               Asta e SINGURUL lucru pe care agentul trebuie să-l facă
               obligatoriu la fiecare client. Din el ies toate rapoartele. Dacă

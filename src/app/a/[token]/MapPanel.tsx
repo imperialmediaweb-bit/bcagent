@@ -1358,14 +1358,53 @@ function VisitButtons({
   onCancel: () => void;
 }) {
   const [note, setNote] = useState("");
+  // Text provizoriu, cât timp agentul încă vorbește (nu-l salvăm încă).
+  const [interim, setInterim] = useState("");
+  const [dicteaza, setDicteaza] = useState(false);
   return (
-    <div className="mt-2 rounded-lg border border-indigo-100 bg-indigo-50/50 p-2">
-      <div className="grid grid-cols-1 gap-1.5">
+    <div className="mt-2 rounded-lg border border-indigo-100 bg-indigo-50/50 p-2.5">
+      {/* DICTARE RAPIDĂ: agentul apasă, spune tot ce a zis clientul, se
+          scrie live; apasă din nou și se oprește. Tot ce zice rămâne. */}
+      <div className="rounded-lg border-2 border-indigo-200 bg-white p-2">
+        <div className="flex items-center gap-2">
+          <span className="flex-1 text-xs font-semibold text-indigo-800">
+            {dicteaza
+              ? "🔴 Te ascult — spune ce a zis clientul..."
+              : "🎤 Apasă și spune ce a zis clientul"}
+          </span>
+          <MicButton
+            live
+            size={4}
+            onListening={setDicteaza}
+            onInterim={(t) => setInterim(t)}
+            onText={(t) => {
+              setNote((n) => (n ? `${n} ${t}` : t));
+              setInterim("");
+            }}
+          />
+        </div>
+        <textarea
+          value={note + (interim ? (note ? " " : "") + interim : "")}
+          onChange={(e) => {
+            setInterim("");
+            setNote(e.target.value);
+          }}
+          onFocus={() => setDicteaza(false)}
+          rows={3}
+          placeholder="Aici se scrie ce dictezi — sau scrii tu cu mâna."
+          className="mt-1.5 block w-full resize-none rounded-md border border-slate-200 bg-white px-2 py-1.5 text-sm focus:border-indigo-400 focus:outline-none"
+        />
+      </div>
+
+      <p className="mt-2 text-[11px] font-medium text-slate-500">
+        Alege ce s-a întâmplat (nota se salvează cu el):
+      </p>
+      <div className="mt-1 grid grid-cols-1 gap-1.5">
         {VISIT_RESULTS.map((v) => (
           <button
             key={v.id}
             type="button"
-            onClick={() => onPick(v.id, note)}
+            onClick={() => onPick(v.id, (note + " " + interim).trim())}
             className="flex items-center gap-2 rounded-md bg-white px-3 py-2 text-left text-sm text-slate-800 shadow-sm ring-1 ring-slate-200 transition hover:ring-indigo-300"
           >
             <span>{v.emoji}</span>
@@ -1373,22 +1412,10 @@ function VisitButtons({
           </button>
         ))}
       </div>
-      <div className="mt-1.5 flex items-center gap-1.5">
-        <input
-          value={note}
-          onChange={(e) => setNote(e.target.value)}
-          placeholder="Notă: zici sau scrii — rămâne salvată la client"
-          className="min-w-0 flex-1 rounded-md border border-slate-200 bg-white px-2 py-1.5 text-xs focus:border-indigo-400 focus:outline-none"
-        />
-        <MicButton
-          size={3}
-          onText={(t) => setNote((n) => (n ? `${n} ${t}` : t))}
-        />
-      </div>
       <button
         type="button"
         onClick={onCancel}
-        className="mt-1 text-xs text-slate-500 hover:text-slate-700"
+        className="mt-1.5 text-xs text-slate-500 hover:text-slate-700"
       >
         Renunță
       </button>
