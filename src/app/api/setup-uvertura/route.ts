@@ -195,12 +195,47 @@ export async function GET(req: Request) {
 Email: ${esc(OWNER_EMAIL)}<br>
 Parola: ${password ? esc(password) : "(cea afișată la primul click — dacă n-ai copiat-o, redeschide pagina cu &amp;resetpass=1 la finalul adresei)"}</div>
 ${password ? `<p style="font-size:13px">⚠ Parola se vede DOAR acum — copiaz-o. Bogdan și-o poate schimba din panou.</p>` : ""}
+<div class="agent"><b>Mesaj gata de trimis lui Bogdan</b>
+<textarea readonly rows="7" style="width:100%;font:inherit;font-size:12px;border:2px solid #161412;padding:8px;box-sizing:border-box">${esc(`Salut, Bogdan! Ți-am făcut contul pe Provendi — de aici conduci tot: băieții, clienții, comenzile, vizitele.
 
-<h2>Linkurile agenților (fiecare băiat primește al lui)</h2>
+Intră aici: ${origin}/agentie/login
+Email: ${OWNER_EMAIL}
+Parola: ${password || "[parola pe care ți-am trimis-o]"}
+(ți-o poți schimba din panou, la Setări)
+
+Ghidul cu tot ce face platforma, pas cu pas: https://provendi.ro/ghid
+
+Mai jos îți trimit și linkurile băieților — fiecare primește DOAR pe al lui, cu instrucțiunile de instalare.`)}</textarea>
+<button onclick="navigator.clipboard.writeText(this.previousElementSibling.value).then(()=>{this.textContent='✓ Copiat!';setTimeout(()=>this.textContent='Copiază mesajul',2000)})"
+ style="margin-top:6px;padding:8px 14px;font:inherit;font-weight:700;background:#ffd23f;border:2px solid #161412;cursor:pointer">Copiază mesajul</button></div>
+
+<h2>Mesaje gata de trimis pe WhatsApp — unul pentru fiecare băiat</h2>
+<p style="font-size:13px">Apeși „Copiază mesajul", îl lipești în WhatsApp la agentul respectiv, trimiți. Mesajul conține deja linkul lui, pașii de instalare și ghidul.</p>
 ${links
-  .map(
-    (l) => `<div class="agent"><b>${esc(l.name)}</b><a href="${esc(l.url)}">${esc(l.url)}</a></div>`,
-  )
+  .map((l) => {
+    const prenume = l.name.split(" ").pop() ?? l.name;
+    const mesaj = `Salut, ${prenume}! Ăsta e linkul tău de lucru — aplicația Provendi a firmei:
+
+${l.url}
+
+Fă exact așa:
+1) Apasă pe link — se deschide în Chrome.
+2) Prima dată îți cere singură să-ți pui un PIN de 4-6 cifre (ca la card). Alege unul și ține-l minte — cu el intri de acum.
+3) Bagă aplicația pe ecranul telefonului:
+- Android: sus dreapta cele 3 puncte -> „Adaugă pe ecranul de pornire" -> Adaugă
+- iPhone: jos pătratul cu săgeată -> „Adaugă pe ecranul principal" -> Adaugă
+De acum deschizi Provendi de pe ecran, ca pe WhatsApp.
+
+Ce ai în ea: clienții tăi, harta cu ruta zilei, vizitele (apeși microfonul și spui ce a zis clientul — se scrie singur), comenzi cu poză la factură.
+
+Vezi tot ce face aplicația, explicat pas cu pas: https://provendi.ro/ghid
+
+Linkul e doar al tău — nu-l da nimănui. Nu-ți iese ceva? Sună-l pe Bogdan.`;
+    return `<div class="agent"><b>${esc(l.name)}</b>
+<textarea readonly rows="8" style="width:100%;font:inherit;font-size:12px;border:2px solid #161412;padding:8px;box-sizing:border-box">${esc(mesaj)}</textarea>
+<button onclick="navigator.clipboard.writeText(this.previousElementSibling.value).then(()=>{this.textContent='✓ Copiat!';setTimeout(()=>this.textContent='Copiază mesajul',2000)})"
+ style="margin-top:6px;padding:8px 14px;font:inherit;font-weight:700;background:#ffd23f;border:2px solid #161412;cursor:pointer">Copiază mesajul</button></div>`;
+  })
   .join("")}
 <p style="font-size:13px">Linkurile țin UN AN; Bogdan le poate regenera sau bloca oricând din panou → Agenți.</p>
 
