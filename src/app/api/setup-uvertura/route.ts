@@ -9,6 +9,7 @@ import {
   generatePassword,
   getOrgUserForLogin,
   listOrgAgents,
+  setOrgUserPassword,
 } from "@/modules/platform";
 import CLIENTS from "./clients-data.json";
 
@@ -105,6 +106,12 @@ export async function GET(req: Request) {
     const existing = await getOrgUserForLogin(OWNER_EMAIL);
     if (existing) {
       orgId = existing.orgId;
+      // „&resetpass=1": dacă parola de la primul click s-a pierdut,
+      // generăm una nouă și o afișăm — contul rămâne același.
+      if (url.searchParams.get("resetpass") === "1") {
+        password = generatePassword();
+        await setOrgUserPassword(existing.id, password);
+      }
     } else {
       const org = await createOrg({
         name: ORG_NAME,
@@ -186,7 +193,7 @@ export async function GET(req: Request) {
 <h2>Contul lui Bogdan (trimite-i pe WhatsApp)</h2>
 <div class="cred">Pagina: ${esc(origin)}/agentie/login<br>
 Email: ${esc(OWNER_EMAIL)}<br>
-Parola: ${password ? esc(password) : "(cea afișată la primul click — nu s-a schimbat)"}</div>
+Parola: ${password ? esc(password) : "(cea afișată la primul click — dacă n-ai copiat-o, redeschide pagina cu &amp;resetpass=1 la finalul adresei)"}</div>
 ${password ? `<p style="font-size:13px">⚠ Parola se vede DOAR acum — copiaz-o. Bogdan și-o poate schimba din panou.</p>` : ""}
 
 <h2>Linkurile agenților (fiecare băiat primește al lui)</h2>
