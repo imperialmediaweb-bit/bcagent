@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { Link2, Plus } from "lucide-react";
+import AiMarkdown from "@/components/AiMarkdown";
 import {
   Alert,
   Badge,
@@ -309,8 +310,8 @@ function EvalModal({
         </p>
       )}
       {text && (
-        <div className="prose-ai whitespace-pre-wrap text-sm text-slate-700">
-          {text}
+        <div className="text-sm text-slate-700">
+          <AiMarkdown text={text} />
         </div>
       )}
       <div className="mt-4 flex justify-end">

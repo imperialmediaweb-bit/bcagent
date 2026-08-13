@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import AiMarkdown from "@/components/AiMarkdown";
 // (Link e folosit și în ghidul „Primii pași")
 import { useEffect, useState } from "react";
 import {
@@ -111,8 +112,8 @@ function BriefingCard() {
         </div>
       )}
       {text && (
-        <div className="mt-3 whitespace-pre-wrap rounded-lg bg-white p-4 text-sm leading-relaxed text-slate-700 shadow-sm">
-          {text}
+        <div className="mt-3 rounded-lg bg-white p-4 text-sm leading-relaxed text-slate-700 shadow-sm">
+          <AiMarkdown text={text} />
         </div>
       )}
     </Card>
