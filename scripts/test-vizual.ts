@@ -481,7 +481,38 @@ async function panouFirma(browser: Browser) {
   await ctx.close();
 }
 
+/**
+ * Bulele de pe hartă au nevoie de coordonate. În producție vin de la
+ * Nominatim (și se rețin în geo_localitati), dar mediul de test n-are
+ * internet spre OpenStreetMap — așa că punem noi coordonate de test
+ * pentru localitățile din fixture, ca suita să fie deterministă offline.
+ */
+async function seedGeo() {
+  const dbUrl = process.env.DATABASE_URL;
+  if (!dbUrl) return;
+  try {
+    const postgres = (await import("postgres")).default;
+    const sql = postgres(dbUrl);
+    await sql`
+      INSERT INTO geo_localitati (judet, localitate, lat, lng, failed)
+      SELECT DISTINCT p.judet, p.localitate,
+             47.5 + (hashtext(p.localitate) % 100)::float / 500.0,
+             26.0 + (hashtext(p.judet || p.localitate) % 100)::float / 400.0,
+             FALSE
+      FROM prospects p
+      WHERE COALESCE(p.localitate, '') <> '' AND COALESCE(p.judet, '') <> ''
+      ON CONFLICT (judet, localitate)
+        DO UPDATE SET lat = EXCLUDED.lat, lng = EXCLUDED.lng, failed = FALSE
+        WHERE geo_localitati.lat IS NULL
+    `;
+    await sql.end();
+  } catch (e) {
+    console.log("  · seed geo sărit:", (e as Error).message.slice(0, 80));
+  }
+}
+
 async function main() {
+  await seedGeo();
   const browser = await chromium.launch({ executablePath: CHROME });
   try {
     await panouAgent(browser);
