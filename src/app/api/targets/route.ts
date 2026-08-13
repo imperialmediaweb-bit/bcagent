@@ -35,10 +35,12 @@ export async function GET(req: Request) {
     }
     const orgId = membership[0].org_id;
 
-    const agents = await db<Array<{ name: string }>>`
-      SELECT name FROM org_agents WHERE org_id = ${orgId} AND active
+    const agents = await db<Array<{ name: string; agent_id: string }>>`
+      SELECT name, agent_id FROM org_agents WHERE org_id = ${orgId} AND active
     `;
     const names = agents.map((a) => a.name);
+    // Izolare pe firmă: doar fișierele urcate de firma asta sau de agenții ei.
+    const ownerIds = ["org:" + orgId, ...agents.map((a) => a.agent_id)];
 
     const targets = await db<Array<{ agent_name: string; target_value: number }>>`
       SELECT agent_name, target_value FROM targets
@@ -51,7 +53,8 @@ export async function GET(req: Request) {
              COALESCE(SUM((r->>'value')::float), 0)::text AS value,
              COALESCE(SUM((r->>'volume')::float), 0)::text AS volume
       FROM batches b, jsonb_array_elements(b.rows) r
-      WHERE (r->>'date') LIKE ${month + "%"}
+      WHERE b.agent_id = ANY(${ownerIds})
+        AND (r->>'date') LIKE ${month + "%"}
         AND r->>'agent' = ANY(${names.length ? names : [""]})
       GROUP BY 1
     `;

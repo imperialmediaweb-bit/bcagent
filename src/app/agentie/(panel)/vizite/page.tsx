@@ -1,5 +1,6 @@
 "use client";
 
+import AiMarkdown from "@/components/AiMarkdown";
 import { useCallback, useEffect, useState } from "react";
 import { Sparkles } from "lucide-react";
 import {
@@ -208,63 +209,10 @@ function ClientVoice({ agent, days }: { agent: string; days: number }) {
               Din {count} note de vizită.
             </p>
           )}
-          {renderMarkdown(text)}
+          <AiMarkdown text={text} />
         </div>
       )}
     </Card>
   );
 }
 
-/** Markdown minimal (##, - , **bold**) → JSX, fără librărie. */
-function renderMarkdown(md: string): React.ReactNode {
-  const lines = md.split("\n");
-  const out: React.ReactNode[] = [];
-  let list: string[] = [];
-  const flush = (key: number) => {
-    if (list.length) {
-      out.push(
-        <ul key={`ul${key}`} className="my-1.5 list-disc space-y-0.5 pl-5">
-          {list.map((li, i) => (
-            <li key={i}>{inline(li)}</li>
-          ))}
-        </ul>,
-      );
-      list = [];
-    }
-  };
-  lines.forEach((raw, i) => {
-    const line = raw.trimEnd();
-    if (/^#{1,6}\s/.test(line)) {
-      flush(i);
-      out.push(
-        <p key={i} className="mt-3 text-sm font-bold text-indigo-900">
-          {line.replace(/^#{1,6}\s/, "")}
-        </p>,
-      );
-    } else if (/^[-*]\s/.test(line)) {
-      list.push(line.replace(/^[-*]\s/, ""));
-    } else if (line.trim() === "") {
-      flush(i);
-    } else {
-      flush(i);
-      out.push(
-        <p key={i} className="my-1">
-          {inline(line)}
-        </p>,
-      );
-    }
-  });
-  flush(lines.length);
-  return out;
-}
-
-function inline(s: string): React.ReactNode {
-  const parts = s.split(/(\*\*[^*]+\*\*)/g);
-  return parts.map((p, i) =>
-    /^\*\*[^*]+\*\*$/.test(p) ? (
-      <strong key={i}>{p.slice(2, -2)}</strong>
-    ) : (
-      <span key={i}>{p}</span>
-    ),
-  );
-}

@@ -152,36 +152,43 @@ export async function GET(req: Request) {
       links.push({ name, url: `${origin}/a/${token}` });
     }
 
-    // 4) Importul clienților: firmele existente în universul MF își
-    //    păstrează datele oficiale (doar status + agent); cele lipsă se
-    //    adaugă cu datele din fișierul agenției.
-    const payload = clients.map((c) => ({
-      cui: c.cui,
-      denumire: c.denumire,
-      localitate: c.localitate,
-      judet: c.judet,
-      agent: c.agent,
-    }));
-    const updated = await db`
-      UPDATE prospects p
-      SET status = 'client', assigned_agent = u.agent, updated_at = NOW()
-      FROM jsonb_to_recordset(${db.json(
-        payload as unknown as Parameters<typeof db.json>[0],
-      )}) AS u(cui TEXT, agent TEXT)
-      WHERE p.cui = u.cui
+    // 4) Importul clienților rulează O SINGURĂ DATĂ — doar dacă niciunul
+    //    din CUI-urile fișierului nu e deja client. Altfel, fiecare
+    //    deschidere a paginii ar RESCRIE alocările făcute de Bogdan în
+    //    panou (ex. benzinăriile mutate pe alt agent).
+    const [dejaImportat] = await db<[{ n: string }]>`
+      SELECT COUNT(*)::text AS n FROM prospects
+      WHERE cui = ANY(${clients.map((c) => c.cui)}) AND status = 'client'
     `;
-    const inserted = await db`
-      INSERT INTO prospects (cui, denumire, localitate, judet, status, assigned_agent)
-      SELECT u.cui, u.denumire, u.localitate, u.judet, 'client', u.agent
-      FROM jsonb_to_recordset(${db.json(
-        payload as unknown as Parameters<typeof db.json>[0],
-      )}) AS u(cui TEXT, denumire TEXT, localitate TEXT, judet TEXT, agent TEXT)
-      WHERE NOT EXISTS (SELECT 1 FROM prospects p WHERE p.cui = u.cui)
-    `;
-    await audit("setup-uvertura", "org.seed", orgId, {
-      updated: updated.count,
-      inserted: inserted.count,
-    });
+    if (parseInt(dejaImportat.n, 10) === 0) {
+      const payload = clients.map((c) => ({
+        cui: c.cui,
+        denumire: c.denumire,
+        localitate: c.localitate,
+        judet: c.judet,
+        agent: c.agent,
+      }));
+      const updated = await db`
+        UPDATE prospects p
+        SET status = 'client', assigned_agent = u.agent, updated_at = NOW()
+        FROM jsonb_to_recordset(${db.json(
+          payload as unknown as Parameters<typeof db.json>[0],
+        )}) AS u(cui TEXT, agent TEXT)
+        WHERE p.cui = u.cui
+      `;
+      const inserted = await db`
+        INSERT INTO prospects (cui, denumire, localitate, judet, status, assigned_agent)
+        SELECT u.cui, u.denumire, u.localitate, u.judet, 'client', u.agent
+        FROM jsonb_to_recordset(${db.json(
+          payload as unknown as Parameters<typeof db.json>[0],
+        )}) AS u(cui TEXT, denumire TEXT, localitate TEXT, judet TEXT, agent TEXT)
+        WHERE NOT EXISTS (SELECT 1 FROM prospects p WHERE p.cui = u.cui)
+      `;
+      await audit("setup-uvertura", "org.seed", orgId, {
+        updated: updated.count,
+        inserted: inserted.count,
+      });
+    }
 
     // 5) Raportul pe ecran.
     const shared = clients.filter((c) => c.impartit && c.impartit.length > 1);

@@ -344,10 +344,11 @@ function scanSheet(
         /[Pp]erioada[:\s]+(\d{1,2})[./-](\d{1,2})[./-](\d{4})/,
       );
       if (m) {
+        // Amiază UTC, nu miezul nopții local: serializat cu toISOString,
+        // miezul nopții din România (UTC+3) ar cădea pe ZIUA (și luna)
+        // anterioară — tot fișierul ar ateriza în luna greșită.
         defaultDate = new Date(
-          parseInt(m[3], 10),
-          parseInt(m[2], 10) - 1,
-          parseInt(m[1], 10),
+          Date.UTC(parseInt(m[3], 10), parseInt(m[2], 10) - 1, parseInt(m[1], 10), 12),
         );
         break;
       }
@@ -483,10 +484,10 @@ function parseGroupedPivot(
       /[Pp]erioada[:\s]+(\d{1,2})[./-](\d{1,2})[./-](\d{4})/,
     );
     if (m) {
+      // Amiază UTC — vezi nota din fallback-ul fără dată: altfel fusul
+      // României mută tot fișierul în ziua/luna anterioară la serializare.
       defaultDate = new Date(
-        parseInt(m[3], 10),
-        parseInt(m[2], 10) - 1,
-        parseInt(m[1], 10),
+        Date.UTC(parseInt(m[3], 10), parseInt(m[2], 10) - 1, parseInt(m[1], 10), 12),
       );
       break;
     }

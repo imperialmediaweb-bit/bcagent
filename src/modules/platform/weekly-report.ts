@@ -78,7 +78,8 @@ export async function buildWeeklyReport(
            COALESCE(SUM((r->>'value')::float), 0)::text AS value,
            COALESCE(SUM((r->>'volume')::float), 0)::text AS volume
     FROM batches b, jsonb_array_elements(b.rows) r
-    WHERE (r->>'date') LIKE ${month + "%"}
+    WHERE b.agent_id = ANY(${["org:" + orgId, ...ids]})
+      AND (r->>'date') LIKE ${month + "%"}
       AND r->>'agent' = ANY(${names.length ? names : [""]})
     GROUP BY 1
   `;

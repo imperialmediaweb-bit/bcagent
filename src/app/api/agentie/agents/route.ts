@@ -89,7 +89,7 @@ export async function POST(req: Request) {
   if (!agentId || !agentName) {
     return Response.json({ error: "ID și nume agent obligatorii" }, { status: 400 });
   }
-  const ttlDays = Math.min(365, Math.max(1, Number(body.ttlDays) || 30));
+  const ttlDays = Math.min(365, Math.max(1, Number(body.ttlDays) || 365));
 
   try {
     await ensureSchema();

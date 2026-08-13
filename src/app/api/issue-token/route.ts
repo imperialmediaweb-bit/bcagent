@@ -72,7 +72,7 @@ export async function POST(req: Request) {
 
   const ttlDays = Math.max(
     1,
-    Math.min(365, Math.floor(Number(body.ttlDays ?? 30))),
+    Math.min(365, Math.floor(Number(body.ttlDays ?? 365))),
   );
   const exp = Math.floor(Date.now() / 1000) + ttlDays * 86400;
   const token = await signToken({ agentId, agentName, exp }, tokenSecret);
