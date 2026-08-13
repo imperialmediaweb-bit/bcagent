@@ -81,7 +81,22 @@ function page(title: string, body: string, status = 200): Response {
   );
 }
 
+/**
+ * Resetarea parolei se face DOAR prin POST (butonul de pe pagină).
+ * Motiv: WhatsApp & co. accesează linkurile prin GET ca să facă
+ * previzualizarea — dacă GET-ul ar reseta parola, fiecare lipire a
+ * linkului într-un chat ar schimba-o pe nevăzute. Butonul nu poate fi
+ * „apăsat" de roboții de preview.
+ */
 export async function GET(req: Request) {
+  return handle(req, false);
+}
+
+export async function POST(req: Request) {
+  return handle(req, true);
+}
+
+async function handle(req: Request, doReset: boolean) {
   const url = new URL(req.url);
   if (url.searchParams.get("key") !== SETUP_KEY) {
     return new Response("Not found", { status: 404 });
@@ -106,9 +121,9 @@ export async function GET(req: Request) {
     const existing = await getOrgUserForLogin(OWNER_EMAIL);
     if (existing) {
       orgId = existing.orgId;
-      // „&resetpass=1": dacă parola de la primul click s-a pierdut,
-      // generăm una nouă și o afișăm — contul rămâne același.
-      if (url.searchParams.get("resetpass") === "1") {
+      // Parolă nouă DOAR la apăsarea butonului (POST) — vezi comentariul
+      // de la GET/POST. Contul rămâne același.
+      if (doReset) {
         password = generatePassword();
         await setOrgUserPassword(existing.id, password);
       }
@@ -193,8 +208,15 @@ export async function GET(req: Request) {
 <h2>Contul lui Bogdan (trimite-i pe WhatsApp)</h2>
 <div class="cred">Pagina: ${esc(origin)}/agentie/login<br>
 Email: ${esc(OWNER_EMAIL)}<br>
-Parola: ${password ? esc(password) : "(cea afișată la primul click — dacă n-ai copiat-o, redeschide pagina cu &amp;resetpass=1 la finalul adresei)"}</div>
-${password ? `<p style="font-size:13px">⚠ Parola se vede DOAR acum — copiaz-o. Bogdan și-o poate schimba din panou.</p>` : ""}
+Parola: ${password ? esc(password) : "(apasă butonul de mai jos și primești una nouă, gata pusă în mesaj)"}</div>
+${
+  password
+    ? `<p style="font-size:13px">⚠ Parola asta e valabilă DE ACUM — trimite-i lui Bogdan mesajul de mai jos (o are în el). Nu mai apăsa butonul după ce i-ai trimis-o.</p>`
+    : `<form method="POST" action="/api/setup-uvertura?key=${SETUP_KEY}" style="margin:8px 0">
+<button type="submit" style="padding:10px 16px;font:inherit;font-weight:700;background:#ff4d00;color:#fff;border:2px solid #161412;cursor:pointer">🔑 Generează parolă nouă pentru Bogdan</button>
+</form>
+<p style="font-size:13px">Butonul face o parolă nouă și o pune direct în mesajul lui Bogdan. Parola se schimbă DOAR când apeși butonul — deschisul paginii nu o mai atinge niciodată.</p>`
+}
 <div class="agent"><b>Mesaj gata de trimis lui Bogdan</b>
 <textarea readonly rows="7" style="width:100%;font:inherit;font-size:12px;border:2px solid #161412;padding:8px;box-sizing:border-box">${esc(`Salut, Bogdan! Ți-am făcut contul pe Provendi — de aici conduci tot: băieții, clienții, comenzile, vizitele.
 
