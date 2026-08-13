@@ -226,7 +226,7 @@ De acum deschizi Provendi de pe ecran, ca pe WhatsApp.
 
 Ce ai în ea: clienții tăi, harta cu ruta zilei, vizitele (apeși microfonul și spui ce a zis clientul — se scrie singur), comenzi cu poză la factură.
 
-Vezi tot ce face aplicația, explicat pas cu pas: https://provendi.ro/ghid
+Vezi tot ce face aplicația ta, explicat pas cu pas: https://provendi.ro/ghid?rol=agent
 
 Linkul e doar al tău — nu-l da nimănui. Nu-ți iese ceva? Sună-l pe Bogdan.`;
     return `<div class="agent"><b>${esc(l.name)}</b>

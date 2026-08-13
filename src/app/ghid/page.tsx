@@ -88,7 +88,15 @@ function Panel({ id, title, subtitle, children }: { id: string; title: string; s
   );
 }
 
-export default function GhidPage() {
+export default async function GhidPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ rol?: string }>;
+}) {
+  // „/ghid?rol=agent" = varianta pentru băieții de pe teren: doar
+  // capitolele lor, fără lecțiile administratorului, solduri, Stripe etc.
+  // Administratorul și managerul deschid „/ghid" simplu și văd TOT.
+  const doarAgent = (await searchParams).rol === "agent";
   return (
     <main
       className="min-h-screen px-4 py-10"
@@ -111,18 +119,27 @@ export default function GhidPage() {
             Ghidul platformei
           </h1>
           <p className="mt-1 font-medium text-[#161412]/60">
-            Ce face fiecare funcție, pe fiecare panou — pe scurt și pe românește.
+            {doarAgent
+              ? "Ghidul tău de agent: doar ce ține de tine, pe scurt și pe românește."
+              : "Ce face fiecare funcție, pe fiecare panou — pe scurt și pe românește."}
           </p>
           <nav className="mt-4 flex flex-wrap justify-center gap-2 text-sm font-bold">
-            <a href="#training" className="rounded-full border-2 border-[#161412] bg-[#ff4d00] px-3 py-1 text-white">🎓 Training de la zero</a>
+            {!doarAgent && (
+              <a href="#training" className="rounded-full border-2 border-[#161412] bg-[#ff4d00] px-3 py-1 text-white">🎓 Training de la zero</a>
+            )}
             <a href="#agent" className="rounded-full border-2 border-[#161412] bg-[#ffd23f] px-3 py-1">📱 Agentul</a>
             <a href="#pascupas" className="rounded-full border-2 border-[#161412] bg-white px-3 py-1">📖 Pas cu pas</a>
-            <a href="#firma" className="rounded-full border-2 border-[#161412] bg-white px-3 py-1">🏢 Manager / Administrator</a>
-            <a href="#pascupasfirma" className="rounded-full border-2 border-[#161412] bg-white px-3 py-1">📖 Pas cu pas firmă</a>
+            {!doarAgent && (
+              <>
+                <a href="#firma" className="rounded-full border-2 border-[#161412] bg-white px-3 py-1">🏢 Manager / Administrator</a>
+                <a href="#pascupasfirma" className="rounded-full border-2 border-[#161412] bg-white px-3 py-1">📖 Pas cu pas firmă</a>
+              </>
+            )}
             <a href="#intrare" className="rounded-full border-2 border-[#161412] bg-white px-3 py-1">🔑 Cum intri</a>
           </nav>
         </header>
 
+        {!doarAgent && (
         <Panel
           id="training"
           title="🎓 TRAINING de la zero"
@@ -421,6 +438,8 @@ Vrei să vezi înainte cum arată? Intri în demo, fără cont: provendi.ro/prez
           </Row>
         </Panel>
 
+        )}
+
         <Panel
           id="agent"
           title="📱 Panoul AGENTULUI de teren"
@@ -607,6 +626,7 @@ Vrei să vezi înainte cum arată? Intri în demo, fără cont: provendi.ro/prez
           </Row>
         </Panel>
 
+        {!doarAgent && (
         <Panel
           id="firma"
           title="🏢 Panoul FIRMEI — manager și administrator"
@@ -709,6 +729,8 @@ Vrei să vezi înainte cum arată? Intri în demo, fără cont: provendi.ro/prez
           </Row>
         </Panel>
 
+        )}
+        {!doarAgent && (
         <Panel
           id="pascupasfirma"
           title="📖 Pas cu pas — administrator & manager"
@@ -801,6 +823,7 @@ Vrei să vezi înainte cum arată? Intri în demo, fără cont: provendi.ro/prez
             rezumatul AI. Îl vezi oricând și în panou, la „Raportul săpt.".
           </Row>
         </Panel>
+        )}
 
 <Panel id="intrare" title="🔑 Cum intri" subtitle="Trei uși, trei feluri de oameni.">
           <Row icon="📱" name="Agent">
