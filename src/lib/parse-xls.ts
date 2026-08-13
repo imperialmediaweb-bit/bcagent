@@ -272,7 +272,9 @@ function scanSheet(
     skipped: number;
   }> = [];
 
-  const maxHeaderRow = Math.min(6, aoa.length);
+  // Antetul poate fi adânc: rapoartele SAGA („Ieșiri mărfuri pe documente")
+  // au deasupra un preambul de ~10 rânduri (perioadă, tip marfă, agenți).
+  const maxHeaderRow = Math.min(20, aoa.length);
   for (let h = 0; h < maxHeaderRow; h++) {
     const raw = aoa[h];
     if (!Array.isArray(raw)) continue;
@@ -325,6 +327,84 @@ function scanSheet(
       rows,
       skipped,
     });
+  }
+
+  // FALLBACK „fără coloană de dată": exportul SAGA plat („Ieșiri mărfuri
+  // pe documente", rând per client×produs) nu are data pe rând — o are
+  // doar în preambul, ca „Perioada: dd.mm.yyyy..". Dacă niciun antet cu
+  // dată n-a produs rânduri, folosim data de start a perioadei pentru
+  // toate rândurile (același compromis ca la pivotul grupat pe agent).
+  if (!candidates.some((c) => c.rowsCount > 0)) {
+    let defaultDate: Date | null = null;
+    for (let i = 0; i < Math.min(25, aoa.length); i++) {
+      const row = aoa[i];
+      if (!Array.isArray(row)) continue;
+      const text = row.map((c) => (c == null ? "" : String(c))).join(" ");
+      const m = text.match(
+        /[Pp]erioada[:\s]+(\d{1,2})[./-](\d{1,2})[./-](\d{4})/,
+      );
+      if (m) {
+        defaultDate = new Date(
+          parseInt(m[3], 10),
+          parseInt(m[2], 10) - 1,
+          parseInt(m[1], 10),
+        );
+        break;
+      }
+    }
+    if (defaultDate) {
+      for (let h = 0; h < maxHeaderRow; h++) {
+        const raw = aoa[h];
+        if (!Array.isArray(raw)) continue;
+        const headers = raw.map((v) => (v == null ? "" : String(v).trim()));
+        if (headers.filter((x) => x !== "").length < 3) continue;
+        const mapping = detectColumns(headers.filter((x) => x !== ""));
+        // Fără dată e acceptabil doar dacă restul e clar: cine (client +
+        // agent) și cât (cantitate sau valoare).
+        if (!mapping.client || !mapping.agent) continue;
+        if (!mapping.volume && !mapping.value) continue;
+        const rows: NormalizedRow[] = [];
+        let skipped = 0;
+        for (let r = h + 1; r < aoa.length; r++) {
+          const rowArr = aoa[r];
+          if (!Array.isArray(rowArr)) continue;
+          const obj: Record<string, unknown> = {};
+          for (let c = 0; c < headers.length; c++) {
+            if (headers[c]) obj[headers[c]] = rowArr[c];
+          }
+          const client = String(obj[mapping.client] ?? "").trim();
+          if (!client) {
+            if (Object.values(obj).some((v) => v != null && String(v).trim() !== "")) {
+              skipped++;
+            }
+            continue;
+          }
+          rows.push({
+            date: defaultDate,
+            agent: mapping.agent ? String(obj[mapping.agent] ?? "").trim() : "",
+            producer: mapping.producer
+              ? String(obj[mapping.producer] ?? "").trim()
+              : "",
+            client,
+            volume: mapping.volume ? parseNumber(obj[mapping.volume]) : 0,
+            value: mapping.value ? parseNumber(obj[mapping.value]) : 0,
+          });
+        }
+        if (rows.length > 0) {
+          candidates.push({
+            sheet: sheetName,
+            headerRow: h + 1,
+            headers,
+            mapping,
+            mappedCount: Object.keys(mapping).length,
+            rowsCount: rows.length,
+            rows,
+            skipped,
+          });
+          break;
+        }
+      }
+    }
   }
 
   // Cel mai bun candidat = cele mai multe rânduri parsate (prioritar),
