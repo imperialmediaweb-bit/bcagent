@@ -53,6 +53,8 @@ export async function POST(req: Request) {
   try {
     await ensureSchema();
     const agents = await listOrgAgents(auth.session.orgId);
+    // Izolare pe firmă: doar fișierele urcate de firma asta sau de agenții ei.
+    const ownerIds = ["org:" + auth.session.orgId, ...agents.map((a) => a.agentId)];
     const ids = agents.map((a) => a.agentId);
     const names = agents.map((a) => a.name);
     const month = new Date().toISOString().slice(0, 7);
@@ -65,7 +67,8 @@ export async function POST(req: Request) {
              COALESCE(SUM((r->>'volume')::float), 0)::text AS volume,
              COUNT(DISTINCT r->>'client')::text AS clienti
       FROM batches b, jsonb_array_elements(b.rows) r
-      WHERE r->>'agent' = ANY(${names.length ? names : [""]})
+      WHERE b.agent_id = ANY(${ownerIds})
+        AND r->>'agent' = ANY(${names.length ? names : [""]})
         AND (r->>'date') LIKE ${month + "%"}
       GROUP BY 1
     `;
@@ -110,7 +113,8 @@ export async function POST(req: Request) {
              COALESCE(SUM((r->>'value')::float), 0)::text AS value,
              COALESCE(SUM((r->>'volume')::float), 0)::text AS volume
       FROM batches b, jsonb_array_elements(b.rows) r
-      WHERE r->>'agent' = ANY(${names.length ? names : [""]})
+      WHERE b.agent_id = ANY(${ownerIds})
+        AND r->>'agent' = ANY(${names.length ? names : [""]})
         AND (r->>'date') >= ${since6.toISOString().slice(0, 7) + "-01"}
       GROUP BY 1, 2 ORDER BY 2
     `;

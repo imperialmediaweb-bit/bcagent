@@ -20,6 +20,7 @@ function validMonth(m: string): boolean {
 async function realizedByAgent(
   month: string,
   agentNames: string[],
+  ownerIds: string[],
 ): Promise<Map<string, { value: number; volume: number }>> {
   const db = getDB()!;
   const rows = await db<Array<{ agent: string; value: string; volume: string }>>`
@@ -27,7 +28,8 @@ async function realizedByAgent(
            COALESCE(SUM((r->>'value')::float), 0)::text AS value,
            COALESCE(SUM((r->>'volume')::float), 0)::text AS volume
     FROM batches b, jsonb_array_elements(b.rows) r
-    WHERE (r->>'date') LIKE ${month + "%"}
+    WHERE b.agent_id = ANY(${ownerIds.length ? ownerIds : [""]})
+      AND (r->>'date') LIKE ${month + "%"}
       AND r->>'agent' = ANY(${agentNames.length ? agentNames : [""]})
     GROUP BY 1
   `;
@@ -62,7 +64,9 @@ export async function GET(req: Request) {
       WHERE org_id = ${auth.session.orgId} AND month = ${month}
     `;
     const targetByName = new Map(targets.map((t) => [t.agent_name, t.target_value]));
-    const realized = await realizedByAgent(month, names);
+    // Izolare pe firmă: doar fișierele urcate de firma asta sau de agenții ei.
+    const ownerIds = ["org:" + auth.session.orgId, ...agents.map((a) => a.agentId)];
+    const realized = await realizedByAgent(month, names, ownerIds);
 
     return Response.json({
       month,

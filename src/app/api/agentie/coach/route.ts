@@ -69,6 +69,8 @@ export async function POST(req: Request) {
   try {
     await ensureSchema();
     const agents = await listOrgAgents(auth.session.orgId);
+    // Izolare pe firmă: doar fișierele urcate de firma asta sau de agenții ei.
+    const ownerIds = ["org:" + auth.session.orgId, ...agents.map((a) => a.agentId)];
     const agent = agents.find((a) => a.agentId === String(body.agentId ?? ""));
     if (!agent) {
       return Response.json({ error: "Agentul nu e din firma ta" }, { status: 403 });
@@ -116,7 +118,8 @@ export async function POST(req: Request) {
       SELECT COALESCE(SUM((r->>'value')::float), 0)::text AS value,
              COALESCE(SUM((r->>'volume')::float), 0)::text AS volume
       FROM batches b, jsonb_array_elements(b.rows) r
-      WHERE (r->>'date') LIKE ${month + "%"} AND r->>'agent' = ${agent.name}
+      WHERE b.agent_id = ANY(${ownerIds})
+        AND (r->>'date') LIKE ${month + "%"} AND r->>'agent' = ${agent.name}
     `;
 
     // Profilul de vânzări pe ultimele 3 luni: branduri, evoluție, top clienți
@@ -132,7 +135,8 @@ export async function POST(req: Request) {
              COALESCE(SUM((r->>'value')::float), 0)::text AS value,
              COALESCE(SUM((r->>'volume')::float), 0)::text AS volume
       FROM batches b, jsonb_array_elements(b.rows) r
-      WHERE r->>'agent' = ${agent.name} AND (r->>'date') >= ${since3Key}
+      WHERE b.agent_id = ANY(${ownerIds})
+        AND r->>'agent' = ${agent.name} AND (r->>'date') >= ${since3Key}
         AND COALESCE(r->>'producer', '') <> ''
       GROUP BY 1 ORDER BY 3 DESC LIMIT 10
     `;
@@ -144,7 +148,8 @@ export async function POST(req: Request) {
              COALESCE(SUM((r->>'volume')::float), 0)::text AS volume,
              COUNT(DISTINCT r->>'client')::text AS clienti
       FROM batches b, jsonb_array_elements(b.rows) r
-      WHERE r->>'agent' = ${agent.name} AND (r->>'date') >= ${since3Key}
+      WHERE b.agent_id = ANY(${ownerIds})
+        AND r->>'agent' = ${agent.name} AND (r->>'date') >= ${since3Key}
       GROUP BY 1 ORDER BY 1
     `;
     const topClientsSales = await db<
@@ -154,7 +159,8 @@ export async function POST(req: Request) {
              COALESCE(SUM((r->>'value')::float), 0)::text AS value,
              COALESCE(SUM((r->>'volume')::float), 0)::text AS volume
       FROM batches b, jsonb_array_elements(b.rows) r
-      WHERE r->>'agent' = ${agent.name} AND (r->>'date') >= ${since3Key}
+      WHERE b.agent_id = ANY(${ownerIds})
+        AND r->>'agent' = ${agent.name} AND (r->>'date') >= ${since3Key}
         AND COALESCE(r->>'client', '') <> ''
       GROUP BY 1 ORDER BY 3 DESC, 2 DESC LIMIT 8
     `;
@@ -162,7 +168,8 @@ export async function POST(req: Request) {
       SELECT COALESCE(SUM((r->>'value')::float), 0)::text AS value,
              COALESCE(SUM((r->>'volume')::float), 0)::text AS volume
       FROM batches b, jsonb_array_elements(b.rows) r
-      WHERE r->>'agent' = ANY(${teamNames}) AND (r->>'date') >= ${since3Key}
+      WHERE b.agent_id = ANY(${ownerIds})
+        AND r->>'agent' = ANY(${teamNames}) AND (r->>'date') >= ${since3Key}
     `;
 
     const context = {

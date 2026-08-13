@@ -31,6 +31,10 @@ export async function GET(req: Request) {
     await ensureSchema();
     const agents = await listOrgAgents(auth.session.orgId);
     const names = agents.map((a) => a.name);
+    // IZOLARE PE FIRMĂ: numai fișierele urcate de firma asta (org:<id>)
+    // sau de agenții ei — altfel două firme cu agenți cu același nume
+    // și-ar amesteca vânzările.
+    const ownerIds = ["org:" + auth.session.orgId, ...agents.map((a) => a.agentId)];
     if (names.length === 0) {
       return Response.json({ agents: [], monthly: [], topClients: [], brands: [] });
     }
@@ -44,7 +48,8 @@ export async function GET(req: Request) {
              COALESCE(SUM((r->>'volume')::float), 0)::text AS volume,
              COUNT(DISTINCT r->>'client')::text AS clienti
       FROM batches b, jsonb_array_elements(b.rows) r
-      WHERE r->>'agent' = ANY(${names}) AND (r->>'date') >= ${sinceKey}
+      WHERE b.agent_id = ANY(${ownerIds})
+        AND r->>'agent' = ANY(${names}) AND (r->>'date') >= ${sinceKey}
       GROUP BY 1, 2 ORDER BY 2
     `;
 
@@ -56,7 +61,8 @@ export async function GET(req: Request) {
              COALESCE(SUM((r->>'value')::float), 0)::text AS value,
              COALESCE(SUM((r->>'volume')::float), 0)::text AS volume
       FROM batches b, jsonb_array_elements(b.rows) r
-      WHERE r->>'agent' = ANY(${names}) AND (r->>'date') >= ${sinceKey}
+      WHERE b.agent_id = ANY(${ownerIds})
+        AND r->>'agent' = ANY(${names}) AND (r->>'date') >= ${sinceKey}
         AND COALESCE(r->>'producer', '') <> ''
       GROUP BY 1, 2
     `;
@@ -69,7 +75,8 @@ export async function GET(req: Request) {
              COALESCE(SUM((r->>'value')::float), 0)::text AS value,
              COALESCE(SUM((r->>'volume')::float), 0)::text AS volume
       FROM batches b, jsonb_array_elements(b.rows) r
-      WHERE r->>'agent' = ANY(${names}) AND (r->>'date') >= ${sinceKey}
+      WHERE b.agent_id = ANY(${ownerIds})
+        AND r->>'agent' = ANY(${names}) AND (r->>'date') >= ${sinceKey}
         AND COALESCE(r->>'client', '') <> ''
       GROUP BY 1
       ORDER BY SUM(COALESCE((r->>'value')::float, 0)) DESC,
