@@ -136,7 +136,7 @@ export async function GET(req: Request) {
       byName.set(name, agentId);
     }
 
-    // 3) Linkurile agenților (30 de zile; Bogdan le poate regenera din panou).
+    // 3) Linkurile agenților (1 an; Bogdan le poate regenera/bloca din panou).
     const origin = requestOrigin(req);
     const links: Array<{ name: string; url: string }> = [];
     for (const name of AGENT_NAMES) {
@@ -146,7 +146,7 @@ export async function GET(req: Request) {
         {
           agentId,
           agentName: name,
-          exp: Math.floor(Date.now() / 1000) + 30 * 86400,
+          exp: Math.floor(Date.now() / 1000) + 365 * 86400,
         },
         secret,
       );
@@ -202,7 +202,7 @@ ${links
     (l) => `<div class="agent"><b>${esc(l.name)}</b><a href="${esc(l.url)}">${esc(l.url)}</a></div>`,
   )
   .join("")}
-<p style="font-size:13px">Linkurile țin 30 de zile; Bogdan le poate regenera oricând din panou → Agenți.</p>
+<p style="font-size:13px">Linkurile țin UN AN; Bogdan le poate regenera sau bloca oricând din panou → Agenți.</p>
 
 ${
   shared.length

@@ -116,7 +116,7 @@ export async function POST(req: Request) {
             {
               agentId,
               agentName: cleanName,
-              exp: Math.floor(Date.now() / 1000) + 30 * 86400,
+              exp: Math.floor(Date.now() / 1000) + 365 * 86400,
             },
             secret,
           );

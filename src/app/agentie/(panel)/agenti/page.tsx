@@ -333,7 +333,7 @@ function NewAgentModal({
 }) {
   const [agentId, setAgentId] = useState("");
   const [agentName, setAgentName] = useState("");
-  const [ttlDays, setTtlDays] = useState(30);
+  const [ttlDays, setTtlDays] = useState(365);
   const [link, setLink] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -405,7 +405,7 @@ function NewAgentModal({
               min={1}
               max={365}
               value={ttlDays}
-              onChange={(e) => setTtlDays(parseInt(e.target.value) || 30)}
+              onChange={(e) => setTtlDays(parseInt(e.target.value) || 365)}
               className={inputClass}
             />
           </Field>
