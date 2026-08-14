@@ -135,6 +135,15 @@ async function panouAgent(browser: Browser) {
       check(`meniul „${eticheta}” există`, false, "butonul nu e în bara laterală");
       continue;
     }
+    // Fără XLS încărcat, meniurile de analiză sunt DEZACTIVATE intenționat
+    // (pointer-events-none) — nu insistăm pe un buton care nu se vrea apăsat.
+    const dezactivat = await buton.evaluate(
+      (el: HTMLElement) => getComputedStyle(el).pointerEvents === "none",
+    );
+    if (dezactivat) {
+      console.log(`  · „${eticheta}” e dezactivat (fără date) — sar`);
+      continue;
+    }
     await buton.click();
     await page.waitForTimeout(key === "harta" ? 3500 : 1200);
 
