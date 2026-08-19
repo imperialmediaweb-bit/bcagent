@@ -1,5 +1,6 @@
 import Telemetry from "./Telemetry";
 import BootFlag from "./BootFlag";
+import AutoUpdate from "./AutoUpdate";
 import "./globals.css";
 import type { Metadata, Viewport } from "next";
 import { Syne, Space_Grotesk } from "next/font/google";
@@ -60,6 +61,7 @@ document.body.appendChild(d);
           }}
         />
         <BootFlag />
+        <AutoUpdate />
         <Telemetry />
         {children}
       </body>

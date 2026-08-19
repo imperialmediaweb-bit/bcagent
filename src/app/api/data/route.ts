@@ -27,6 +27,27 @@ export async function GET(req: Request) {
 
   try {
     await ensureSchema();
+
+    // FIȘIERUL FIRMEI: raportul de vânzări îl urcă managerul, o dată,
+    // pentru toată echipa. Agentul trebuie să-și vadă cifrele din el —
+    // dar DOAR felia lui, nu ale colegilor. Aflăm firma agentului și
+    // numele sub care apare în rapoarte.
+    let orgOwner = "";
+    let numeleMeu = "";
+    try {
+      const [m] = await db<Array<{ org_id: string; name: string }>>`
+        SELECT org_id, name FROM org_agents
+        WHERE agent_id = ${auth.agentId} AND active
+        LIMIT 1
+      `;
+      if (m) {
+        orgOwner = `org:${m.org_id}`;
+        numeleMeu = m.name;
+      }
+    } catch {
+      // instalare fără tabelele platformei — mergem doar pe fișierele lui
+    }
+
     const batchRows = await db<
       Array<{
         id: string;
@@ -45,9 +66,28 @@ export async function GET(req: Request) {
         }>;
       }>
     >`
-      SELECT id, file_name, uploaded_at, row_count, date_min, date_max, rows
-      FROM batches
-      WHERE agent_id = ${auth.agentId}
+      SELECT id, file_name, uploaded_at, date_min, date_max,
+             jsonb_array_length(felia) AS row_count,
+             felia AS rows
+      FROM (
+        SELECT id, file_name, uploaded_at, date_min, date_max,
+               CASE
+                 -- Fișierele urcate chiar de el: integral.
+                 WHEN agent_id = ${auth.agentId} THEN rows
+                 -- Fișierul firmei: DOAR rândurile lui. Potrivirea pe nume
+                 -- iartă diacriticele, majusculele și spațiile în plus.
+                 ELSE COALESCE((
+                   SELECT jsonb_agg(r)
+                   FROM jsonb_array_elements(rows) r
+                   WHERE btrim(lower(translate(r->>'agent', 'ăâîșțşţ', 'aaistst')))
+                       = btrim(lower(translate(${numeleMeu}, 'ăâîșțşţ', 'aaistst')))
+                 ), '[]'::jsonb)
+               END AS felia
+        FROM batches
+        WHERE agent_id = ${auth.agentId}
+           OR (${orgOwner} <> '' AND agent_id = ${orgOwner})
+      ) t
+      WHERE jsonb_array_length(felia) > 0
       ORDER BY uploaded_at ASC
     `;
 
@@ -107,9 +147,17 @@ export async function DELETE(req: Request) {
   if (!db) return Response.json({ enabled: false });
   try {
     await ensureSchema();
-    await db`DELETE FROM batches WHERE agent_id = ${auth.agentId}`;
+    // ISTORICUL NU SE ȘTERGE DIN TEREN. Butonul ăsta golea din baza de
+    // date TOATE vânzările agentului — o apăsare greșită pe telefon, sau
+    // un agent care pleacă din firmă, și istoricul firmei dispărea.
+    // Datele rămân ale firmei; ștergerea se face doar din panoul firmei.
+    // (Panoul agentului își curăță doar afișarea, local.)
     await db`DELETE FROM agent_settings WHERE agent_id = ${auth.agentId}`;
-    return Response.json({ ok: true });
+    return Response.json({
+      ok: true,
+      pastrat: true,
+      mesaj: "Setările au fost resetate. Vânzările rămân la firmă.",
+    });
   } catch (e) {
     return Response.json(
       { error: e instanceof Error ? e.message : String(e) },
