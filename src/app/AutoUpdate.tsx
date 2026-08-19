@@ -20,23 +20,43 @@ export default function AutoUpdate() {
     let versiuneMea = "";
     let oprit = false;
 
-    /** Momente în care NU avem voie să reîmprospătăm: e ceva în lucru. */
+    // Ultima dată când agentul a scris ceva (tastat sau dictat).
+    let ultimaScriere = 0;
+    const amScris = () => {
+      ultimaScriere = Date.now();
+    };
+    document.addEventListener("input", amScris, true);
+
+    /**
+     * Momente în care NU avem voie să reîmprospătăm: e ceva în lucru.
+     * ATENȚIE la falsele alarme: „orice câmp cu valoare" NU e un semn de
+     * lucru — panoul are câmpuri completate din start (preț, comision,
+     * bife), iar cu regula aia aplicația nu s-ar actualiza niciodată.
+     */
     function eOcupat(): boolean {
-      // fereastră deschisă (comandă, vizită, poză)
+      // 1. Fereastră deschisă: comandă, vizită, poză, meniul mobil.
+      //    Modalele noastre sunt straturi „fixed inset-0" peste pagină.
       if (document.querySelector('[role="dialog"], dialog[open]')) return true;
+      const straturi = Array.from(document.querySelectorAll<HTMLElement>("div"));
+      const areFereastra = straturi.some((el) => {
+        const s = getComputedStyle(el);
+        if (s.position !== "fixed" || s.display === "none") return false;
+        const r = el.getBoundingClientRect();
+        // acoperă tot ecranul = fereastră/fundal de fereastră
+        return r.width >= window.innerWidth * 0.9 && r.height >= window.innerHeight * 0.9;
+      });
+      if (areFereastra) return true;
+      // 2. Scrie chiar acum.
       const activ = document.activeElement as HTMLElement | null;
       if (activ) {
         const t = activ.tagName;
-        if (t === "INPUT" || t === "TEXTAREA" || t === "SELECT") return true;
-        if (activ.isContentEditable) return true;
+        if (t === "INPUT" || t === "TEXTAREA" || activ.isContentEditable) return true;
       }
-      // text început într-un câmp, chiar dacă nu e focalizat acum
-      const campuri = Array.from(
-        document.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>(
-          "input, textarea",
-        ),
-      );
-      if (campuri.some((c) => (c.value ?? "").trim().length > 0)) return true;
+      // 3. Notă dictată/scrisă, nesalvată (textarea n-are valori implicite).
+      const note = Array.from(document.querySelectorAll<HTMLTextAreaElement>("textarea"));
+      if (note.some((n) => (n.value ?? "").trim().length > 0)) return true;
+      // 4. A scris ceva în ultimele 2 minute — poate se întoarce la el.
+      if (ultimaScriere && Date.now() - ultimaScriere < 120_000) return true;
       return false;
     }
 
@@ -70,6 +90,7 @@ export default function AutoUpdate() {
     const ceas = setInterval(() => void verifica(true), 10 * 60 * 1000);
 
     return () => {
+      document.removeEventListener("input", amScris, true);
       document.removeEventListener("visibilitychange", laRevenire);
       window.removeEventListener("focus", laRevenire);
       clearInterval(ceas);

@@ -10,11 +10,16 @@ export const dynamic = "force-dynamic";
  * Railway pune un identificator unic la fiecare deploy; local folosim ora
  * de pornire a serverului.
  */
+// ATENȚIE: fără un identificator STABIL de deploy, două instanțe ale
+// serverului ar raporta versiuni diferite și telefoanele s-ar reîncărca
+// la nesfârșit, în buclă. De aceea, dacă nu găsim unul, spunem „fix" —
+// adică actualizarea automată stă deoparte, nu riscăm bucla.
 const VERSIUNE =
   process.env.RAILWAY_DEPLOYMENT_ID ??
   process.env.RAILWAY_GIT_COMMIT_SHA ??
   process.env.VERCEL_GIT_COMMIT_SHA ??
-  `local-${Date.now()}`;
+  process.env.APP_VERSION ??
+  "fix";
 
 export function GET() {
   return new Response(JSON.stringify({ versiune: VERSIUNE }), {

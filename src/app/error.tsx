@@ -24,9 +24,13 @@ export default function AppError({
       /chunk|Loading chunk|dynamically imported module|import\(\)|failed to fetch/i.test(
         msg,
       );
-    if (eChunk && !sessionStorage.getItem("chunk-reload")) {
-      sessionStorage.setItem("chunk-reload", "1");
-      window.location.reload();
+    try {
+      if (eChunk && !sessionStorage.getItem("chunk-reload")) {
+        sessionStorage.setItem("chunk-reload", "1");
+        window.location.reload();
+      }
+    } catch {
+      // stocare blocată (mod incognito/restricții) — rămâne butonul
     }
   }, [error]);
 
@@ -63,7 +67,11 @@ export default function AppError({
         <button
           type="button"
           onClick={() => {
-            sessionStorage.removeItem("chunk-reload");
+            try {
+              sessionStorage.removeItem("chunk-reload");
+            } catch {
+              // nimic
+            }
             reset();
             window.location.reload();
           }}

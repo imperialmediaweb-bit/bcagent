@@ -24,7 +24,7 @@ export async function orgAgentNamesForAgent(agentId: string): Promise<string[]> 
       SELECT colegi.name
       FROM org_agents eu
       JOIN org_agents colegi ON colegi.org_id = eu.org_id
-      WHERE eu.agent_id = ${agentId}
+      WHERE eu.agent_id = ${agentId} AND eu.active
     `;
     return rows.map((r) => r.name);
   } catch {

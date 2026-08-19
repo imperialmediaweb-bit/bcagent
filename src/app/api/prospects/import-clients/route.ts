@@ -37,7 +37,10 @@ export async function POST(req: Request) {
   } catch {
     return Response.json({ error: "Invalid JSON" }, { status: 400 });
   }
-  if (!body.token || !(await verifyFieldToken(body.token, secret))) {
+  const identitate = body.token
+    ? await verifyFieldToken(body.token, secret)
+    : null;
+  if (!identitate) {
     return Response.json({ error: "Token invalid sau expirat" }, { status: 401 });
   }
   if (!Array.isArray(body.clients)) {
@@ -167,6 +170,10 @@ export async function POST(req: Request) {
       .map((c) => c.name)
       .filter((n) => !matchedNames.has(n));
 
+    // IZOLARE: nu punem mâna pe firmele aflate în lucru la ALTĂ agenție.
+    const { orgAgentNamesForAgent } = await import("@/lib/org-scope");
+    const numeleFirmei = await orgAgentNamesForAgent(identitate.agentId);
+
     let updated = 0;
     if (!body.dryRun && matched.length > 0) {
       const payload = matched.map((m) => ({ cui: m.cui, agent: m.agent }));
@@ -182,6 +189,8 @@ export async function POST(req: Request) {
           payload as unknown as Parameters<typeof db.json>[0],
         )}) AS u(cui TEXT, agent TEXT)
         WHERE p.cui = u.cui
+          AND (COALESCE(p.assigned_agent, '') = ''
+               OR p.assigned_agent = ANY(${numeleFirmei.length ? numeleFirmei : [""]}))
       `;
       updated = result.count;
     }

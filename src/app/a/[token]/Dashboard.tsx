@@ -135,6 +135,9 @@ export default function Dashboard({
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   // Meniul arată DOAR secțiunea aleasă (aerisit); „tot" = pagina lungă veche.
   const [view, setView] = useState<string>("acasa");
+  // „Am terminat de întrebat serverul" — secțiunile de analiză apar abia
+  // după ce vin datele, deci nu judecăm nimic înainte de momentul ăsta.
+  const [dateSosite, setDateSosite] = useState(false);
   useEffect(() => {
     try {
       const v = localStorage.getItem("bcagent:view");
@@ -150,6 +153,10 @@ export default function Dashboard({
   // înapoi pe „Acasă", curățând și memoria.
   useEffect(() => {
     if (view === "acasa" || view === "tot") return;
+    // Așteptăm să vină datele de pe server (secțiunile de analiză apar
+    // abia atunci). Verificăm de mai multe ori, rar — dacă tăiem prea
+    // repede, i-am șterge omului secțiunea preferată degeaba.
+    if (!dateSosite) return; // încă se încarcă — nu tăiem nimic degeaba
     const t = setTimeout(() => {
       if (!document.getElementById(view)) {
         setView("acasa");
@@ -159,9 +166,9 @@ export default function Dashboard({
           // nimic
         }
       }
-    }, 60);
+    }, 300);
     return () => clearTimeout(t);
-  }, [view]);
+  }, [view, dateSosite]);
   function goView(v: string) {
     setView(v);
     try {
@@ -307,6 +314,8 @@ export default function Dashboard({
         }
       } catch {
         // localStorage rămâne sursa
+      } finally {
+        if (!cancelled) setDateSosite(true);
       }
     }
 
@@ -463,15 +472,33 @@ export default function Dashboard({
     const removeEnd = removeStart + batches[idx].rowCount;
     const newRows = [...rows.slice(0, removeStart), ...rows.slice(removeEnd)];
     const newBatches = [...before, ...after];
+    // Întâi întrebăm serverul: fișierele mai vechi de o zi și cel al
+    // firmei NU se șterg din teren. Dacă refuză, nu-l scoatem nici de pe
+    // ecran — altfel dispărea aici și reapărea la următoarea deschidere.
+    if (storageMode === "db") {
+      (async () => {
+        try {
+          const res = await fetch(
+            `/api/batches/${encodeURIComponent(id)}?token=${encodeURIComponent(token)}`,
+            { method: "DELETE" },
+          );
+          if (!res.ok) {
+            const d = (await res.json().catch(() => null)) as { error?: string } | null;
+            setError(d?.error ?? "Fișierul nu poate fi șters din teren.");
+            return;
+          }
+          setRows(newRows);
+          setBatches(newBatches);
+          persist(newRows, parseInfo, false, newBatches);
+        } catch {
+          setError("Fără semnal — încearcă din nou.");
+        }
+      })();
+      return;
+    }
     setRows(newRows);
     setBatches(newBatches);
     persist(newRows, parseInfo, false, newBatches);
-    // Sync DB
-    if (storageMode === "db") {
-      fetch(`/api/batches/${encodeURIComponent(id)}?token=${encodeURIComponent(token)}`, {
-        method: "DELETE",
-      }).catch(() => {});
-    }
   }
 
   function loadDemo() {

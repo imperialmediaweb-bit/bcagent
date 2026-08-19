@@ -57,6 +57,7 @@ async function main() {
     { date: "2026-08-03", agent: "Gavrilet Bogdan", producer: "BAT", client: "MAGAZIN 1", volume: 10, value: 100 },
     { date: "2026-08-04", agent: "Gavrilet Bogdan", producer: "BAT", client: "MAGAZIN 2", volume: 20, value: 200 },
     { date: "2026-08-05", agent: "GAVRILET BOGDAN", producer: "PMI", client: "MAGAZIN 3", volume: 5, value: 50 },
+    { date: "2026-08-07", agent: "GAVRILEȚ BOGDAN", producer: "PMI", client: "MAGAZIN 4", volume: 8, value: 80 },
     { date: "2026-08-03", agent: "Cojocaru Razvan", producer: "BAT", client: "BAR 1", volume: 7, value: 70 },
     { date: "2026-08-06", agent: "Cojocaru Razvan", producer: "JTI", client: "BAR 2", volume: 3, value: 30 },
   ];
@@ -84,21 +85,27 @@ async function main() {
   console.log("══ Agentul A își vede felia lui din fișierul firmei ══");
   const a = await dataFor(tokA);
   check("A vede fișierul firmei", (a.batches ?? []).length === 1, JSON.stringify(a.batches));
-  check("A are exact 3 rânduri (ale lui)", (a.rows ?? []).length === 3, `${(a.rows ?? []).length}`);
+  check("A are exact 4 rânduri (ale lui)", (a.rows ?? []).length === 4, `${(a.rows ?? []).length}`);
   check(
     "A NU vede niciun rând al colegului",
     (a.rows ?? []).every((r) => !/cojocaru/i.test(r.agent)),
     JSON.stringify((a.rows ?? []).map((r) => r.agent)),
   );
   check(
-    "cantitatea lui A e corectă (10+20+5=35)",
-    (a.rows ?? []).reduce((s, r) => s + r.volume, 0) === 35,
+    "cantitatea lui A e corectă (10+20+5+8=43)",
+    (a.rows ?? []).reduce((s, r) => s + r.volume, 0) === 43,
+    String((a.rows ?? []).reduce((s, r) => s + r.volume, 0)),
   );
   check(
     "potrivirea trece peste diacritice și MAJUSCULE",
     (a.rows ?? []).some((r) => r.agent === "GAVRILET BOGDAN"),
   );
-  check("numărul de rânduri afișat e cel al feliei lui", a.batches?.[0]?.rowCount === 3, `${a.batches?.[0]?.rowCount}`);
+  check("numărul de rânduri afișat e cel al feliei lui", a.batches?.[0]?.rowCount === 4, `${a.batches?.[0]?.rowCount}`);
+  check(
+    "potrivirea prinde și diacriticele MARI (GAVRILEȚ)",
+    (a.rows ?? []).some((r) => r.agent === "GAVRILEȚ BOGDAN"),
+    JSON.stringify((a.rows ?? []).map((r) => r.agent)),
+  );
 
   console.log("══ Agentul B vede DOAR ce e al lui ══");
   const b = await dataFor(tokB);
@@ -108,6 +115,28 @@ async function main() {
     (b.rows ?? []).every((r) => !/gavrilet/i.test(r.agent)),
   );
   check("cantitatea lui B e corectă (7+3=10)", (b.rows ?? []).reduce((s, r) => s + r.volume, 0) === 10);
+
+  console.log("══ ANTI-DUBLARE: același raport urcat și de agent, și de firmă ══");
+  // Agentul urcă el însuși aceleași rânduri (se întâmplă: i-l dă managerul
+  // pe WhatsApp și îl bagă și el). Cifrele NU au voie să se dubleze.
+  const alLui = `bo_${RUN}_eu`;
+  await sql`
+    INSERT INTO batches (id, agent_id, file_name, uploaded_at, row_count, date_min, date_max, rows)
+    VALUES (${alLui}, ${idA}, 'acelasi-raport.ods', NOW(), 4, '2026-08-03', '2026-08-07',
+            ${sql.json(rows.filter((r) => /gavrile/i.test(r.agent)))})
+  `;
+  const a2 = await dataFor(tokA);
+  check(
+    "rândurile identice se numără O SINGURĂ dată",
+    (a2.rows ?? []).length === 4,
+    `${(a2.rows ?? []).length} rânduri`,
+  );
+  check(
+    "cantitatea rămâne 43, nu se dublează la 86",
+    (a2.rows ?? []).reduce((s, r) => s + r.volume, 0) === 43,
+    String((a2.rows ?? []).reduce((s, r) => s + r.volume, 0)),
+  );
+  await sql`DELETE FROM batches WHERE id = ${alLui}`;
 
   console.log("══ Agentul străin (fără firmă) nu vede nimic ══");
   const tokStrain = await signToken(

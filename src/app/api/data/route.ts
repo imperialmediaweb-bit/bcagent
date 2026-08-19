@@ -79,8 +79,11 @@ export async function GET(req: Request) {
                  ELSE COALESCE((
                    SELECT jsonb_agg(r)
                    FROM jsonb_array_elements(rows) r
-                   WHERE btrim(lower(translate(r->>'agent', 'ăâîșțşţ', 'aaistst')))
-                       = btrim(lower(translate(${numeleMeu}, 'ăâîșțşţ', 'aaistst')))
+                   -- lower() ÎNAINTE de translate: altfel diacriticele
+                   -- MARI (GAVRILEȚ) nu se pliază și agentul rămâne fără
+                   -- nicio cifră, deși e chiar numele lui în raport.
+                   WHERE btrim(translate(lower(r->>'agent'), 'ăâîșțşţ', 'aaistst'))
+                       = btrim(translate(lower(${numeleMeu}), 'ăâîșțşţ', 'aaistst'))
                  ), '[]'::jsonb)
                END AS felia
         FROM batches
@@ -103,7 +106,37 @@ export async function GET(req: Request) {
       WHERE agent_id = ${auth.agentId}
     `;
 
-    const allRows = batchRows.flatMap((b) => b.rows);
+    // ANTI-DUBLARE. Dacă agentul a urcat cândva chiar el același raport
+    // pe care l-a urcat și firma, aceleași vânzări ar veni pe două căi și
+    // s-ar aduna — cifre umflate, comisioane greșite. Păstrăm o singură
+    // dată fiecare rând identic (aceeași zi, client, marfă, cantitate,
+    // valoare). Rândurile diferite rămân toate, chiar dacă seamănă.
+    const vazute = new Set<string>();
+    const allRows: typeof batchRows[number]["rows"] = [];
+    let dublate = 0;
+    for (const b of batchRows) {
+      for (const r of b.rows) {
+        const amprenta = [
+          String(r.date ?? "").slice(0, 10),
+          String(r.client ?? "").trim().toLowerCase(),
+          String(r.producer ?? "").trim().toLowerCase(),
+          String(r.agent ?? "").trim().toLowerCase(),
+          r.volume,
+          r.value,
+        ].join("|");
+        if (vazute.has(amprenta)) {
+          dublate++;
+          continue;
+        }
+        vazute.add(amprenta);
+        allRows.push(r);
+      }
+    }
+    if (dublate > 0) {
+      console.warn(
+        `[data] ${dublate} rânduri identice venite pe două căi (fișier propriu + fișierul firmei) — numărate o singură dată`,
+      );
+    }
 
     return Response.json({
       enabled: true,

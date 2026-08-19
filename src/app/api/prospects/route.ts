@@ -101,9 +101,15 @@ export async function GET(req: Request) {
         AND (${localitate} = '' OR localitate ILIKE ${"%" + localitate + "%"})
         AND (${caenPattern} = '' OR caen LIKE ${caenPattern})
         AND (${caenInPatterns.length === 0} OR caen LIKE ANY(${caenInPatterns}))
-        AND (${status} = '' OR
-             (CASE WHEN ${!masked} OR assigned_agent = '' OR assigned_agent = ANY(${mineArr})
-                   THEN status ELSE 'nou' END) = ${status})
+        AND (${status} = ''
+             -- Ramura asta folosește indexul pe status (1,3M firme).
+             OR (status = ${status}
+                 AND (${!masked} OR COALESCE(assigned_agent,'') = ''
+                      OR assigned_agent = ANY(${mineArr})))
+             -- Firmele altei agenții ne apar ca „nou".
+             OR (${masked} AND ${status} = 'nou'
+                 AND COALESCE(assigned_agent,'') <> ''
+                 AND NOT (assigned_agent = ANY(${mineArr}))))
         AND (${agent} = '' OR
              (CASE WHEN ${!masked} OR assigned_agent = ANY(${mineArr})
                    THEN assigned_agent ELSE '' END) = ${agent})
