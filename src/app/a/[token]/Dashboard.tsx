@@ -143,6 +143,25 @@ export default function Dashboard({
       // fără localStorage — rămâne acasă
     }
   }, []);
+  // AUTOVINDECARE (anti-ecran-alb): secțiunile de analiză există în pagină
+  // doar după ce firma a urcat vânzările. Dacă cea ținută minte lipsește
+  // — sau dispare pentru că fișierul a fost șters — panoul ar rămâne ALB
+  // cu antet, la fiecare deschidere. Verificăm după randare și cădem
+  // înapoi pe „Acasă", curățând și memoria.
+  useEffect(() => {
+    if (view === "acasa" || view === "tot") return;
+    const t = setTimeout(() => {
+      if (!document.getElementById(view)) {
+        setView("acasa");
+        try {
+          localStorage.removeItem("bcagent:view");
+        } catch {
+          // nimic
+        }
+      }
+    }, 60);
+    return () => clearTimeout(t);
+  }, [view]);
   function goView(v: string) {
     setView(v);
     try {
@@ -788,6 +807,20 @@ export default function Dashboard({
           )}
           </div>
 
+          {/* HARTA lucrează pe CLIENȚI și pe firmele din piață — NU are
+              nevoie de fișierul de vânzări. Stătea în blocul de mai jos și
+              agentul care o deschidea fără fișier urcat primea ecran ALB. */}
+          <section id="harta" className={"scroll-mt fade-in" + vis("harta")}>
+            <SectionTitle
+              icon={<MapIcon className="h-5 w-5" />}
+              title="Harta pieței"
+              subtitle="Verde = ai clienți acolo · Portocaliu = firme neacoperite (pete albe) — pe baza celor 1,3M firme active"
+            />
+            <div className="mt-4">
+              <MapPanel token={token} clients={allClients} />
+            </div>
+          </section>
+
           {hasData && (
             <>
               {valueless && (
@@ -893,17 +926,6 @@ export default function Dashboard({
                   </div>
                 </section>
               )}
-
-              <section id="harta" className={"scroll-mt fade-in" + vis("harta")}>
-                <SectionTitle
-                  icon={<MapIcon className="h-5 w-5" />}
-                  title="Harta pieței"
-                  subtitle="Verde = ai clienți acolo · Portocaliu = firme neacoperite (pete albe) — pe baza celor 1,3M firme active"
-                />
-                <div className="mt-4">
-                  <MapPanel token={token} clients={allClients} />
-                </div>
-              </section>
 
               <section id="antrenor" className={"scroll-mt fade-in" + vis("antrenor")}>
                 <SectionTitle
