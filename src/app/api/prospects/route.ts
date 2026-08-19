@@ -83,6 +83,13 @@ export async function GET(req: Request) {
   try {
     await ensureSchema();
 
+    // IZOLARE ÎNTRE FIRME: starea de lucru (status/notă/agent/sold) se vede
+    // doar pe rândurile firmei apelantului; ale altora apar ca firme simple.
+    const { orgAgentNamesForAgent } = await import("@/lib/org-scope");
+    const mine = await orgAgentNamesForAgent(auth.agentId);
+    const masked = mine.length > 0;
+    const mineArr = masked ? mine : [""];
+
     // Filtrul e construit o singură dată și refolosit la listă + count.
     // caen/caenIn funcționează pe PREFIX: "47" prinde tot 47xx, "4711" exact.
     const caenPattern = caen ? `${caen}%` : "";
@@ -94,8 +101,12 @@ export async function GET(req: Request) {
         AND (${localitate} = '' OR localitate ILIKE ${"%" + localitate + "%"})
         AND (${caenPattern} = '' OR caen LIKE ${caenPattern})
         AND (${caenInPatterns.length === 0} OR caen LIKE ANY(${caenInPatterns}))
-        AND (${status} = '' OR status = ${status})
-        AND (${agent} = '' OR assigned_agent = ${agent})
+        AND (${status} = '' OR
+             (CASE WHEN ${!masked} OR assigned_agent = '' OR assigned_agent = ANY(${mineArr})
+                   THEN status ELSE 'nou' END) = ${status})
+        AND (${agent} = '' OR
+             (CASE WHEN ${!masked} OR assigned_agent = ANY(${mineArr})
+                   THEN assigned_agent ELSE '' END) = ${agent})
         AND (${!onlyActive} OR activ IS DISTINCT FROM FALSE)
         AND (${!onlyTva} OR tva IS TRUE)
         AND (${!withPhone} OR (telefon IS NOT NULL AND telefon <> ''))
@@ -104,11 +115,18 @@ export async function GET(req: Request) {
 
     const rows = await db<ProspectRow[]>`
       SELECT cui, denumire, adresa, localitate, judet, caen, caen_desc,
-             tva, activ, status, note, assigned_agent,
+             tva, activ,
+             (CASE WHEN ${!masked} OR assigned_agent = '' OR assigned_agent = ANY(${mineArr})
+                   THEN status ELSE 'nou' END) AS status,
+             (CASE WHEN ${!masked} OR assigned_agent = '' OR assigned_agent = ANY(${mineArr})
+                   THEN note ELSE '' END) AS note,
+             (CASE WHEN ${!masked} OR assigned_agent = ANY(${mineArr})
+                   THEN assigned_agent ELSE '' END) AS assigned_agent,
              COALESCE(telefon, '') AS telefon,
              COALESCE(email, '') AS email,
              COALESCE(contact, '') AS contact,
-             sold_cents::text AS sold_cents,
+             (CASE WHEN ${!masked} OR assigned_agent = '' OR assigned_agent = ANY(${mineArr})
+                   THEN sold_cents ELSE NULL END)::text AS sold_cents,
              updated_at
       FROM prospects
       ${buildWhere()}
@@ -122,8 +140,10 @@ export async function GET(req: Request) {
       [{ total: string; contactati: string; clienti: string }]
     >`
       SELECT COUNT(*)::text AS total,
-             COUNT(*) FILTER (WHERE status = 'contactat')::text AS contactati,
-             COUNT(*) FILTER (WHERE status = 'client')::text AS clienti
+             COUNT(*) FILTER (WHERE status = 'contactat'
+               AND (${!masked} OR assigned_agent = '' OR assigned_agent = ANY(${mineArr})))::text AS contactati,
+             COUNT(*) FILTER (WHERE status = 'client'
+               AND (${!masked} OR assigned_agent = '' OR assigned_agent = ANY(${mineArr})))::text AS clienti
       FROM prospects
     `;
     return Response.json({
@@ -224,6 +244,22 @@ export async function PATCH(req: Request) {
   if (!db) return Response.json({ enabled: false }, { status: 503 });
   try {
     await ensureSchema();
+    // IZOLARE: nu poți modifica o firmă aflată în lucru la ALTĂ agenție.
+    const { orgAgentNamesForAgent } = await import("@/lib/org-scope");
+    const mine = await orgAgentNamesForAgent(auth.agentId);
+    if (mine.length > 0) {
+      const [cur] = await db<Array<{ assigned_agent: string }>>`
+        SELECT COALESCE(assigned_agent, '') AS assigned_agent
+        FROM prospects WHERE cui = ${cui}
+      `;
+      if (cur && cur.assigned_agent !== "" && !mine.includes(cur.assigned_agent)) {
+        return Response.json(
+          { error: "Firma asta e gestionată de altă agenție." },
+          { status: 403 },
+        );
+      }
+    }
+
     // Actualizează doar câmpurile trimise
     const updates: Record<string, string> = {};
     if (body.status !== undefined) updates.status = body.status;

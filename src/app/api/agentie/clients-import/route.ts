@@ -236,6 +236,9 @@ export async function POST(req: Request) {
     let updated = 0;
     if (!body.dryRun && matched.length > 0) {
       const payload = matched.map((m) => ({ cui: m.cui, agent: m.agent }));
+      // IZOLARE: nu atingem rândurile aflate deja în lucru la ALTĂ
+      // agenție — importul nostru nu are voie să-i fure clienții.
+      const numeleNoastre = agentNorm.map((a) => a.name);
       const result = await db`
         UPDATE prospects p
         SET status = 'client',
@@ -248,6 +251,8 @@ export async function POST(req: Request) {
           payload as unknown as Parameters<typeof db.json>[0],
         )}) AS u(cui TEXT, agent TEXT)
         WHERE p.cui = u.cui
+          AND (COALESCE(p.assigned_agent, '') = ''
+               OR p.assigned_agent = ANY(${numeleNoastre.length ? numeleNoastre : [""]}))
       `;
       updated = result.count;
       await audit(auth.session.email, "clients.import", auth.session.orgId, {
