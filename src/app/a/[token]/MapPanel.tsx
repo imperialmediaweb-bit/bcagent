@@ -655,8 +655,8 @@ export default function MapPanel({
         )}
 
         {/* Hartă + panoul localității */}
-        <div className="grid lg:grid-cols-5">
-          <div className="relative lg:col-span-3">
+        <div className="grid min-w-0 lg:grid-cols-5">
+          <div className="relative min-w-0 lg:col-span-3">
             <div ref={mapRef} className="h-[420px] w-full" />
             {(loading || geocoding > 0) && (
               <div className="pointer-events-none absolute right-3 top-3 z-[1000] flex items-center gap-2 rounded-full bg-white/95 px-3 py-1.5 text-xs font-medium text-slate-600 shadow">
@@ -667,7 +667,7 @@ export default function MapPanel({
               </div>
             )}
           </div>
-          <div className="border-t border-slate-100 lg:col-span-2 lg:border-l lg:border-t-0">
+          <div className="min-w-0 border-t border-slate-100 lg:col-span-2 lg:border-l lg:border-t-0">
             {selectedLoc ? (
               <LocalityFirms
                 key={`${judet}-${selectedLoc}-${preset}`}
@@ -1116,7 +1116,7 @@ function LocalityFirms({
   }
 
   return (
-    <div className="flex h-[420px] flex-col">
+    <div className="flex h-[420px] min-w-0 flex-col">
       <div className="flex items-center justify-between gap-2 border-b border-slate-100 px-4 py-3">
         <div className="min-w-0">
           <p className="truncate text-sm font-semibold text-slate-800">

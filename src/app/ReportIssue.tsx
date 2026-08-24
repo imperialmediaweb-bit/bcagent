@@ -74,12 +74,14 @@ export default function ReportIssue({ token }: { token?: string }) {
           setOpen(true);
           setResult(null);
         }}
-        className="fixed bottom-4 right-4 z-40 flex items-center gap-2 rounded-full bg-slate-900 py-2.5 pl-3 pr-4 text-white shadow-lg transition hover:scale-105"
+        className="fixed bottom-4 right-4 z-40 flex items-center gap-2 rounded-full bg-slate-900 p-3 text-white shadow-lg transition hover:scale-105 sm:py-2.5 sm:pl-3 sm:pr-4"
         title="Probleme, sugestii, feedback"
         aria-label="Probleme, sugestii, feedback"
       >
         <MessageCircle className="h-5 w-5" />
-        <span className="text-sm font-semibold">Sugestii / erori</span>
+        {/* Pe telefon rămâne doar iconița: butonul lat acoperea harta și
+            agenții apăsau pe el în loc de bula de pe hartă. */}
+        <span className="hidden text-sm font-semibold sm:inline">Sugestii / erori</span>
       </button>
 
       {open && (
