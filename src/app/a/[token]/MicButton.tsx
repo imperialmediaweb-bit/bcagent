@@ -85,7 +85,36 @@ export default function MicButton({
     };
   }, []);
 
-  if (!supported) return null;
+  // Browserele din interiorul aplicațiilor (Google, WhatsApp, Facebook)
+  // NU au dictare vocală. Înainte, microfonul pur și simplu DISPĂREA și
+  // agentul credea că nu există. Acum apare mereu — iar la apăsare, dacă
+  // dictarea nu e disponibilă, îi spunem exact ce să facă.
+  const [faraSuport, setFaraSuport] = useState(false);
+  if (!supported) {
+    return (
+      <span className="relative inline-flex shrink-0">
+        <button
+          type="button"
+          onClick={() => setFaraSuport((v) => !v)}
+          className={`shrink-0 rounded-md border border-slate-300 bg-slate-100 p-1.5 text-slate-400 ${className}`}
+          title="Dictarea merge doar în Chrome"
+        >
+          <Mic className={`h-${size} w-${size}`} />
+        </button>
+        {faraSuport && (
+          <span
+            onClick={() => setFaraSuport(false)}
+            className="absolute right-0 top-full z-50 mt-1 w-64 rounded-lg border-2 border-amber-300 bg-amber-50 p-2 text-xs font-medium text-amber-900 shadow-lg"
+          >
+            🎤 Dictarea cu vocea merge doar în <strong>Chrome</strong>.
+            Deschide linkul în Chrome: meniul ⋮ (sau „...") →
+            <strong> „Deschide în Chrome"</strong>. Până atunci poți scrie
+            nota cu mâna în căsuța de mai jos.
+          </span>
+        )}
+      </span>
+    );
+  }
 
   function build(): SpeechRecognitionLike | null {
     const SR = getSR();

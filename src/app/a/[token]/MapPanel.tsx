@@ -1146,9 +1146,9 @@ function LocalityFirms({
             Nicio firmă pe filtrul curent.
           </p>
         ) : (
-          <ul className="divide-y divide-slate-100">
+          <ul className="max-w-full divide-y divide-slate-100 overflow-x-hidden">
             {firms.map((f) => (
-              <li key={f.cui} className="px-4 py-2.5">
+              <li key={f.cui} className="min-w-0 max-w-full px-4 py-2.5">
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0">
                     <p className="flex items-center gap-1.5 text-sm font-medium text-slate-800">
@@ -1216,7 +1216,7 @@ function LocalityFirms({
                   <button
                     type="button"
                     onClick={() => setVisitFor(visitFor?.cui === f.cui ? null : f)}
-                    className="inline-flex w-full items-center justify-center gap-1.5 rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-700 sm:w-auto"
+                    className="inline-flex w-full max-w-full items-center justify-center gap-1.5 whitespace-normal break-words rounded-md bg-indigo-600 px-3 py-2 text-center text-sm font-semibold text-white shadow-sm hover:bg-indigo-700"
                   >
                     🎤 Am fost — spune ce a zis
                   </button>
@@ -1368,13 +1368,10 @@ function VisitButtons({
     <div className="mt-2 rounded-lg border border-indigo-100 bg-indigo-50/50 p-2.5">
       {/* DICTARE RAPIDĂ: agentul apasă, spune tot ce a zis clientul, se
           scrie live; apasă din nou și se oprește. Tot ce zice rămâne. */}
-      <div className="rounded-lg border-2 border-indigo-200 bg-white p-2">
-        <div className="flex items-center gap-2">
-          <span className="flex-1 text-xs font-semibold text-indigo-800">
-            {dicteaza
-              ? "🔴 Te ascult — spune ce a zis clientul..."
-              : "🎤 Apasă și spune ce a zis clientul"}
-          </span>
+      <div className="min-w-0 max-w-full rounded-lg border-2 border-indigo-200 bg-white p-2">
+        <div className="flex min-w-0 items-center gap-2">
+          {/* Microfonul PRIMUL, în stânga: orice s-ar îngusta (font mărit,
+              browsere ciudate), se taie din text — NICIODATĂ din buton. */}
           <MicButton
             live
             size={4}
@@ -1385,6 +1382,11 @@ function VisitButtons({
               setInterim("");
             }}
           />
+          <span className="min-w-0 flex-1 break-words text-xs font-semibold text-indigo-800">
+            {dicteaza
+              ? "🔴 Te ascult — spune ce a zis clientul..."
+              : "Apasă microfonul și spune ce a zis clientul"}
+          </span>
         </div>
         <textarea
           value={note + (interim ? (note ? " " : "") + interim : "")}
@@ -1395,7 +1397,7 @@ function VisitButtons({
           onFocus={() => setDicteaza(false)}
           rows={3}
           placeholder="Aici se scrie ce dictezi — sau scrii tu cu mâna."
-          className="mt-1.5 block w-full resize-none rounded-md border border-slate-200 bg-white px-2 py-1.5 text-sm focus:border-indigo-400 focus:outline-none"
+          className="mt-1.5 block w-full min-w-0 max-w-full resize-none rounded-md border border-slate-200 bg-white px-2 py-1.5 text-sm focus:border-indigo-400 focus:outline-none"
         />
       </div>
 

@@ -761,7 +761,7 @@ export default function Dashboard({
   }
 
   return (
-    <div className="paperbg min-h-screen">
+    <div className="paperbg min-h-screen overflow-x-clip">
       <Sidebar
         hasData={hasData}
         view={view}
@@ -783,7 +783,7 @@ export default function Dashboard({
           onOpenMobileNav={() => setMobileNavOpen(true)}
         />
 
-        <main className="mx-auto max-w-7xl space-y-8 px-4 py-8 sm:px-6 lg:px-8">
+        <main className="mx-auto min-w-0 max-w-7xl space-y-8 overflow-x-clip px-4 py-8 sm:px-6 lg:px-8">
           <div id="acasa" className={"scroll-mt space-y-8" + vis("acasa")}>
           <DayPanel token={token} />
           <VanPanel token={token} />
