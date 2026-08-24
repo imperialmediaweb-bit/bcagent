@@ -229,6 +229,19 @@ export async function ensureSchema(): Promise<void> {
     );
     -- Cache de geocodare per localitate (Nominatim, 1 req/s) — o localitate
     -- se geocodează O dată, apoi harta o citește instant de aici.
+    -- COORDONATELE FIECĂREI FIRME (pentru pinii de pe hartă). Agentul
+    -- trebuie să vadă dacă doi clienți sunt vecini, altfel umblă degeaba pe
+    -- drum. „aprox" = n-am găsit adresa exactă și am pus firma în centrul
+    -- localității (cu o mică împrăștiere, ca să nu se suprapună toate).
+    CREATE TABLE IF NOT EXISTS geo_firme (
+      cui TEXT PRIMARY KEY,
+      lat DOUBLE PRECISION,
+      lng DOUBLE PRECISION,
+      aprox BOOLEAN NOT NULL DEFAULT FALSE,
+      failed BOOLEAN NOT NULL DEFAULT FALSE,
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+
     CREATE TABLE IF NOT EXISTS geo_localitati (
       judet TEXT NOT NULL,
       localitate TEXT NOT NULL,

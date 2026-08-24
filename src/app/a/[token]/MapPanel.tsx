@@ -131,6 +131,17 @@ function navAddress(f: { adresa: string; localitate: string; judet?: string }): 
   return parts;
 }
 
+/** Text din baza de date pus în HTML — orice caracter periculos devine
+ *  inofensiv (numele firmelor vin din surse externe). */
+function escHtml(s: string): string {
+  return String(s ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
 function gmapsDir(address: string): string {
   return `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(address)}&travelmode=driving`;
 }
@@ -150,6 +161,22 @@ export default function MapPanel({
   const [geocoding, setGeocoding] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [selectedLoc, setSelectedLoc] = useState<string | null>(null);
+  // PINII CLIENȚILOR: fiecare client, un punct pe hartă la adresa lui —
+  // ca agentul să vadă cine e vecin cu cine și să nu umble aiurea pe drum.
+  interface PinClient {
+    cui: string;
+    denumire: string;
+    adresa: string;
+    localitate: string;
+    telefon: string;
+    lat: number;
+    lng: number;
+    aprox: boolean;
+  }
+  const [pins, setPins] = useState<PinClient[]>([]);
+  const [aratPins, setAratPins] = useState(false);
+  const [pinsLoading, setPinsLoading] = useState(false);
+  const [pinsDeGeocodat, setPinsDeGeocodat] = useState(0);
 
   // Coșul de rută + rutele salvate.
   const [basket, setBasket] = useState<Stop[]>([]);
@@ -175,6 +202,11 @@ export default function MapPanel({
   const resizeObsRef = useRef<ResizeObserver | null>(null);
   // Câte opriri avea ruta ultima dată când am centrat harta pe ea.
   const ruteFit = useRef(-1);
+  // Ultimul cadru pe care s-a potrivit harta. Când harta află (sau își
+  // schimbă) dimensiunea — chenar redimensionat, rotirea telefonului —
+  // proiecția se schimbă și bulele pot ieși din cadru; atunci refacem
+  // potrivirea pe același cadru, ca să rămână toate vizibile și apăsabile.
+  const ultimulCadru = useRef<Array<[number, number]> | null>(null);
   const geocodeRound = useRef(0);
 
   const caenParam = useMemo(() => {
@@ -305,6 +337,65 @@ export default function MapPanel({
     [token, judet, caenParam],
   );
 
+  // Aducem punctele clienților; geocodarea adreselor noi se face în valuri
+  // (Nominatim cere 1 pe secundă), iar rezultatul rămâne salvat — a doua
+  // oară harta se umple instant.
+  const incarcaPins = useCallback(
+    async (cuGeocodare: boolean) => {
+      const params = new URLSearchParams({ token, judet, geocode: cuGeocodare ? "1" : "0" });
+      if (selectedLoc) params.set("localitate", selectedLoc);
+      const res = await fetch(`/api/prospects/pins?${params}`);
+      if (!res.ok) throw new Error(`Eroare ${res.status}`);
+      return (await res.json()) as {
+        pins: PinClient[];
+        deGeocodat: number;
+        geocodate: number;
+      };
+    },
+    [token, judet, selectedLoc],
+  );
+
+  useEffect(() => {
+    if (!aratPins) {
+      // ATENȚIE: fără garda asta, un array NOU la fiecare rulare cerea
+      // redesenarea hărții și întrerupea încărcarea listei de firme
+      // (clientul apăsa pe bulă și nu i se mai deschidea nimic).
+      setPins((p) => (p.length === 0 ? p : []));
+      setPinsDeGeocodat(0);
+      return;
+    }
+    let anulat = false;
+    (async () => {
+      setPinsLoading(true);
+      try {
+        let d = await incarcaPins(false);
+        if (anulat) return;
+        setPins(d.pins);
+        setPinsDeGeocodat(d.deGeocodat);
+        setPinsLoading(false);
+        // valuri de geocodare până se termină (max 10 runde)
+        let runde = 0;
+        while (d.deGeocodat > 0 && runde < 10) {
+          runde++;
+          const inainte = d.deGeocodat;
+          d = await incarcaPins(true);
+          if (anulat) return;
+          setPins(d.pins);
+          setPinsDeGeocodat(d.deGeocodat);
+          if (d.deGeocodat >= inainte) break; // nu mai avansează — ne oprim
+        }
+      } catch {
+        if (!anulat) setPinsLoading(false);
+      }
+    })();
+    return () => {
+      anulat = true;
+    };
+    // Dependențe SIMPLE: funcția se recrea la fiecare render și ar fi
+    // repornit efectul în buclă.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [aratPins, token, judet, selectedLoc]);
+
   useEffect(() => {
     let cancelled = false;
     geocodeRound.current = 0;
@@ -374,12 +465,20 @@ export default function MapPanel({
           const ro = new ResizeObserver(() => {
             if (el.offsetParent === null) return; // ascunsă — nu are rost
             map.invalidateSize();
+            if (ultimulCadru.current && ultimulCadru.current.length > 0) {
+              map.fitBounds(ultimulCadru.current, { padding: [30, 30], maxZoom: 11 });
+            }
           });
           ro.observe(el);
           resizeObsRef.current = ro;
         }
         // Și o dată la început, după ce se așază chenarul.
-        setTimeout(() => map.invalidateSize(), 250);
+        setTimeout(() => {
+          map.invalidateSize();
+          if (ultimulCadru.current && ultimulCadru.current.length > 0) {
+            map.fitBounds(ultimulCadru.current, { padding: [30, 30], maxZoom: 11 });
+          }
+        }, 250);
       }
 
       const { map, layer } = leafletRef.current;
@@ -408,6 +507,55 @@ export default function MapPanel({
         marker.addTo(layer);
         bounds.push([loc.lat, loc.lng]);
       }
+      // PINII CLIENȚILOR: fiecare client, un punct. Apeși pe punct și-i
+      // vezi numele — așa se vede pe hartă cine e vecin cu cine, iar ruta
+      // se face pe vecinătate, nu la nimereală.
+      if (aratPins && pins.length > 0) {
+        for (const p of pins) {
+          const punct = L.circleMarker([p.lat, p.lng], {
+            radius: 7,
+            color: "#7c3aed",
+            fillColor: p.aprox ? "#c4b5fd" : "#8b5cf6",
+            fillOpacity: 0.95,
+            weight: 2,
+          });
+          punct.bindTooltip(p.denumire, { direction: "top" });
+          const inRuta = basket.some((b) => b.cui === p.cui);
+          punct.bindPopup(
+            `<div style="min-width:190px">
+              <div style="font-weight:700;font-size:13px;margin-bottom:2px">${escHtml(p.denumire)}</div>
+              <div style="font-size:11px;color:#64748b">${escHtml(p.adresa || p.localitate)}${p.aprox ? " · loc aproximativ" : ""}</div>
+              <div style="margin-top:6px;display:flex;gap:6px;flex-wrap:wrap">
+                ${p.telefon ? `<a href="tel:${escHtml(p.telefon)}" style="font-size:12px;font-weight:600;color:#0f766e;text-decoration:none">📞 Sună</a>` : ""}
+                <a href="${escHtml(gmapsDir(p.adresa ? `${p.adresa}, ${p.localitate}` : p.localitate))}" target="_blank" rel="noopener" style="font-size:12px;font-weight:600;color:#1d4ed8;text-decoration:none">🧭 Navighează</a>
+                <button data-pin-ruta="${escHtml(p.cui)}" style="font-size:12px;font-weight:700;color:${inRuta ? "#b91c1c" : "#4f46e5"};background:none;border:none;padding:0;cursor:pointer">${inRuta ? "− Scoate din rută" : "+ Pune în rută"}</button>
+              </div>
+            </div>`,
+          );
+          punct.on("popupopen", () => {
+            const btn = document.querySelector<HTMLButtonElement>(
+              `[data-pin-ruta="${CSS.escape(p.cui)}"]`,
+            );
+            btn?.addEventListener(
+              "click",
+              () => {
+                toggleStop({
+                  cui: p.cui,
+                  denumire: p.denumire,
+                  adresa: p.adresa,
+                  localitate: p.localitate,
+                  telefon: p.telefon,
+                } as Firm);
+                map.closePopup();
+              },
+              { once: true },
+            );
+          });
+          punct.addTo(layer);
+          bounds.push([p.lat, p.lng]);
+        }
+      }
+
       // RUTA, DESENATĂ PE HARTĂ. Opririle din coș primesc pini numerotați,
       // în ordinea de mers, legați cu o linie — agentul vede drumul înainte
       // să pornească navigarea, nu doar o listă de nume dedesubt.
@@ -487,13 +635,14 @@ export default function MapPanel({
           map.fitBounds(puncte, { padding: [60, 60], maxZoom: 13 });
         }
       } else if (bounds.length > 0 && !selectedLoc) {
+        ultimulCadru.current = bounds;
         map.fitBounds(bounds, { padding: [30, 30], maxZoom: 11 });
       }
     })();
     return () => {
       disposed = true;
     };
-  }, [localities, clientLocalities, selectedLoc, basket]);
+  }, [localities, clientLocalities, selectedLoc, basket, pins, aratPins]);
 
   useEffect(
     () => () => {
@@ -646,6 +795,32 @@ export default function MapPanel({
               neacoperite (pete albe)
             </span>
           </div>
+        </div>
+
+        {/* CLIENȚII CA PUNCTE: fără asta agentul vede doar bula satului și
+            nu știe care clienți sunt vecini — de aici pierdere de timp și
+            motorină pe drum. */}
+        <div className="flex flex-wrap items-center gap-2 border-t border-slate-100 px-4 py-2.5">
+          <button
+            type="button"
+            onClick={() => setAratPins((v) => !v)}
+            className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold transition ${
+              aratPins
+                ? "bg-violet-600 text-white shadow-sm"
+                : "bg-violet-50 text-violet-700 hover:bg-violet-100"
+            }`}
+          >
+            📍 {aratPins ? "Ascunde clienții de pe hartă" : "Arată clienții pe hartă"}
+          </button>
+          {aratPins && (
+            <span className="text-xs text-slate-500">
+              {pinsLoading && pins.length === 0
+                ? "caut adresele..."
+                : `${pins.length} clienți pe hartă`}
+              {pinsDeGeocodat > 0 && ` · ${pinsDeGeocodat} adrese încă se caută`}
+              {pins.length > 0 && " · apeși pe un punct și-i vezi numele"}
+            </span>
+          )}
         </div>
 
         {error && (
