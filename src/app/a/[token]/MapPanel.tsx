@@ -461,24 +461,34 @@ export default function MapPanel({
         // de hartă — restul rămâne gri. Urmărim mărimea chenarului și îi
         // spunem hărții să se recalculeze de fiecare dată când se schimbă.
         const el = mapRef.current;
+        // Repotrivirea pe cadru se face DOAR când harta iese dintr-o stare
+        // stricată (era minusculă/ascunsă când s-a potrivit prima dată și
+        // bulele au rămas în afara ecranului). La orice altă redimensionare
+        // — rotire, tastatură, tras de fereastră — zoomul și poziția puse
+        // de agent rămân neatinse: harta nu sare de sub deget.
+        const marimeVeche = { w: el?.clientWidth ?? 0, h: el?.clientHeight ?? 0 };
+        const reaseaza = () => {
+          if (!el) return;
+          const w = el.clientWidth;
+          const h = el.clientHeight;
+          const eraStricata = marimeVeche.w < 100 || marimeVeche.h < 100;
+          marimeVeche.w = w;
+          marimeVeche.h = h;
+          map.invalidateSize();
+          if (eraStricata && w >= 100 && h >= 100 && ultimulCadru.current?.length) {
+            map.fitBounds(ultimulCadru.current, { padding: [30, 30], maxZoom: 11 });
+          }
+        };
         if (el && typeof ResizeObserver !== "undefined") {
           const ro = new ResizeObserver(() => {
             if (el.offsetParent === null) return; // ascunsă — nu are rost
-            map.invalidateSize();
-            if (ultimulCadru.current && ultimulCadru.current.length > 0) {
-              map.fitBounds(ultimulCadru.current, { padding: [30, 30], maxZoom: 11 });
-            }
+            reaseaza();
           });
           ro.observe(el);
           resizeObsRef.current = ro;
         }
         // Și o dată la început, după ce se așază chenarul.
-        setTimeout(() => {
-          map.invalidateSize();
-          if (ultimulCadru.current && ultimulCadru.current.length > 0) {
-            map.fitBounds(ultimulCadru.current, { padding: [30, 30], maxZoom: 11 });
-          }
-        }, 250);
+        setTimeout(reaseaza, 250);
       }
 
       const { map, layer } = leafletRef.current;
@@ -500,7 +510,8 @@ export default function MapPanel({
           weight: isSelected ? 3 : 1.5,
         });
         marker.bindTooltip(
-          `${loc.localitate} — ${fmt(loc.count)} firme` +
+          // Numele localității vine din datele MF — dezarmat, ca orice text extern.
+          `${escHtml(loc.localitate)} — ${fmt(loc.count)} firme` +
             (isCovered ? ` · ${clientCount} clienți` : " · pată albă"),
         );
         marker.on("click", () => setSelectedLoc(loc.localitate));  // deja pe hartă
@@ -519,7 +530,7 @@ export default function MapPanel({
             fillOpacity: 0.95,
             weight: 2,
           });
-          punct.bindTooltip(p.denumire, { direction: "top" });
+          punct.bindTooltip(escHtml(p.denumire), { direction: "top" });
           const inRuta = basket.some((b) => b.cui === p.cui);
           punct.bindPopup(
             `<div style="min-width:190px">
@@ -615,7 +626,7 @@ export default function MapPanel({
               iconAnchor: [lat / 2, 14],
             }),
           })
-            .bindTooltip(g.nume.join("<br>"))
+            .bindTooltip(g.nume.map((n: string) => escHtml(n)).join("<br>"))
             .addTo(layer);
         }
         if (puncte.length > 1) {

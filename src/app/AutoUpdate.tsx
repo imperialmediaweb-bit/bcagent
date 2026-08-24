@@ -20,10 +20,15 @@ export default function AutoUpdate() {
     let versiuneMea = "";
     let oprit = false;
 
-    // Ultima dată când agentul a scris ceva (tastat sau dictat).
+    // Ultima dată când agentul a scris ceva (tastat sau dictat) și
+    // CÂMPURILE în care a scris efectiv: dacă vreunul mai are text
+    // nesalvat, nu reîmprospătăm — i l-am șterge. (Câmpurile cu valori
+    // implicite — preț, comision — NU intră aici: doar ce a atins omul.)
     let ultimaScriere = 0;
-    const amScris = () => {
+    const campuriAtinse = new WeakSet<Element>();
+    const amScris = (e: Event) => {
       ultimaScriere = Date.now();
+      if (e.target instanceof Element) campuriAtinse.add(e.target);
     };
     document.addEventListener("input", amScris, true);
 
@@ -55,6 +60,18 @@ export default function AutoUpdate() {
       // 3. Notă dictată/scrisă, nesalvată (textarea n-are valori implicite).
       const note = Array.from(document.querySelectorAll<HTMLTextAreaElement>("textarea"));
       if (note.some((n) => (n.value ?? "").trim().length > 0)) return true;
+      // 3b. Orice câmp ÎN CARE OMUL A SCRIS și care încă are text — chiar
+      //     dacă nu mai e focalizat (a tastat, a atins altceva, urma să
+      //     revină). Actualizarea i-ar șterge ce a scris.
+      const campuri = Array.from(
+        document.querySelectorAll<HTMLInputElement>("input"),
+      );
+      if (
+        campuri.some(
+          (c) => campuriAtinse.has(c) && (c.value ?? "").trim().length > 0,
+        )
+      )
+        return true;
       // 4. A scris ceva în ultimele 2 minute — poate se întoarce la el.
       if (ultimaScriere && Date.now() - ultimaScriere < 120_000) return true;
       return false;

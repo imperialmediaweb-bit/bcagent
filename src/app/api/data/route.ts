@@ -106,41 +106,58 @@ export async function GET(req: Request) {
       WHERE agent_id = ${auth.agentId}
     `;
 
-    // ANTI-DUBLARE. Dacă agentul a urcat cândva chiar el același raport
-    // pe care l-a urcat și firma, aceleași vânzări ar veni pe două căi și
-    // s-ar aduna — cifre umflate, comisioane greșite. Păstrăm o singură
-    // dată fiecare rând identic (aceeași zi, client, marfă, cantitate,
-    // valoare). Rândurile diferite rămân toate, chiar dacă seamănă.
-    const vazute = new Set<string>();
-    const allRows: typeof batchRows[number]["rows"] = [];
+    // ANTI-DUBLARE — dar corect: un rând se taie DOAR dacă același rând a
+    // apărut deja într-un ALT fișier (agentul a urcat chiar el raportul pe
+    // care l-a urcat și firma). Două vânzări identice din ACELAȘI fișier
+    // sunt două livrări reale — rămân amândouă, altfel am subnumăra
+    // comisioanele. Numărătoarea fiecărui fișier se recalculează după
+    // curățare (panoul o folosește ca să știe care rânduri sunt ale cui);
+    // fișierele rămase complet goale dispar din listă.
+    const amprenta = (r: (typeof batchRows)[number]["rows"][number]) =>
+      [
+        String(r.date ?? "").slice(0, 10),
+        String(r.client ?? "").trim().toLowerCase(),
+        String(r.producer ?? "").trim().toLowerCase(),
+        String(r.agent ?? "").trim().toLowerCase(),
+        r.volume,
+        r.value,
+      ].join("|");
+    // câte apariții din fiecare amprentă au venit din fișierele ANTERIOARE
+    const dinAlteFisiere = new Map<string, number>();
+    const allRows: (typeof batchRows)[number]["rows"] = [];
+    const batchesCurate: Array<(typeof batchRows)[number]> = [];
     let dublate = 0;
     for (const b of batchRows) {
+      const pastrate: typeof b.rows = [];
+      const dinFisierulAsta = new Map<string, number>();
       for (const r of b.rows) {
-        const amprenta = [
-          String(r.date ?? "").slice(0, 10),
-          String(r.client ?? "").trim().toLowerCase(),
-          String(r.producer ?? "").trim().toLowerCase(),
-          String(r.agent ?? "").trim().toLowerCase(),
-          r.volume,
-          r.value,
-        ].join("|");
-        if (vazute.has(amprenta)) {
+        const a = amprenta(r);
+        const ramase = dinAlteFisiere.get(a) ?? 0;
+        if (ramase > 0) {
+          dinAlteFisiere.set(a, ramase - 1);
           dublate++;
           continue;
         }
-        vazute.add(amprenta);
-        allRows.push(r);
+        pastrate.push(r);
+        dinFisierulAsta.set(a, (dinFisierulAsta.get(a) ?? 0) + 1);
+      }
+      for (const [a, n] of dinFisierulAsta) {
+        dinAlteFisiere.set(a, (dinAlteFisiere.get(a) ?? 0) + n);
+      }
+      if (pastrate.length > 0) {
+        batchesCurate.push({ ...b, rows: pastrate, row_count: pastrate.length });
+        allRows.push(...pastrate);
       }
     }
     if (dublate > 0) {
       console.warn(
-        `[data] ${dublate} rânduri identice venite pe două căi (fișier propriu + fișierul firmei) — numărate o singură dată`,
+        `[data] ${dublate} rânduri identice venite din două fișiere (propriu + al firmei) — numărate o singură dată`,
       );
     }
 
     return Response.json({
       enabled: true,
-      batches: batchRows.map((b) => ({
+      batches: batchesCurate.map((b) => ({
         id: b.id,
         fileName: b.file_name,
         uploadedAt: b.uploaded_at.toISOString(),

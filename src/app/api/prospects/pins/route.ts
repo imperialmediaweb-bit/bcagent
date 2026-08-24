@@ -61,10 +61,20 @@ async function geocodeAdresa(
  * singur punct și n-ai putea apăsa pe ele. Același CUI → același loc mereu.
  */
 function imprastie(cui: string, lat: number, lng: number) {
-  let h = 0;
-  for (let i = 0; i < cui.length; i++) h = (h * 31 + cui.charCodeAt(i)) % 100000;
-  const dLat = ((h % 100) / 100 - 0.5) * 0.012; // ~±650 m
-  const dLng = ((Math.floor(h / 100) % 100) / 100 - 0.5) * 0.018;
+  // Hash pe 32 de biți, împărțit în două jumătăți de 16 biți independente:
+  // cu doar 10.000 de poziții, două CUI-uri din aceeași localitate se
+  // suprapuneau cam la 8% din cazuri — și pinul de dedesubt nu mai putea
+  // fi apăsat. Cu 65.536 × 65.536 poziții, practic imposibil.
+  let h = 2166136261;
+  for (let i = 0; i < cui.length; i++) {
+    h ^= cui.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  h = h >>> 0;
+  const sus = h >>> 16;
+  const jos = h & 0xffff;
+  const dLat = (sus / 65535 - 0.5) * 0.012; // ~±650 m
+  const dLng = (jos / 65535 - 0.5) * 0.018;
   return { lat: lat + dLat, lng: lng + dLng };
 }
 
@@ -135,9 +145,13 @@ export async function GET(req: Request) {
     let geocodate = 0;
     if (doGeocode) {
       const deFacut = rows.filter((r) => r.lat === null && r.failed !== true);
-      for (const r of deFacut.slice(0, GEOCODE_PER_REQUEST)) {
+      const lot = deFacut.slice(0, GEOCODE_PER_REQUEST);
+      for (let i = 0; i < lot.length; i++) {
+        const r = lot[i];
+        let amIntrebatNominatim = false;
         try {
           const q = curataAdresa(r.adresa, r.localitate, judet);
+          amIntrebatNominatim = !!r.adresa;
           const c = r.adresa ? await geocodeAdresa(q) : null;
           if (c) {
             await db`
@@ -164,7 +178,11 @@ export async function GET(req: Request) {
           // rețea/limită — nu marcăm nimic, reîncercăm data viitoare
           break;
         }
-        await new Promise((res) => setTimeout(res, 1100));
+        // Nominatim cere 1 cerere/secundă — dar pauza are sens DOAR după o
+        // cerere reală, și nu după ultimul element (ar fi secunde moarte).
+        if (amIntrebatNominatim && i < lot.length - 1) {
+          await new Promise((res) => setTimeout(res, 1100));
+        }
       }
     }
 

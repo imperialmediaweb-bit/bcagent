@@ -41,11 +41,15 @@ export async function DELETE(
         AND uploaded_at > NOW() - INTERVAL '24 hours'
     `;
     if (sters.count === 0) {
-      const [exista] = await db<Array<{ n: string }>>`
-        SELECT COUNT(*)::text AS n FROM batches
-        WHERE id = ${id} AND agent_id = ${payload.agentId}
+      // N-am șters nimic. Aflăm DE CE, ca răspunsul să nu mintă: înainte,
+      // ștergerea fișierului FIRMEI răspundea „ok" fără să șteargă nimic,
+      // fișierul dispărea de pe ecran și reapărea la următoarea deschidere.
+      const [exista] = await db<Array<{ al_lui: string; total: string }>>`
+        SELECT COUNT(*) FILTER (WHERE agent_id = ${payload.agentId})::text AS al_lui,
+               COUNT(*)::text AS total
+        FROM batches WHERE id = ${id}
       `;
-      if (exista && exista.n !== "0") {
+      if (exista && exista.al_lui !== "0") {
         return Response.json(
           {
             error:
@@ -54,6 +58,13 @@ export async function DELETE(
           { status: 403 },
         );
       }
+      if (exista && exista.total !== "0") {
+        return Response.json(
+          { error: "Fișierul firmei nu se șterge din teren." },
+          { status: 403 },
+        );
+      }
+      // nu există deloc — ștergere repetată, e în regulă
     }
     return Response.json({ ok: true });
   } catch (e) {
