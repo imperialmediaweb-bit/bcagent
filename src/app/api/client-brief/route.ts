@@ -1,3 +1,4 @@
+import { mesajEroareAI } from "@/lib/ai-error";
 import { verifyFieldToken } from "@/lib/agent-guard";
 import { ensureSchema, getDB, isDBEnabled } from "@/lib/db";
 import { isAIEnabled, streamCompletion } from "@/lib/llm";
@@ -167,7 +168,7 @@ export async function POST(req: Request) {
         } catch (e) {
           controller.enqueue(
             encoder.encode(
-              `\n\n[Eroare AI: ${e instanceof Error ? e.message : String(e)}]`,
+              mesajEroareAI(e),
             ),
           );
           controller.close();

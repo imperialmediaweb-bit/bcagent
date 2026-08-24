@@ -1,3 +1,4 @@
+import { mesajEroareAI } from "@/lib/ai-error";
 import { verifyFieldToken } from "@/lib/agent-guard";
 import { isAIEnabled, streamCompletion, SYSTEM_PROMPT } from "@/lib/llm";
 import { clientIP, rateLimit } from "@/lib/rate-limit";
@@ -117,7 +118,7 @@ ${instructions}`;
       } catch (e) {
         controller.enqueue(
           encoder.encode(
-            `\n\n[Eroare AI: ${e instanceof Error ? e.message : String(e)}]`,
+            mesajEroareAI(e),
           ),
         );
         controller.close();

@@ -1209,13 +1209,16 @@ function LocalityFirms({
                     <Navigation className="h-3 w-3" />
                     Navighează
                   </a>
+                  {/* ACȚIUNEA PRINCIPALĂ a agentului la fiecare client:
+                      bifează vizita și DICTEAZĂ ce a zis clientul. Stătea
+                      ultima, mică, între alte patru butoane la fel — și
+                      agenții n-o găseau. Acum e prima și mare. */}
                   <button
                     type="button"
-                    onClick={() => setBriefFor(f)}
-                    className="inline-flex items-center gap-1 rounded-md bg-slate-100 px-2 py-1 text-xs font-medium text-slate-700 hover:bg-slate-200"
-                    title="Fișa clientului, făcută de AI din tot istoricul"
+                    onClick={() => setVisitFor(visitFor?.cui === f.cui ? null : f)}
+                    className="inline-flex w-full items-center justify-center gap-1.5 rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-700 sm:w-auto"
                   >
-                    📋 Fișă
+                    🎤 Am fost — spune ce a zis
                   </button>
                   <button
                     type="button"
@@ -1226,11 +1229,11 @@ function LocalityFirms({
                   </button>
                   <button
                     type="button"
-                    onClick={() => setVisitFor(visitFor?.cui === f.cui ? null : f)}
-                    className="inline-flex items-center gap-1 rounded-md bg-indigo-50 px-2 py-1 text-xs font-medium text-indigo-700 hover:bg-indigo-100"
+                    onClick={() => setBriefFor(f)}
+                    className="inline-flex items-center gap-1 rounded-md bg-slate-100 px-2 py-1 text-xs font-medium text-slate-700 hover:bg-slate-200"
+                    title="Fișa clientului, făcută de AI din tot istoricul"
                   >
-                    <ClipboardList className="h-3 w-3" />
-                    Am fost
+                    📋 Fișă
                   </button>
                 </div>
                 {visitFor?.cui === f.cui && (
