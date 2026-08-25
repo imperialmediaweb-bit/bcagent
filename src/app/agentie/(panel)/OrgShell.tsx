@@ -8,6 +8,7 @@ import Logo from "@/app/Logo";
 import {
   Bug,
   Building2,
+  Map,
   ClipboardList,
   FileText,
   LayoutDashboard,
@@ -32,6 +33,7 @@ const NAV = [
   { href: "/agentie/targete", label: "Targeturi", icon: Target },
   { href: "/agentie/agenti", label: "Agenți", icon: UserRound },
   { href: "/agentie/vizite", label: "Vizite", icon: ClipboardList },
+  { href: "/agentie/harta", label: "Harta firmei", icon: Map },
   { href: "/agentie/clienti", label: "Clienți", icon: Building2 },
   { href: "/agentie/solduri", label: "Solduri", icon: Wallet },
   { href: "/agentie/decont", label: "Decont", icon: Receipt },

@@ -13,6 +13,7 @@
  *   BASE_URL=... DATABASE_URL=... TOKEN_SECRET=... npx tsx scripts/test-probleme-firma.ts
  */
 import postgres from "postgres";
+import { createOrg, createOrgUser } from "../src/modules/platform/repo";
 import { signToken } from "../src/lib/signed-token";
 
 const BASE = process.env.BASE_URL ?? "http://127.0.0.1:3131";
@@ -64,18 +65,11 @@ async function main() {
   // sesiune construită de login doar dacă există user. Așa că userii îi
   // punem cu hash-ul generat de aplicație la /api/agentie/auth/register?
   // Cel mai robust: register prin API.
-  const reg = async (email: string, org: string) => {
-    const r = await fetch(`${BASE}/api/agentie/signup`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        firma: org,
-        name: "Test Owner",
-        email,
-        password: "ParolaTest123!",
-      }),
-    });
-    return r.ok;
+  // Cont direct, fără înregistrarea publică (limită de 5 pe oră).
+  const reg = async (email: string, firma: string) => {
+    const org = await createOrg({ name: firma, email });
+    await createOrgUser(org.id, email, "ParolaTest123!", "Test Owner", "owner");
+    return true;
   };
   const emailA = `${RUN}-owner@test.ro`;
   const emailB = `${RUN}-strain@test.ro`;
