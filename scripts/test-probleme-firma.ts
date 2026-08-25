@@ -39,14 +39,16 @@ interface Issue {
   message: string;
 }
 
-async function orgLogin(email: string, parola: string): Promise<string> {
-  const r = await fetch(`${BASE}/api/agentie/login`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ email, password: parola }),
-  });
-  const cookie = r.headers.get("set-cookie") ?? "";
-  return cookie.split(";")[0];
+/** Sesiune directă (login-ul public e limitat la 10 încercări/5 min). */
+async function orgLogin(email: string, orgId: string): Promise<string> {
+  const { COOKIE_NAME, semneazaSesiuneTest } = await import("./_sesiune-test");
+  return `${COOKIE_NAME}=${await semneazaSesiuneTest({
+    userId: `usr-${email}`,
+    orgId,
+    email,
+    name: "Test Owner",
+    role: "owner",
+  })}`;
 }
 
 async function main() {
@@ -115,14 +117,14 @@ async function main() {
   await sql`INSERT INTO issues (id, source, reporter, role, page, message)
             VALUES (${"iss-vechi-" + RUN}, 'user', ${numeA}, 'agent', '/a/x', ${mesajVechi})`;
 
-  const cookieA = await orgLogin(emailA, "ParolaTest123!");
+  const cookieA = await orgLogin(emailA, orgA.id);
   const rA = await fetch(`${BASE}/api/agentie/issues`, { headers: { cookie: cookieA } });
   const dA = (await rA.json()) as { issues?: Issue[] };
   check("administratorul își vede raportul agentului", dA.issues?.some((i) => i.message === mesaj) === true, `total: ${dA.issues?.length}`);
   check("raportul VECHI (fără firmă) se recuperează după nume", dA.issues?.some((i) => i.message === mesajVechi) === true);
 
   console.log("\n══ Firma străină nu vede nimic ══");
-  const cookieB = await orgLogin(emailB, "ParolaTest123!");
+  const cookieB = await orgLogin(emailB, orgB.id);
   const rB = await fetch(`${BASE}/api/agentie/issues`, { headers: { cookie: cookieB } });
   const dB = (await rB.json()) as { issues?: Issue[] };
   check(

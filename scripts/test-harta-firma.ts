@@ -119,16 +119,18 @@ async function main() {
     (${"agid1-" + RUN}, ${numeIon}, ${cui(1)}, 'x', 'client', '', NOW() - INTERVAL '1 day'),
     (${"agid2-" + RUN}, ${numeVasile}, ${cui(3)}, 'x', 'gandeste', '', NOW() - INTERVAL '20 days')`;
 
-  const login = async (email: string) => {
-    const r = await fetch(`${BASE}/api/agentie/login`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, password: PAROLA }),
-    });
-    return (r.headers.get("set-cookie") ?? "").split(";")[0];
-  };
-  const ckA = await login(emailA);
-  const ckB = await login(emailB);
+  // Sesiune directă (login-ul public e limitat la 10 încercări/5 min).
+  const { COOKIE_NAME, semneazaSesiuneTest } = await import("./_sesiune-test");
+  const login = async (email: string, orgId: string) =>
+    `${COOKIE_NAME}=${await semneazaSesiuneTest({
+      userId: `usr-${email}`,
+      orgId,
+      email,
+      name: "Owner",
+      role: "owner",
+    })}`;
+  const ckA = await login(emailA, orgA);
+  const ckB = await login(emailB, orgB);
 
   const harta = async (cookie: string, q = "") => {
     const r = await fetch(`${BASE}/api/agentie/harta${q}`, { headers: { cookie } });

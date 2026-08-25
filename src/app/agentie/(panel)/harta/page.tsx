@@ -120,6 +120,25 @@ export default function HartaFirmeiPage() {
     [date, doarRestanti],
   );
 
+  // Când se schimbă dimensiunea ferestrei (rotirea telefonului, altă
+  // fereastră, tastatura), harta TREBUIE anunțată — altfel rămâne
+  // desenată la mărimea veche și pătratele ei ies din pagină.
+  useEffect(() => {
+    const anunta = () => hartaRef.current?.map.invalidateSize();
+    window.addEventListener("resize", anunta);
+    window.addEventListener("orientationchange", anunta);
+    const obs =
+      typeof ResizeObserver !== "undefined" && cutieRef.current
+        ? new ResizeObserver(() => anunta())
+        : null;
+    if (obs && cutieRef.current) obs.observe(cutieRef.current);
+    return () => {
+      window.removeEventListener("resize", anunta);
+      window.removeEventListener("orientationchange", anunta);
+      obs?.disconnect();
+    };
+  }, []);
+
   // Desenarea hărții.
   useEffect(() => {
     let anulat = false;
@@ -230,34 +249,40 @@ export default function HartaFirmeiPage() {
       )}
 
       <Card className="p-4">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+        {/* Rândul de filtre: `min-w-0` pe select e obligatoriu — fără el,
+            caseta nu se poate micșora sub cel mai lung nume de agent și
+            împinge pagina în lateral pe ecrane medii (tabletă). */}
+        <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
           <select
             value={agentAles}
             onChange={(e) => setAgentAles(e.target.value)}
-            className="mt-0 flex-1 rounded-lg border border-slate-200 px-3 py-2 text-sm"
+            className="mt-0 w-full min-w-0 flex-1 rounded-lg border border-slate-200 px-3 py-2 text-sm sm:w-auto"
           >
             <option value="">Toți agenții</option>
             {(date?.agenti ?? []).map((a) => (
               <option key={a.nume} value={a.nume}>
-                {a.nume} ({a.clienti})
+                {/* Numele foarte lungi se scurtează în listă, ca să nu
+                    lățească caseta pe telefon. */}
+                {a.nume.length > 34 ? `${a.nume.slice(0, 32)}…` : a.nume} ({a.clienti})
               </option>
             ))}
           </select>
           <select
             value={zile}
             onChange={(e) => setZile(parseInt(e.target.value))}
-            className="mt-0 rounded-lg border border-slate-200 px-3 py-2 text-sm sm:w-52"
+            className="mt-0 w-full min-w-0 shrink-0 rounded-lg border border-slate-200 px-3 py-2 text-sm sm:w-52"
           >
             <option value={7}>Restant după 7 zile</option>
             <option value={14}>Restant după 2 săptămâni</option>
             <option value={30}>Restant după o lună</option>
           </select>
-          <label className="flex items-center gap-2 text-sm font-medium text-slate-700">
+          {/* Zona de apăsat cât degetul (≥44px), nu doar pătrățelul. */}
+          <label className="flex min-h-11 shrink-0 cursor-pointer select-none items-center gap-2 rounded-lg px-2 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">
             <input
               type="checkbox"
               checked={doarRestanti}
               onChange={(e) => setDoarRestanti(e.target.checked)}
-              className="h-4 w-4"
+              className="h-5 w-5 accent-rose-600"
             />
             Doar restanții
           </label>
@@ -267,7 +292,10 @@ export default function HartaFirmeiPage() {
       <AnalizaHarta agent={agentAles} zile={zile} />
 
       <Card className="overflow-hidden p-0">
-        <div ref={cutieRef} className="h-[460px] w-full bg-slate-100" />
+        <div
+          ref={cutieRef}
+          className="h-[460px] w-full max-w-full overflow-hidden bg-slate-100"
+        />
         <div className="flex flex-wrap items-center gap-3 border-t border-slate-100 px-4 py-2.5 text-xs">
           {(date?.agenti ?? []).map((a) => (
             <span key={a.nume} className="inline-flex items-center gap-1.5">

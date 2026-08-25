@@ -116,9 +116,11 @@ export async function GET(req: Request) {
       clienti.map((c) => `${c.judet}|${c.localitate}`).filter((k) => k !== "|"),
     );
     // Câți clienți are fiecare agent și câți dintre ei sunt restanți —
-    // clasamentul pe care managerul îl citește în 3 secunde.
+    // clasamentul pe care managerul îl citește în 3 secunde. Lista are
+    // TOȚI agenții firmei, nu doar cel filtrat: altfel, după ce alegi un
+    // agent, dropdown-ul rămâne cu el singur și nu mai poți sări la altul.
     const peAgent = new Map<string, { clienti: number; restanti: number; vizitatiRecent: number }>();
-    for (const n of cautati) peAgent.set(n, { clienti: 0, restanti: 0, vizitatiRecent: 0 });
+    for (const n of nume) peAgent.set(n, { clienti: 0, restanti: 0, vizitatiRecent: 0 });
     for (const c of clienti) {
       const a = peAgent.get(c.agent) ?? { clienti: 0, restanti: 0, vizitatiRecent: 0 };
       a.clienti++;
