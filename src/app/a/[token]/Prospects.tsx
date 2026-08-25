@@ -849,9 +849,12 @@ function FunnelCard({
   accent: string;
 }) {
   return (
-    <div className="card flex items-center gap-3 p-4">
+    // Pe telefon cele trei cifre stau tot pe un rând, deci eticheta n-are
+    // loc lângă iconiță: o punem DEDESUBT și o lăsăm să se rupă pe două
+    // rânduri. Înainte scria „Re…", „Co…", „De…" — adică nimic.
+    <div className="card flex flex-col gap-1.5 p-3 sm:flex-row sm:items-center sm:gap-3 sm:p-4">
       <div
-        className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br text-white ${accent}`}
+        className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br text-white sm:h-9 sm:w-9 ${accent}`}
       >
         {icon}
       </div>
@@ -859,7 +862,7 @@ function FunnelCard({
         <p className="text-lg font-semibold leading-tight text-slate-900">
           {new Intl.NumberFormat("ro-RO").format(value)}
         </p>
-        <p className="truncate text-xs text-slate-500">{label}</p>
+        <p className="break-words text-xs leading-snug text-slate-500">{label}</p>
       </div>
     </div>
   );

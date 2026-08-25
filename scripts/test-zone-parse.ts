@@ -101,5 +101,32 @@ check("…dar nu inventează sugestii aiurea", negasit.sugestii.length === 0, JS
 const ambiguu = potriveste("do", ["DOROHOI", "DORNA CANDRENILOR"]);
 check("când sunt mai multe potriviri, cere lămurire (nu ghicește)", ambiguu.oficial === null && ambiguu.sugestii.length === 2, JSON.stringify(ambiguu));
 
+sectiune("Virgula uitată: două sate lipite");
+const lipite = potriveste("sendriceni dorohoi", cunoscute);
+check(
+  "«Sendriceni Dorohoi» devine DOUĂ sate, nu unul",
+  (lipite.parti ?? []).length === 2,
+  JSON.stringify(lipite),
+);
+check(
+  "…și sunt exact cele două cunoscute",
+  (lipite.parti ?? []).includes("ȘENDRICENI") && (lipite.parti ?? []).includes("DOROHOI"),
+  JSON.stringify(lipite.parti),
+);
+const treiLipite = potriveste("lozna dersca dorohoi", cunoscute);
+check("merge și cu trei sate lipite", (treiLipite.parti ?? []).length === 3, JSON.stringify(treiLipite.parti));
+const satDinDouaCuvinte = potriveste("poiana stampei", cunoscute);
+check(
+  "dar un sat din două cuvinte NU se sparge",
+  satDinDouaCuvinte.oficial === "POIANA STAMPEI" && !satDinDouaCuvinte.parti,
+  JSON.stringify(satDinDouaCuvinte),
+);
+const cuNecunoscut = potriveste("lozna cluj", cunoscute);
+check(
+  "dacă o bucată nu se cunoaște, NU spargem (nu ghicim pe jumătate)",
+  !cuNecunoscut.parti,
+  JSON.stringify(cuNecunoscut),
+);
+
 console.log(`\n${fail === 0 ? "✅" : "❌"} ${pass} verificări trecute, ${fail} eșuate`);
 process.exit(fail === 0 ? 0 : 1);

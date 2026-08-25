@@ -112,7 +112,7 @@ export function parseZone(text: string): ZonaLinie[] {
 export function potriveste(
   scris: string,
   cunoscute: string[],
-): { oficial: string | null; sugestii: string[] } {
+): { oficial: string | null; parti?: string[]; sugestii: string[] } {
   const n = neted(scris);
   const perechi = cunoscute.map((c) => ({ c, n: neted(c) }));
 
@@ -129,9 +129,16 @@ export function potriveste(
   if (exact2) return { oficial: exact2.c, sugestii: [] };
 
   const incepe = perechi.filter((p) => p.n.startsWith(fara) || fara.startsWith(p.n));
-  if (incepe.length === 1) return { oficial: incepe[0].c, sugestii: [] };
-
   const contine = perechi.filter((p) => p.n.includes(fara) || fara.includes(p.n));
+
+  // VIRGULA UITATĂ: „Sendriceni Dorohoi" înseamnă DOUĂ sate, nu unul.
+  // Încercăm să spargem textul în localități cunoscute (cele mai lungi
+  // întâi); dacă TOT textul se acoperă, le întoarcem pe amândouă — altfel
+  // al doilea sat s-ar pierde în tăcere din zona agentului.
+  const parti = spargeInLocalitati(fara, perechi);
+  if (parti && parti.length >= 2) return { oficial: null, parti, sugestii: [] };
+
+  if (incepe.length === 1) return { oficial: incepe[0].c, sugestii: [] };
   if (contine.length === 1) return { oficial: contine[0].c, sugestii: [] };
 
   const sugestii = [...incepe, ...contine]
@@ -139,4 +146,33 @@ export function potriveste(
     .filter((v, i, a) => a.indexOf(v) === i)
     .slice(0, 5);
   return { oficial: null, sugestii };
+}
+
+/** Sparge „sendriceni dorohoi" în [ȘENDRICENI, DOROHOI], dacă se poate
+ *  acoperi TOT textul cu localități cunoscute. Altfel, null. */
+function spargeInLocalitati(
+  text: string,
+  perechi: Array<{ c: string; n: string }>,
+): string[] | null {
+  const cuvinte = text.split(" ").filter(Boolean);
+  if (cuvinte.length < 2 || cuvinte.length > 6) return null;
+  const gasite: string[] = [];
+  let i = 0;
+  while (i < cuvinte.length) {
+    let potrivit: { c: string; lungime: number } | null = null;
+    // Cea mai LUNGĂ potrivire de la poziția curentă („poiana stampei"
+    // înainte de „poiana").
+    for (let j = cuvinte.length; j > i; j--) {
+      const bucata = cuvinte.slice(i, j).join(" ");
+      const p = perechi.find((x) => x.n === bucata);
+      if (p) {
+        potrivit = { c: p.c, lungime: j - i };
+        break;
+      }
+    }
+    if (!potrivit) return null; // a rămas ceva neacoperit → nu ghicim
+    gasite.push(potrivit.c);
+    i += potrivit.lungime;
+  }
+  return gasite.length >= 2 ? gasite : null;
 }

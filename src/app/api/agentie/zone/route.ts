@@ -100,13 +100,20 @@ export async function POST(req: Request) {
     const gasite: Array<{ zi: string; localitate: string; scris: string }> = [];
     const negasite: Array<{ scris: string; sugestii: string[] }> = [];
     const vazute = new Set<string>();
+    const adauga = (zi: string, oficial: string, scris: string) => {
+      const cheie = `${zi}|${neted(oficial)}`;
+      if (vazute.has(cheie)) return;
+      vazute.add(cheie);
+      gasite.push({ zi, localitate: oficial, scris });
+    };
     for (const c of citite) {
       const p = potriveste(c.localitate, cunoscute);
       if (p.oficial) {
-        const cheie = `${c.zi}|${neted(p.oficial)}`;
-        if (vazute.has(cheie)) continue;
-        vazute.add(cheie);
-        gasite.push({ zi: c.zi, localitate: p.oficial, scris: c.localitate });
+        adauga(c.zi, p.oficial, c.localitate);
+      } else if (p.parti && p.parti.length >= 2) {
+        // Virgula uitată: „Sendriceni Dorohoi" = două sate. Le punem pe
+        // amândouă, ca al doilea să nu se piardă din zona agentului.
+        for (const parte of p.parti) adauga(c.zi, parte, c.localitate);
       } else {
         negasite.push({ scris: c.localitate, sugestii: p.sugestii });
       }

@@ -1497,21 +1497,27 @@ function Topbar({
           )}
           {hasData && (
             <>
+              {/* Pe telefon rămân doar iconițele: altfel cele două butoane
+                  înghesuiau numele agentului până rămânea „Andrei Muntea…". */}
               <button
                 type="button"
                 onClick={onExport}
-                className="inline-flex items-center gap-1.5 rounded-md border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 transition hover:bg-slate-50"
+                title="Export CSV"
+                aria-label="Export CSV"
+                className="inline-flex min-h-9 items-center gap-1.5 rounded-md border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-700 transition hover:bg-slate-50 sm:px-3"
               >
-                <Download className="h-3.5 w-3.5" />
-                Export CSV
+                <Download className="h-4 w-4 shrink-0" />
+                <span className="hidden sm:inline">Export CSV</span>
               </button>
               <button
                 type="button"
                 onClick={onReset}
-                className="inline-flex items-center gap-1.5 rounded-md border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 transition hover:bg-slate-50"
+                title="Reset (șterge datele din telefon)"
+                aria-label="Reset"
+                className="inline-flex min-h-9 items-center gap-1.5 rounded-md border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-700 transition hover:bg-slate-50 sm:px-3"
               >
-                <LogOut className="h-3.5 w-3.5" />
-                Reset
+                <LogOut className="h-4 w-4 shrink-0" />
+                <span className="hidden sm:inline">Reset</span>
               </button>
             </>
           )}
@@ -1904,8 +1910,15 @@ function InsightCard({
         <p className="text-xs font-medium uppercase tracking-wide text-slate-500">
           {label}
         </p>
-        <p className="mt-1 truncate text-sm font-semibold text-slate-800">{value}</p>
-        {sub && <p className="mt-0.5 truncate text-xs text-slate-500">{sub}</p>}
+        {/* Numele clienților și ale agenților se RUP pe rânduri, nu se
+            taie: pe telefon cardul are ~85px lățime utilă, iar „MAGAZIN
+            CENTRAL SRL" apărea ca „MAGAZIN CE…" — informația se pierdea. */}
+        <p className="mt-1 break-words text-sm font-semibold leading-snug text-slate-800">
+          {value}
+        </p>
+        {sub && (
+          <p className="mt-0.5 break-words text-xs leading-snug text-slate-500">{sub}</p>
+        )}
       </div>
     </div>
   );

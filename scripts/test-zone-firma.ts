@@ -130,13 +130,14 @@ vineri-roma,nicseni,ungureni ,Gorbănești ,stauceni`;
     JSON.stringify([...new Set((ver.d.gasite ?? []).map((g) => g.zi))]),
   );
   check(
-    "«Sendriceni Dorohoi» lipite NU se potrivesc din greșeală — cere lămurire",
-    (ver.d.negasite ?? []).some((n) => n.scris.toLowerCase().includes("sendriceni dorohoi")),
-    JSON.stringify(ver.d.negasite),
+    "«Sendriceni Dorohoi» (virgulă uitată) devine DOUĂ sate, amândouă luni",
+    (ver.d.gasite ?? []).some((g) => g.zi === "luni" && g.localitate === "ȘENDRICENI") &&
+      (ver.d.gasite ?? []).some((g) => g.zi === "luni" && g.localitate === "DOROHOI"),
+    JSON.stringify((ver.d.gasite ?? []).filter((g) => g.zi === "luni")),
   );
   check(
-    "…și îi propune variantele apropiate",
-    (ver.d.negasite ?? []).some((n) => n.sugestii.length > 0),
+    "ce chiar nu există (Carasa) e raportat, nu inventat",
+    (ver.d.negasite ?? []).some((n) => n.scris.toLowerCase().includes("carasa")),
     JSON.stringify(ver.d.negasite),
   );
   const inainte = await sql`SELECT COUNT(*)::int AS n FROM agent_zone WHERE org_id = ${org.id}`;
@@ -156,8 +157,8 @@ vineri-roma,nicseni,ungureni ,Gorbănești ,stauceni`;
     JSON.stringify(dupa.filter((d) => d.localitate === "UNGURENI")),
   );
   check(
-    "luni are 4 sate (al 5-lea a rămas nelămurit)",
-    dupa.filter((d) => d.zi === "luni").length === 4,
+    "luni are 6 sate (5 scrise + al doilea din virgula uitată)",
+    dupa.filter((d) => d.zi === "luni").length === 6,
     String(dupa.filter((d) => d.zi === "luni").length),
   );
 
