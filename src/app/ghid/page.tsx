@@ -190,7 +190,12 @@ export default async function GhidPage({
               deloc, deci pagina se deschide instant și pe semnal slab de
               teren. Primul capitol e deschis, restul la un apas. */}
           <div className="space-y-3">
-            {CAPITOLE_POZE.map((cap, ci) => (
+            {(poze.length === 30
+              ? CAPITOLE_POZE
+              : // Plasă de siguranță: dacă generatorul a scos alt număr de
+                // pași, capitolele fixe s-ar decala — mai bine totul într-unul.
+                [{ titlu: "📷 Toți pașii", dela: 1, panala: poze.length }]
+            ).map((cap, ci) => (
               <details
                 key={cap.titlu}
                 open={ci === 0}

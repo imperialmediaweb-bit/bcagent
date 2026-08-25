@@ -13,6 +13,7 @@
  * Rulare: server pe :3000, apoi
  *   npx tsx scripts/test-ghid-poze.ts
  */
+import { createHash } from "node:crypto";
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
@@ -53,6 +54,19 @@ async function main() {
     "fiecare pas are titlu și text nevide",
     poze.every((p) => p.titlu.trim().length > 3 && p.text.trim().length > 3),
   );
+  // Două poze IDENTICE byte-cu-byte = generatorul a derulat greșit și două
+  // legende diferite arată același ecran (s-a întâmplat la pas20/pas21).
+  const amprente = new Map<string, string>();
+  const dubluri: string[] = [];
+  for (const p of poze) {
+    const h = createHash("md5")
+      .update(readFileSync(join(radacina, "public/ghid-poze", p.img)))
+      .digest("hex");
+    const gemene = amprente.get(h);
+    if (gemene) dubluri.push(`${gemene}=${p.img}`);
+    amprente.set(h, p.img);
+  }
+  ok("nicio pereche de poze identice (fiecare pas arată alt ecran)", dubluri.length === 0, dubluri.join(", "));
 
   const browser = await chromium.launch({
     executablePath: process.env.CHROMIUM_PATH ?? "/opt/pw-browsers/chromium",

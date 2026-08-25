@@ -10,7 +10,8 @@ const pw = (await import(PW)) as any;
 const chromium = pw.chromium ?? pw.default?.chromium;
 const OUT = "public/ghid-poze";
 
-const b = await chromium.launch({ executablePath: "/opt/pw-browsers/chromium" });
+const BAZA = process.env.BASE_URL ?? "http://127.0.0.1:3131";
+const b = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH ?? "/opt/pw-browsers/chromium" });
 const ctx = await b.newContext({ viewport: { width: 393, height: 800 }, isMobile: true, hasTouch: true, deviceScaleFactor: 1.2 });
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const page: any = await ctx.newPage();
@@ -47,18 +48,21 @@ async function sectiune(et: string, id: string) {
   await page.waitForTimeout(400);
   return true;
 }
-const scrollLa = async (text: string) => { await page.evaluate((t: string) => { const el = [...document.querySelectorAll("h2,h3,div,p")].find((x) => new RegExp(t, "i").test(x.textContent || "")); if (el) { const y = el.getBoundingClientRect().top + window.scrollY - 130; window.scrollTo(0, Math.max(0, y)); } }, text); await page.waitForTimeout(350); };
+// Derulează la elementul cel mai ADÂNC care conține textul — primul găsit
+// ar fi mereu învelișul întregii pagini (strămoșii conțin tot textul) și
+// toate pozele ar ieși identice.
+const scrollLa = async (text: string) => { await page.evaluate((t: string) => { const re = new RegExp(t, "i"); const toate = [...document.querySelectorAll("h2,h3,div,p")].filter((x) => re.test(x.textContent || "")); const el = toate.reverse().find((x) => ![...x.children].some((c) => re.test(c.textContent || ""))) ?? toate[0]; if (el) { const y = el.getBoundingClientRect().top + window.scrollY - 130; window.scrollTo(0, Math.max(0, y)); } }, text); await page.waitForTimeout(350); };
 
 // A. INTRAREA
 const tok = await signToken({ agentId: "ag-poze-1", agentName: "Ion Agentul", exp: Math.floor(Date.now() / 1000) + 3600 }, "test-secret-0123456789");
-await page.goto(`http://127.0.0.1:3131/a/${tok}`, { waitUntil: "domcontentloaded" });
+await page.goto(`${BAZA}/a/${tok}`, { waitUntil: "domcontentloaded" });
 await page.waitForTimeout(2200);
 await cadru("Deschizi linkul tău din WhatsApp", "Apeși pe linkul primit — e doar al tău, nu-l dai nimănui.");
 const pin1 = page.locator("input").first();
 if (await pin1.count()) { await pin1.fill("1234"); const p2 = page.locator("input").nth(1); if (await p2.count()) await p2.fill("1234"); }
 await cadru("Îți pui un PIN de 4-6 cifre", "Ca la card. Doar prima dată ți-l cere — cu el intri de acum.");
 
-await page.goto("http://127.0.0.1:3131/api/agentie/demo-login?rol=agent", { waitUntil: "domcontentloaded" });
+await page.goto(`${BAZA}/api/agentie/demo-login?rol=agent`, { waitUntil: "domcontentloaded" });
 await page.waitForTimeout(3500);
 await cadru("Acasă — ziua ta", "Ruta de azi, clienții de vizitat, vizitele și comenzile de azi. Totul dintr-o privire.");
 await page.locator("header button").first().click().catch(() => {});
@@ -154,13 +158,19 @@ await curata();
 await page.evaluate(() => { const el = [...document.querySelectorAll("button")].find((x) => /van|mașin|numerar|depozit/i.test(x.textContent || "")); el?.scrollIntoView({ block: "center" }); });
 await page.waitForTimeout(250);
 await cadru("Din dubă sau de la depozit", "VÂNZARE DIN MAȘINĂ = dai marfa pe loc, stocul scade singur. COMANDĂ LA DEPOZIT = o pregătesc ei. Apoi TRIMITE.");
-await page.evaluate(() => { const el = [...document.querySelectorAll("button")].find((x) => /Renunț|Închide/.test((x.textContent || "").trim())); el?.click(); });
+// Închidem formularul de comandă: butonul „×”, apoi Escape ca plasă —
+// altfel modalul rămâne peste următoarele două cadre.
+await page.evaluate(() => { (document.querySelector('button[aria-label="Închide"]') as HTMLElement | null)?.click(); });
 await page.waitForTimeout(600);
+// verificăm chiar că s-a închis — altfel modalul acoperă cadrele următoare
+const modalInca = await page.locator('button[aria-label="Închide"]').count();
+if (modalInca > 0) { console.error("EROARE: formularul de comandă nu s-a închis"); process.exit(1); }
 
-// E. RESTUL
-await scrollLa("Marfa din mașină");
+// E. RESTUL — cardul dubei stă în „Acasă”, petele albe în „Harta pieței”:
+// intrăm în secțiunea potrivită înainte de fiecare cadru.
+if (await sectiune("Acasă", "acasa")) await scrollLa("Marfa din mașină");
 await cadru("Marfa din mașină (van)", "Dimineața încarci duba. Fiecare vânzare pe loc scade stocul. Seara vezi banii și marfa de predat.");
-await scrollLa("zone neacoperite");
+if (await sectiune("Harta pieței", "harta")) await scrollLa("zone neacoperite");
 await cadru("Petele albe", "Localități fără niciun client — de aici crești. Apeși pe una și îți faci ruta de cucerire.");
 if (await sectiune("Antrenorul", "antrenor")) await cadru("Antrenorul AI", "Îi scrii sau îi VORBEȘTI: mi-a zis că e scump, ce fac? Îți dă replica exactă. Merge și cu poză de la raft.");
 if (await sectiune("Target", "obiective")) await cadru("Target și decont", "Cât ai făcut din target + clasamentul echipei. Cheltuielile cu poză la bon.");
@@ -175,3 +185,7 @@ if (await sectiune("Top clienți", "clienti")) await cadru("Top clienții tăi",
 writeFileSync("src/app/ghid/poze.json", JSON.stringify(legende, null, 1));
 await b.close();
 console.log("TOTAL poze:", nr);
+if (nr !== 30) {
+  console.error(`EROARE: ghidul are nevoie de EXACT 30 de pași (capitolele din ghid/page.tsx sunt pe poziții fixe) — au ieșit ${nr}. O secțiune n-a fost găsită?`);
+  process.exit(1);
+}
