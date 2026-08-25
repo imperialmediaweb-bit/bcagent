@@ -758,6 +758,32 @@ export default function MapPanel({
     setActiveRouteId(null);
   }
 
+  /** „ZONA PE ZI" dintr-un apas: bagă în rută TOȚI clienții dați (fără
+   *  dubluri), ca agentul să-și facă ziua din 3-4 sate în 30 de secunde:
+   *  sat → butonul „Clienții mei în rută" → următorul sat → Salvează pe zi. */
+  function addStops(fs: Firm[]) {
+    setBasket((b) => {
+      const existente = new Set(b.map((s) => s.cui));
+      const noi = fs
+        .filter((f) => !existente.has(f.cui))
+        .map((f) => ({
+          cui: f.cui,
+          denumire: f.denumire,
+          adresa: f.adresa,
+          localitate: f.localitate,
+          telefon: f.telefon,
+        }));
+      const rezultat = [...b, ...noi].slice(0, 40);
+      if (b.length + noi.length > 40) {
+        showToast("Ruta ține maxim 40 de opriri — restul rămân pe altă zi.");
+      } else if (noi.length > 0) {
+        showToast(`${noi.length} clienți puși în rută ✓`);
+      }
+      return rezultat;
+    });
+    setActiveRouteId(null);
+  }
+
   async function saveRoute(name: string, day: string) {
     try {
       const res = await fetch("/api/routes", {
@@ -915,6 +941,7 @@ export default function MapPanel({
                 caenParam={caenParam}
                 inBasket={inBasket}
                 onToggleStop={toggleStop}
+                onAddStops={addStops}
                 onClose={() => setSelectedLoc(null)}
                 onVisitSaved={() => {
                   setVisitsToday((v) => v + 1);
@@ -1249,6 +1276,7 @@ function LocalityFirms({
   caenParam,
   inBasket,
   onToggleStop,
+  onAddStops,
   onClose,
   onVisitSaved,
   showToast,
@@ -1259,6 +1287,7 @@ function LocalityFirms({
   caenParam: string;
   inBasket: Set<string>;
   onToggleStop: (f: Firm) => void;
+  onAddStops: (fs: Firm[]) => void;
   onClose: () => void;
   onVisitSaved: () => void;
   showToast: (msg: string) => void;
@@ -1391,6 +1420,23 @@ function LocalityFirms({
           <p className="text-xs text-slate-500">
             {loading ? "se încarcă..." : `${fmt(total)} firme active`}
           </p>
+          {/* „Zona pe zi" dintr-un apas: toți clienții MEI din sat, în rută.
+              Deschizi satele zilei pe rând, apeși, apoi Salvează pe ziua ta. */}
+          {(() => {
+            const aiMeiDeAdaugat = firms.filter(
+              (f) => f.status === "client" && !inBasket.has(f.cui),
+            );
+            if (loading || aiMeiDeAdaugat.length === 0) return null;
+            return (
+              <button
+                type="button"
+                onClick={() => onAddStops(aiMeiDeAdaugat)}
+                className="mt-1.5 rounded-lg bg-indigo-600 px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-indigo-700"
+              >
+                ➕ Clienții mei de aici în rută ({aiMeiDeAdaugat.length})
+              </button>
+            );
+          })()}
         </div>
         <button
           type="button"
