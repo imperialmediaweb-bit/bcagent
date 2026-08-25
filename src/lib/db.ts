@@ -204,6 +204,18 @@ export async function ensureSchema(): Promise<void> {
       PRIMARY KEY (cui, org_id)
     );
     CREATE INDEX IF NOT EXISTS prospect_inchis_org ON prospect_inchis(org_id);
+    -- ZONELE AGENȚILOR: ce localități are fiecare și în ce zi trece pe
+    -- acolo. Managerul le lipește ca text din WhatsApp; de aici ies
+    -- rutele zilei și „ce clienți din zona mea n-am vizitat".
+    CREATE TABLE IF NOT EXISTS agent_zone (
+      org_id TEXT NOT NULL,
+      agent_name TEXT NOT NULL,
+      localitate TEXT NOT NULL,
+      zi TEXT NOT NULL DEFAULT '',
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      PRIMARY KEY (org_id, agent_name, localitate, zi)
+    );
+    CREATE INDEX IF NOT EXISTS agent_zone_org ON agent_zone(org_id, agent_name);
     -- Comenzile luate din teren: agentul le bate pe telefon la client,
     -- depozitul le vede instant, contabila le exportă pentru SAGA.
     CREATE TABLE IF NOT EXISTS orders (
