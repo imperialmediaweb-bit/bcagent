@@ -3,8 +3,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type * as LType from "leaflet";
 import "leaflet/dist/leaflet.css";
-import { MapPin } from "lucide-react";
-import { Alert, Card, EmptyState, api, formatNumber } from "@/app/platform/ui";
+import { MapPin, Sparkles } from "lucide-react";
+import AiMarkdown from "@/components/AiMarkdown";
+import { paginaRaport } from "@/lib/md-print";
+import { Alert, Button, Card, EmptyState, api, formatNumber } from "@/app/platform/ui";
 
 /**
  * HARTA FIRMEI — situația centralizată, dintr-o privire.
@@ -262,6 +264,8 @@ export default function HartaFirmeiPage() {
         </div>
       </Card>
 
+      <AnalizaHarta agent={agentAles} zile={zile} />
+
       <Card className="overflow-hidden p-0">
         <div ref={cutieRef} className="h-[460px] w-full bg-slate-100" />
         <div className="flex flex-wrap items-center gap-3 border-t border-slate-100 px-4 py-2.5 text-xs">
@@ -341,5 +345,89 @@ export default function HartaFirmeiPage() {
         </Card>
       )}
     </div>
+  );
+}
+
+/**
+ * CE-MI SPUNE HARTA — sinteza AI peste situația centralizată: cine a
+ * rămas în urmă, ce localități s-au răcit, cu ce începe săptămâna.
+ * Se cere la apăsare (nu la fiecare deschidere) și se poate salva PDF,
+ * ca managerul să-l dea mai departe patronului.
+ */
+function AnalizaHarta({ agent, zile }: { agent: string; zile: number }) {
+  const [lucreaza, setLucreaza] = useState(false);
+  const [text, setText] = useState<string | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+  const [cati, setCati] = useState(0);
+
+  async function ruleaza() {
+    setLucreaza(true);
+    setErr(null);
+    setText(null);
+    try {
+      const d = await api<{ text: string; count?: number }>(
+        "/api/agentie/harta/analiza",
+        { method: "POST", json: { agent, zile } },
+      );
+      setText(d.text);
+      setCati(d.count ?? 0);
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : String(e));
+    } finally {
+      setLucreaza(false);
+    }
+  }
+
+  return (
+    <Card className="border-indigo-100 bg-indigo-50/40 p-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="min-w-0">
+          <h2 className="flex items-center gap-2 text-sm font-semibold text-indigo-900">
+            <Sparkles className="h-4 w-4 text-indigo-500" />
+            Ce-mi spune harta
+          </h2>
+          <p className="mt-0.5 text-xs text-indigo-800/70">
+            AI-ul citește situația de pe hartă și-ți spune cine a rămas în
+            urmă, ce sate s-au răcit și cu ce începi săptămâna.
+          </p>
+        </div>
+        <Button onClick={ruleaza} disabled={lucreaza}>
+          {lucreaza ? "Mă uit pe hartă..." : text ? "Reanalizează" : "Analizează harta"}
+        </Button>
+      </div>
+      {err && (
+        <p className="mt-3 rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700">{err}</p>
+      )}
+      {text && (
+        <div className="voice-md mt-3 rounded-lg border border-indigo-100 bg-white p-4 text-sm leading-relaxed text-slate-800">
+          <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+            {cati > 0 && (
+              <p className="text-xs font-medium text-indigo-600">
+                Din situația a {formatNumber(cati)} clienți.
+              </p>
+            )}
+            <button
+              type="button"
+              onClick={() => {
+                const f = window.open("", "_blank");
+                if (!f) return;
+                f.document.write(
+                  paginaRaport({
+                    titlu: "Harta firmei — ce spun cifrele",
+                    subtitlu: `${agent ? `Agent: ${agent} · ` : "Toți agenții · "}restant după ${zile} zile · ${formatNumber(cati)} clienți · generat ${new Date().toLocaleDateString("ro-RO")}`,
+                    corpMd: text,
+                  }),
+                );
+                f.document.close();
+              }}
+              className="rounded-lg border border-indigo-200 bg-white px-2.5 py-1 text-xs font-semibold text-indigo-700 hover:bg-indigo-50"
+            >
+              ⬇️ Descarcă PDF
+            </button>
+          </div>
+          <AiMarkdown text={text} />
+        </div>
+      )}
+    </Card>
   );
 }

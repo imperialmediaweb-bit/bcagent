@@ -20,6 +20,7 @@ export type AiKind =
   | "analiza" // insights / vânzări (OpenAI)
   | "briefing" // briefingul firmei
   | "client_voice" // vocea clientului (note vizite)
+  | "harta_analiza" // ce spune harta firmei (situația centralizată)
   | "coach" // antrenorul (Claude)
   | "chat" // chat agent
   | "brief_client" // fișa unui client
@@ -27,6 +28,7 @@ export type AiKind =
 
 /** Cost estimat per apel, în BANI (1 leu = 100 bani). */
 const COST_BANI: Record<AiKind, number> = {
+  harta_analiza: 3, // ~0,03 lei — o sinteză peste tot portofoliul
   ocr: 1, // ~0,01 lei
   analiza: 10, // ~0,10 lei
   briefing: 12,

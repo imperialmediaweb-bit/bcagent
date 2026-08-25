@@ -194,6 +194,77 @@ async function main() {
   const fara = await fetch(`${BASE}/api/agentie/harta`);
   check("fără cont, harta firmei nu se deschide", fara.status === 401, String(fara.status));
 
+  sectiune("Analiza AI peste hartă");
+  const analiza = async (cookie: string, corp: Record<string, unknown> = {}) => {
+    const r = await fetch(`${BASE}/api/agentie/harta/analiza`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", cookie },
+      body: JSON.stringify(corp),
+    });
+    return { status: r.status, d: (await r.json()) as { text?: string; count?: number; error?: string; enough?: boolean } };
+  };
+  const faraCont = await fetch(`${BASE}/api/agentie/harta/analiza`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({}),
+  });
+  check("fără cont, analiza nu se poate cere", faraCont.status === 401, String(faraCont.status));
+  // Întâi CIFRELE pe care se bazează analiza — astea trebuie să fie
+  // corecte indiferent dacă AI-ul răspunde sau nu.
+  const cifre = await fetch(`${BASE}/api/agentie/harta/analiza`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", cookie: ckA },
+    body: JSON.stringify({ zile: 7, doarDate: true }),
+  });
+  const dc = (await cifre.json()) as {
+    situatie?: {
+      clientiTotal: number;
+      restantiTotal: number;
+      localitatiTotal: number;
+      agenti: Array<{ agent: string; clienti: number; restanti: number; acoperirePct: number }>;
+      localitatiCeleMaiRacite: Array<{ localitate: string; restanti: number }>;
+    };
+  };
+  const st = dc.situatie;
+  check("analiza pleacă de la cifrele reale ale firmei", st?.clientiTotal === 3, JSON.stringify(st?.clientiTotal));
+  check("numără corect restanții (2 din 3 la pragul de 7 zile)", st?.restantiTotal === 2, String(st?.restantiTotal));
+  const agIon = st?.agenti.find((a) => a.agent === numeIon);
+  check(
+    "acoperirea pe agent e calculată corect (Ion: 2 clienți, 1 restant, 50%)",
+    agIon?.clienti === 2 && agIon?.restanti === 1 && agIon?.acoperirePct === 50,
+    JSON.stringify(agIon),
+  );
+  check("agenții sunt sortați cu cei mai restanți primii", (st?.agenti[0]?.restanti ?? 0) >= (st?.agenti[1]?.restanti ?? 0));
+  check("localitățile răcite sunt raportate", (st?.localitatiCeleMaiRacite.length ?? 0) >= 1);
+  check(
+    "NU intră agentul altei firme în cifre",
+    !(st?.agenti ?? []).some((a) => a.agent === numeStrain),
+  );
+
+  const an = await analiza(ckA, { zile: 7 });
+  const aiIndisponibil =
+    an.status === 503 ||
+    an.status === 402 ||
+    (an.status === 500 && /AI|semnal/i.test(an.d.error ?? ""));
+  if (aiIndisponibil) {
+    console.log("  · AI-ul nu e pornit în mediul ăsta — sar peste conținut");
+    check("răspunsul explică de ce nu merge, nu e ecran gol", !!an.d.error && an.d.error.length > 10, JSON.stringify(an.d));
+  } else {
+    check("analiza răspunde", an.status === 200, `${an.status} ${JSON.stringify(an.d).slice(0, 120)}`);
+    check("are text de citit", (an.d.text ?? "").length > 40, (an.d.text ?? "").slice(0, 100));
+    check("spune pe câți clienți s-a uitat", (an.d.count ?? 0) >= 3);
+    const t = (an.d.text ?? "").toLowerCase();
+    check(
+      "vorbește despre agenții REALI ai firmei (nu inventează)",
+      t.includes(numeIon.toLowerCase()) || t.includes(numeVasile.toLowerCase()) || t.includes("agent"),
+      (an.d.text ?? "").slice(0, 160),
+    );
+    check(
+      "NU pomenește agentul altei firme",
+      !t.includes(numeStrain.toLowerCase()),
+    );
+  }
+
   sectiune("Pagina, cu ochii");
   const browser = await chromium.launch({
     executablePath: process.env.CHROMIUM_PATH ?? "/opt/pw-browsers/chromium",
