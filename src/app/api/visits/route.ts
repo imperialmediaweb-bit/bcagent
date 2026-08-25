@@ -183,6 +183,23 @@ export async function POST(req: Request) {
       VALUES (${payload.agentId}, ${payload.agentName}, ${cui},
               ${String(body.denumire ?? "").slice(0, 200)}, ${result}, ${note})
     `;
+    // „ÎNCHIS" din teren: agentul a văzut cu ochii lui că firma nu mai
+    // există (pensiuni moarte de 10 ani, PFA-uri uitate în registru) —
+    // o scoatem de pe hartă și din liste pentru toată lumea. Registrul
+    // MF nu le radiază; terenul da.
+    if (result === "inchis") {
+      // Izolare: nu stingi firma dacă e clientul ÎN LUCRU al altei agenții.
+      const { orgAgentNamesForAgent } = await import("@/lib/org-scope");
+      const mine = await orgAgentNamesForAgent(payload.agentId);
+      await db`
+        UPDATE prospects
+        SET activ = FALSE, updated_at = NOW()
+        WHERE cui = ${cui}
+          AND (${mine.length === 0}
+               OR COALESCE(assigned_agent, '') = ''
+               OR assigned_agent = ANY(${mine.length ? mine : [""]}))
+      `;
+    }
     const status = STATUS_FOR_RESULT[result];
     if (status) {
       // Vizita alocă firma agentului care a fost la ea (dacă nu era a altcuiva).

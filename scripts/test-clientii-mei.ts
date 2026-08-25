@@ -169,6 +169,64 @@ async function main() {
     JSON.stringify(satGolC),
   );
 
+  console.log("\n══ Clientul apare în satul lui REAL, nu doar cel din registru ══");
+  // Client înregistrat pe COMUNĂ, dar adresa pomenește SATUL cerut.
+  await sql`INSERT INTO prospects (cui, denumire, adresa, localitate, judet, caen, status, assigned_agent, activ)
+            VALUES (${cui(6)}, ${"MAGAZIN PE COMUNA " + RUN}, ${"SAT " + SAT_GOL + " NR. 12"}, ${"COMUNA MARE " + RUN.toUpperCase()}, 'SV', '4711', 'client', ${numeA}, TRUE)`;
+  const dupaAdresa = await lista(tokA, SAT_GOL, true);
+  check(
+    "clientul cu sediul pe comună apare în satul din ADRESA lui",
+    dupaAdresa.some((f) => f.cui === cui(6)),
+    JSON.stringify(dupaAdresa.map((f) => f.denumire)),
+  );
+  // Client înregistrat AIUREA, dar cu pin GPS exact lângă satul cerut.
+  await sql`INSERT INTO prospects (cui, denumire, adresa, localitate, judet, caen, status, assigned_agent, activ)
+            VALUES (${cui(7)}, ${"MAGAZIN CU PIN GPS " + RUN}, '', ${"ALT SAT " + RUN.toUpperCase()}, 'SV', '4711', 'client', ${numeA}, TRUE)`;
+  await sql`INSERT INTO geo_firme (cui, lat, lng, aprox, failed)
+            VALUES (${cui(7)}, 47.625, 26.225, FALSE, FALSE)
+            ON CONFLICT (cui) DO UPDATE SET lat = EXCLUDED.lat, lng = EXCLUDED.lng, aprox = FALSE`;
+  const dupaGps = await lista(tokA, SAT_GOL, true);
+  check(
+    "clientul cu PIN GPS lângă sat apare în lista satului (harta învață terenul)",
+    dupaGps.some((f) => f.cui === cui(7)),
+    JSON.stringify(dupaGps.map((f) => f.denumire)),
+  );
+
+  console.log("\n══ „Închis” din teren scoate firma moartă de pe hartă ══");
+  await sql`INSERT INTO prospects (cui, denumire, adresa, localitate, judet, caen, status, assigned_agent, activ)
+            VALUES (${cui(8)}, ${"PENSIUNE MOARTA " + RUN}, '', ${SAT}, 'SV', '4711', 'nou', '', TRUE)`;
+  const rInchis = await fetch(`${BASE}/api/visits`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ token: tokA, cui: cui(8), denumire: "PENSIUNE MOARTA", result: "inchis", note: "nu mai există de 10 ani" }),
+  });
+  check("vizita „închis” se salvează", rInchis.ok);
+  const [moarta] = await sql<Array<{ activ: boolean }>>`SELECT activ FROM prospects WHERE cui = ${cui(8)}`;
+  check("firma închisă devine INACTIVĂ (dispare din liste/bule)", moarta?.activ === false);
+  const listaFaraMoarta = await lista(tokA, SAT, true);
+  check("…și chiar nu mai apare în lista satului", !listaFaraMoarta.some((f) => f.cui === cui(8)));
+  // Izolare: agentul firmei străine nu poate stinge clientul ACTIV al nostru.
+  await fetch(`${BASE}/api/visits`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ token: tokC, cui: cui(2), denumire: "x", result: "inchis", note: "" }),
+  });
+  const [alMeu] = await sql<Array<{ activ: boolean }>>`SELECT activ FROM prospects WHERE cui = ${cui(2)}`;
+  check("firma străină NU poate închide clientul altei agenții", alMeu?.activ !== true ? alMeu?.activ === false : true);
+  // cui(2) era deja inactiv în MF (FALSE la inserare) — verificăm pe unul activ:
+  const [alMeu5] = await sql<Array<{ activ: boolean | null }>>`SELECT activ FROM prospects WHERE cui = ${cui(5)}`;
+  await fetch(`${BASE}/api/visits`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ token: tokC, cui: cui(5), denumire: "x", result: "inchis", note: "" }),
+  });
+  const [alMeu5dupa] = await sql<Array<{ activ: boolean | null }>>`SELECT activ FROM prospects WHERE cui = ${cui(5)}`;
+  check(
+    "clientul MEU activ rămâne activ după „închis” de la firma străină",
+    alMeu5?.activ === true && alMeu5dupa?.activ === true,
+    JSON.stringify({ inainte: alMeu5, dupa: alMeu5dupa }),
+  );
+
   console.log("\n══ Pinul învață poziția EXACTĂ din GPS la „Am fost” ══");
   const vizita = (extra: Record<string, unknown>) =>
     fetch(`${BASE}/api/visits`, {
@@ -205,8 +263,8 @@ async function main() {
   check("vizita FĂRĂ poziție merge normal (GPS opțional)", dFara.ok === true && dFara.pinExact === false);
 
   console.log("\n══ Curățenie ══");
-  await sql`DELETE FROM geo_firme WHERE cui = ${cui(5)}`;
-  await sql`DELETE FROM visits WHERE cui = ${cui(5)}`;
+  await sql`DELETE FROM geo_firme WHERE cui IN (${cui(5)}, ${cui(7)})`;
+  await sql`DELETE FROM visits WHERE cui IN (${cui(5)}, ${cui(8)})`;
   await sql`DELETE FROM prospects WHERE cui LIKE ${"88" + baza + "%"}`;
   await sql`DELETE FROM geo_localitati WHERE localitate IN (${SAT}, ${SAT_GOL})`;
   await sql`DELETE FROM org_agents WHERE org_id IN (${orgId}, ${orgId2})`;

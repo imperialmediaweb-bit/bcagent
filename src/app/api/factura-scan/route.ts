@@ -154,6 +154,8 @@ export async function POST(req: Request) {
     });
   } catch (e) {
     console.error("[factura-scan]", e);
-    return Response.json({ error: "Eroare la citirea pozei" }, { status: 500 });
+    // Motivul real pe românește (credit AI / limită / rețea), nu mesaj sec.
+    const { mesajEroareAI } = await import("@/lib/ai-error");
+    return Response.json({ error: mesajEroareAI(e) }, { status: 500 });
   }
 }

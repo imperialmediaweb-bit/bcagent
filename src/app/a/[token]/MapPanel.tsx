@@ -125,9 +125,19 @@ function normLoc(s: string): string {
     .trim();
 }
 
-/** Adresa completă pentru navigare — telefonul geocodează la moment. */
-function navAddress(f: { adresa: string; localitate: string; judet?: string }): string {
-  const parts = [f.adresa, f.localitate, f.judet ? countyName(f.judet) : "", "Romania"]
+/** Adresa completă pentru navigare — telefonul geocodează la moment.
+ *  Când adresa n-are NUMĂR (sau lipsește), Google ar duce în centrul
+ *  satului — atunci căutăm firma pe NUME + sat, ca să găsească magazinul
+ *  real (așa l-a găsit pe „Moruz Iulian"). */
+function navAddress(f: { adresa: string; localitate: string; judet?: string; denumire?: string }): string {
+  const areNumar = /\d/.test(f.adresa || "");
+  const parts = [
+    !areNumar && f.denumire ? f.denumire : "",
+    f.adresa,
+    f.localitate,
+    f.judet ? countyName(f.judet) : "",
+    "Romania",
+  ]
     .filter(Boolean)
     .join(", ");
   return parts;
@@ -1387,23 +1397,24 @@ function LocalityFirms({
       onVisitSaved();
       const label = VISIT_RESULTS.find((v) => v.id === result)?.label ?? result;
       showToast(`${label} ✓`);
-      // Reflectăm local noul status.
+      // Reflectăm local noul status. „Închis" = firma nu mai există în
+      // realitate — dispare din listă pe loc (serverul a scos-o de pe hartă).
       setFirms((fs) =>
-        fs.map((x) =>
-          x.cui === f.cui
-            ? {
-                ...x,
-                status:
-                  result === "client"
-                    ? "client"
-                    : result === "nu_vrea"
-                      ? "respins"
-                      : result === "inchis"
-                        ? x.status
-                        : "contactat",
-              }
-            : x,
-        ),
+        result === "inchis"
+          ? fs.filter((x) => x.cui !== f.cui)
+          : fs.map((x) =>
+              x.cui === f.cui
+                ? {
+                    ...x,
+                    status:
+                      result === "client"
+                        ? "client"
+                        : result === "nu_vrea"
+                          ? "respins"
+                          : "contactat",
+                  }
+                : x,
+            ),
       );
     } catch {
       showToast("Eroare de rețea");

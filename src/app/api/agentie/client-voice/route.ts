@@ -150,6 +150,9 @@ export async function POST(req: Request) {
     return Response.json({ ok: true, enough: true, count: rows.length, text });
   } catch (e) {
     console.error("[client-voice]", e);
-    return Response.json({ error: "Eroare la analiza notelor" }, { status: 500 });
+    // Nu „Eroare la analiza notelor" sec: spunem CE s-a întâmplat de fapt
+    // (credit AI terminat / limită / rețea), pe românește.
+    const { mesajEroareAI } = await import("@/lib/ai-error");
+    return Response.json({ error: mesajEroareAI(e) }, { status: 500 });
   }
 }

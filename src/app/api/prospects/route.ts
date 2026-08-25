@@ -96,6 +96,27 @@ export async function GET(req: Request) {
     const masked = mine.length > 0;
     const mineArr = masked ? mine : [""];
 
+    // Pentru „ai mei": registrul pune firma pe satul de ÎNREGISTRARE, nu
+    // unde e magazinul în realitate. Ca clientul să apară în satul lui
+    // adevărat, îl potrivim și după ADRESĂ (textul conține numele satului)
+    // și după PINUL GPS lăsat de agent la vizită (±~3km de centrul
+    // localității cerute).
+    let centruLat: number | null = null;
+    let centruLng: number | null = null;
+    if (aiMei && localitate !== "" && judet !== "") {
+      const [centru] = await db<Array<{ lat: number | null; lng: number | null }>>`
+        SELECT lat, lng FROM geo_localitati
+        WHERE judet = ${judet} AND localitate ILIKE ${"%" + localitate + "%"}
+          AND lat IS NOT NULL
+        LIMIT 1
+      `;
+      if (centru && centru.lat !== null && centru.lng !== null) {
+        centruLat = centru.lat;
+        centruLng = centru.lng;
+      }
+    }
+    const areCentru = centruLat !== null && centruLng !== null;
+
     // Filtrul e construit o singură dată și refolosit la listă + count.
     // caen/caenIn funcționează pe PREFIX: "47" prinde tot 47xx, "4711" exact.
     const caenPattern = caen ? `${caen}%` : "";
@@ -130,7 +151,18 @@ export async function GET(req: Request) {
             AND status = 'client'
             AND assigned_agent = ${auth.agentName}
             AND (${judet} = '' OR judet = ${judet})
-            AND (${localitate} = '' OR localitate ILIKE ${"%" + localitate + "%"})
+            AND (${localitate} = ''
+                 -- satul de înregistrare din registru...
+                 OR localitate ILIKE ${"%" + localitate + "%"}
+                 -- ...sau adresa pomenește satul cerut (sediu pe comună)...
+                 OR adresa ILIKE ${"%" + localitate + "%"}
+                 -- ...sau pinul GPS lăsat de agent cade lângă satul cerut.
+                 OR (${areCentru} AND EXISTS (
+                       SELECT 1 FROM geo_firme g
+                       WHERE g.cui = prospects.cui AND g.aprox = FALSE
+                         AND g.lat BETWEEN ${(centruLat ?? 0) - 0.03} AND ${(centruLat ?? 0) + 0.03}
+                         AND g.lng BETWEEN ${(centruLng ?? 0) - 0.045} AND ${(centruLng ?? 0) + 0.045}
+                     )))
             AND (${search} = '' OR denumire ILIKE ${"%" + search + "%"} OR cui LIKE ${search + "%"} OR adresa ILIKE ${"%" + search + "%"}))
       )
     `;
