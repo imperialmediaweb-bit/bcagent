@@ -49,6 +49,29 @@ function parseProvider(v: string | undefined): Provider | null {
   return null;
 }
 
+/**
+ * Merită încercat alt furnizor? DA la erori trecătoare (credit terminat,
+ * limită, rețea, server picat). NU la erori care se repetă oriunde —
+ * poză prea mare, format greșit, cerere invalidă: acolo al doilea și al
+ * treilea furnizor doar consumă timpul agentului până la timeout.
+ */
+function eTranzitorie(e: unknown): boolean {
+  const m = (e instanceof Error ? e.message : String(e)).toLowerCase();
+  // Probleme ale FURNIZORULUI (cheie moartă, credit terminat, limită,
+  // server picat, rețea) → celălalt furnizor chiar poate răspunde.
+  if (/\b(401|403|429|500|502|503|504)\b/.test(m)) return true;
+  if (/credit|quota|balance|billing|rate limit|overload|capacity|api key|apikey|unauthorized|forbidden|authentication|timeout|timed out|fetch failed|network|econn|socket|abort/.test(m))
+    return true;
+  // Probleme ale CERERII (poză prea mare, format greșit, conținut
+  // respins): se repetă identic oriunde — nu chinuim agentul 3× până la
+  // timeout, îi spunem din prima ce e.
+  if (/\b(400|404|405|413|415|422)\b/.test(m)) return false;
+  if (/too large|prea mare|invalid image|unsupported|malformed|invalid request/.test(m))
+    return false;
+  // Necunoscut: încercăm mai departe (mai bine un răspuns decât o eroare).
+  return true;
+}
+
 export function getProvider(task: AITask = "analiza"): Provider | null {
   // 1) override per sarcină, 2) override global, 3) preferința sarcinii
   const perTask = parseProvider(
@@ -111,6 +134,7 @@ export async function streamCompletion(
     } catch (e) {
       if (aScris) throw e;
       ultimaEroare = e;
+      if (!eTranzitorie(e)) throw e; // cerere greșită — nu ajută alt furnizor
       console.warn(
         `[llm] ${provider} a picat pe „${task}”, încerc următorul furnizor:`,
         e instanceof Error ? e.message : e,
@@ -239,6 +263,7 @@ export async function visionCompletion(o: VisionOptions): Promise<string> {
       return await anthropicVision(o);
     } catch (e) {
       ultimaEroare = e;
+      if (!eTranzitorie(e)) throw e; // poză stricată/prea mare: nu insistăm
       console.warn(
         `[llm] ${provider} a picat pe „vision”, încerc următorul furnizor:`,
         e instanceof Error ? e.message : e,

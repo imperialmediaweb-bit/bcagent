@@ -191,6 +191,19 @@ export async function ensureSchema(): Promise<void> {
     ALTER TABLE prospects ADD COLUMN IF NOT EXISTS inchis_teren BOOLEAN NOT NULL DEFAULT FALSE;
     ALTER TABLE prospects ADD COLUMN IF NOT EXISTS anaf_checked_at TIMESTAMPTZ;
     CREATE INDEX IF NOT EXISTS prospects_anaf_sweep ON prospects(judet, anaf_checked_at);
+    -- „Închis" pe o firmă care NU e clientul nostru privește DOAR firma
+    -- care a închis-o: registrul e comun tuturor agențiilor, iar un
+    -- apăsat greșit n-are voie să șteargă un prospect de pe harta
+    -- altcuiva. Clienții PROPRII se sting global (inchis_teren) — acolo
+    -- chiar știm că magazinul nu mai există.
+    CREATE TABLE IF NOT EXISTS prospect_inchis (
+      cui TEXT NOT NULL,
+      org_id TEXT NOT NULL,
+      agent_name TEXT NOT NULL DEFAULT '',
+      closed_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      PRIMARY KEY (cui, org_id)
+    );
+    CREATE INDEX IF NOT EXISTS prospect_inchis_org ON prospect_inchis(org_id);
     -- Comenzile luate din teren: agentul le bate pe telefon la client,
     -- depozitul le vede instant, contabila le exportă pentru SAGA.
     CREATE TABLE IF NOT EXISTS orders (

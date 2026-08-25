@@ -34,15 +34,26 @@ export async function GET() {
     await ensureSchema();
     const agents = await listOrgAgents(auth.session.orgId);
     const nume = agents.map((a) => a.name);
-    const numeSauEmail = [...nume, auth.session.email];
-    // Rapoartele VECHI (dinainte să reținem firma) se REVENDICĂ o
-    // singură dată, la prima citire: primesc org_id-ul nostru și de
-    // atunci se văd doar aici. Fără revendicare, potrivirea pe nume ar
-    // rămâne o gaură permanentă: doi „Ion Popescu" din firme diferite
-    // și-ar vedea unul altuia rapoartele la fiecare listare.
+    // Rapoartele VECHI (dinainte să reținem firma) se pot revendica DOAR
+    // dacă numele raportorului e neîndoielnic al nostru: nume de agent
+    // care există într-o SINGURĂ firmă pe toată platforma. Doi „Ion
+    // Popescu" din firme diferite ar face altfel ca prima firmă care
+    // deschide pagina să ia rapoartele celeilalte. Emailul e unic prin
+    // definiție, deci intră mereu.
+    const numeUnice = nume.length
+      ? (
+          await db<Array<{ name: string }>>`
+            SELECT name FROM org_agents
+            WHERE name = ANY(${nume})
+            GROUP BY name
+            HAVING COUNT(DISTINCT org_id) = 1
+          `
+        ).map((r) => r.name)
+      : [];
+    const potRevendica = [...numeUnice, auth.session.email];
     await db`
       UPDATE issues SET org_id = ${auth.session.orgId}
-      WHERE org_id = '' AND reporter = ANY(${numeSauEmail.length ? numeSauEmail : [""]})
+      WHERE org_id = '' AND reporter = ANY(${potRevendica})
     `;
     const rows = await db<IssueRow[]>`
       SELECT id, reporter, role, page, message, ai_diagnosis, status, created_at

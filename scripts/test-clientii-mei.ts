@@ -201,8 +201,18 @@ async function main() {
     body: JSON.stringify({ token: tokA, cui: cui(8), denumire: "PENSIUNE MOARTA", result: "inchis", note: "nu mai există de 10 ani" }),
   });
   check("vizita „închis” se salvează", rInchis.ok);
+  // Firma NEALOCATĂ (prospect din registrul comun) nu se stinge global —
+  // registrul e al tuturor agențiilor. Se ascunde DOAR la noi.
   const [moarta] = await sql<Array<{ activ: boolean }>>`SELECT activ FROM prospects WHERE cui = ${cui(8)}`;
-  check("firma închisă devine INACTIVĂ (dispare din liste/bule)", moarta?.activ === false);
+  check(
+    "prospectul nealocat NU se stinge global (harta altor agenții rămâne întreagă)",
+    moarta?.activ === true,
+    JSON.stringify(moarta),
+  );
+  const [ascunsa] = await sql<Array<{ org_id: string }>>`
+    SELECT org_id FROM prospect_inchis WHERE cui = ${cui(8)}
+  `;
+  check("închiderea e trecută pe firma agentului care a apăsat", !!ascunsa?.org_id);
   const listaFaraMoarta = await lista(tokA, SAT, true);
   check("…și chiar nu mai apare în lista satului", !listaFaraMoarta.some((f) => f.cui === cui(8)));
   // Izolare: agentul firmei străine nu poate stinge clientul ACTIV al nostru.
@@ -256,6 +266,7 @@ async function main() {
 
   console.log("\n══ Curățenie ══");
   await sql`DELETE FROM geo_firme WHERE cui IN (${cui(5)}, ${cui(7)})`;
+  await sql`DELETE FROM prospect_inchis WHERE cui = ${cui(8)}`;
   await sql`DELETE FROM visits WHERE cui IN (${cui(5)}, ${cui(8)})`;
   await sql`DELETE FROM prospects WHERE cui LIKE ${"88" + baza + "%"}`;
   await sql`DELETE FROM geo_localitati WHERE localitate IN (${SAT}, ${SAT_GOL})`;

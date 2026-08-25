@@ -74,6 +74,8 @@ export default function CautareClient({
           onlyActive: "1",
           // Clienții MEI primii și mereu vizibili, peste orice filtru.
           aiMei: "1",
+          // Doar lista: fără numărători peste tot registrul la fiecare literă.
+          usor: "1",
         });
         const res = await fetch(`/api/prospects?${params}`, { signal: ctrl.signal });
         if (alMeu !== cerereRef.current) return; // a venit deja un răspuns mai nou

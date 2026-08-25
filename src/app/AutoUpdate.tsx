@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 /**
  * ACTUALIZARE FĂRĂ SĂ FACĂ NIMENI NIMIC.
@@ -23,9 +23,12 @@ import { useEffect, useState } from "react";
 export default function AutoUpdate() {
   // Doar când CHIAR există versiune nouă pe server (altfel: nimic pe ecran).
   const [versiuneNoua, setVersiuneNoua] = useState(false);
+  // Versiunea „acceptată" trăiește într-un ref, ca butonul × să o poată
+  // marca văzută — altfel banda reapărea la fiecare revenire în aplicație.
+  const versiuneRef = useRef("");
+  const ultimaVazuta = useRef("");
 
   useEffect(() => {
-    let versiuneMea = "";
     let oprit = false;
 
     // Ultima dată când agentul a scris ceva (tastat sau dictat) și
@@ -76,7 +79,12 @@ export default function AutoUpdate() {
       );
       if (
         campuri.some(
-          (c) => campuriAtinse.has(c) && (c.value ?? "").trim().length > 0,
+          (c) =>
+            campuriAtinse.has(c) &&
+            // Căutarea nu e „lucru nesalvat": un text lăsat în ea nu
+            // trebuie să blocheze actualizarea la nesfârșit.
+            c.type !== "search" &&
+            (c.value ?? "").trim().length > 0,
         )
       )
         return true;
@@ -93,11 +101,11 @@ export default function AutoUpdate() {
         const d = (await r.json()) as { versiune?: string };
         const v = String(d.versiune ?? "");
         if (!v) return;
-        if (!versiuneMea) {
-          versiuneMea = v;
+        if (!versiuneRef.current) {
+          versiuneRef.current = v;
           return;
         }
-        if (v !== versiuneMea) {
+        if (v !== versiuneRef.current && v !== ultimaVazuta.current) {
           // Versiune nouă. Dacă e liber, o luăm singuri (ca până acum);
           // dacă e în mijlocul unei comenzi, îi arătăm banda și decide el.
           if (reincarca && !eOcupat()) {
@@ -143,7 +151,12 @@ export default function AutoUpdate() {
       </button>
       <button
         type="button"
-        onClick={() => setVersiuneNoua(false)}
+        onClick={() => {
+          // „Am înțeles, mai târziu": nu mai insistăm pentru versiunea
+          // asta. La următoarea versiune nouă, banda revine.
+          ultimaVazuta.current = versiuneRef.current;
+          setVersiuneNoua(false);
+        }}
         aria-label="Ascunde"
         className="text-lg font-bold text-white/80 hover:text-white"
       >

@@ -14,6 +14,8 @@ interface Stop {
   denumire: string;
   adresa: string;
   localitate: string;
+  /** Județul firmei (dezambiguizează satele omonime la navigare). */
+  judet?: string;
   telefon: string;
   /** Poziția exactă a magazinului, dacă o știm — ruta salvată navighează
    *  pe COORDONATE, nu pe adresa de sat (altfel Google refuză traseul). */
@@ -40,6 +42,7 @@ function sanitizeStops(raw: unknown): Stop[] {
         denumire: String(s.denumire ?? "").slice(0, 200),
         adresa: String(s.adresa ?? "").slice(0, 300),
         localitate: String(s.localitate ?? "").slice(0, 120),
+        judet: String(s.judet ?? "").slice(0, 40),
         telefon: String(s.telefon ?? "").slice(0, 40),
         lat: bune ? lat : null,
         lng: bune ? lng : null,

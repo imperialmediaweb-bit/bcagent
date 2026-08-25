@@ -105,6 +105,8 @@ export async function GET(req: Request) {
     // filtrul de domeniu/activ) și primele la geocodare — altfel satul
     // clientului fără nicio firmă pe domeniul ales n-avea bulă deloc și
     // agentul întreba „unde-s restul de clienți?".
+    const { orgIdForAgent } = await import("@/lib/org-scope");
+    const orgIdMeu = (await orgIdForAgent(payload.agentId)) || "-";
     const rows = await db<LocalityRow[]>`
       SELECT p.localitate,
              COUNT(*)::text AS count,
@@ -116,6 +118,11 @@ export async function GET(req: Request) {
         ON g.judet = ${judet} AND g.localitate = p.localitate
       WHERE p.judet = ${judet}
         AND p.localitate <> ''
+        -- Ce a închis firma noastră pe teren nu mai umflă bulele.
+        AND NOT EXISTS (
+          SELECT 1 FROM prospect_inchis pi
+          WHERE pi.cui = p.cui AND pi.org_id = ${orgIdMeu}
+        )
         AND (((p.activ IS DISTINCT FROM FALSE)
               AND (${caenPatterns.length === 0} OR p.caen LIKE ANY(${caenPatterns})))
              OR (p.status = 'client' AND p.assigned_agent = ${payload.agentName}))

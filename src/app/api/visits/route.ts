@@ -197,16 +197,31 @@ export async function POST(req: Request) {
     // o scoatem de pe hartă și din liste pentru toată lumea. Registrul
     // MF nu le radiază; terenul da.
     if (result === "inchis") {
-      // inchis_teren: steag separat, ca verificarea ANAF lunară să NU
-      // reînvie firma (legal poate fi activă, dar magazinul e mort).
-      await db`
+      // CLIENTUL NOSTRU închis pe teren → se stinge global: îl cunoaștem,
+      // știm sigur că magazinul nu mai există. `inchis_teren` oprește și
+      // verificarea ANAF lunară să-l reînvie (legal poate fi activ).
+      const stins = await db`
         UPDATE prospects
         SET activ = FALSE, inchis_teren = TRUE, updated_at = NOW()
         WHERE cui = ${cui}
-          AND (COALESCE(assigned_agent, '') = ''
-               OR assigned_agent = ${payload.agentName}
+          AND COALESCE(assigned_agent, '') <> ''
+          AND (assigned_agent = ${payload.agentName}
                OR assigned_agent = ANY(${aiMei}))
       `;
+      if (stins.count === 0) {
+        // Firmă NEALOCATĂ (prospect din registrul comun): o ascundem DOAR
+        // de firma noastră. Registrul e al tuturor agențiilor — un apăsat
+        // greșit n-are voie să șteargă prospectul altcuiva de pe hartă.
+        const { orgIdForAgent } = await import("@/lib/org-scope");
+        const orgId = await orgIdForAgent(payload.agentId);
+        if (orgId) {
+          await db`
+            INSERT INTO prospect_inchis (cui, org_id, agent_name)
+            VALUES (${cui}, ${orgId}, ${payload.agentName})
+            ON CONFLICT (cui, org_id) DO NOTHING
+          `;
+        }
+      }
     }
     const status = STATUS_FOR_RESULT[result];
     if (status) {

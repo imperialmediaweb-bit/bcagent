@@ -57,6 +57,9 @@ export interface Firm {
   judet: string;
   caen: string;
   status: string;
+  /** Agentul care are firma în portofoliu — ca „clienții MEI" să nu-i
+   *  includă pe ai colegului din aceeași firmă. */
+  assignedAgent?: string;
   telefon: string;
   soldCents: number | null;
 }
@@ -66,6 +69,9 @@ interface Stop {
   denumire: string;
   adresa: string;
   localitate: string;
+  /** Județul firmei — călătorește cu oprirea, ca navigarea să nu
+   *  nimerească satul cu același nume din alt județ. */
+  judet?: string;
   telefon: string;
   /** Poziția exactă, dacă o știm — ruta navighează pe coordonate, nu pe
    *  adresă, ca Google să nu mai refuze traseul la adrese de sat. */
@@ -151,9 +157,12 @@ export function gmapsDir(address: string): string {
 export default function MapPanel({
   token,
   clients,
+  agentName = "",
 }: {
   token: string;
   clients: string[];
+  /** Numele agentului conectat — „clienții mei" înseamnă ai LUI. */
+  agentName?: string;
 }) {
   const [judet, setJudet] = useState("SV");
   const [preset, setPreset] = useState("fmcg");
@@ -727,11 +736,13 @@ export default function MapPanel({
         ultimulCadru.current = bounds;
         map.fitBounds(bounds, { padding: [30, 30], maxZoom: 11 });
       }
+      // Steagul se coboară AICI, la finalul desenării (nu după return —
+      // acolo era cod mort și harta rămânea blocată fără reîncadrare).
+      doarPozitiaMea.current = false;
     })();
     return () => {
       disposed = true;
     };
-    doarPozitiaMea.current = false;
   }, [localities, clientLocalities, selectedLoc, basket, pins, aratPins, euSunt]);
 
   useEffect(
@@ -775,6 +786,9 @@ export default function MapPanel({
 
   /* ── coșul de rută ── */
   const inBasket = useMemo(() => new Set(basket.map((s) => s.cui)), [basket]);
+  // Un singur calcul pentru coș (se folosea de 5 ori într-un singur
+  // randare — la 40 de opriri însemna 20 de linkuri construite degeaba).
+  const planCos = useMemo(() => planRoute(basket, [], judet), [basket, judet]);
 
   function toggleStop(f: Firm, pozitie?: { lat?: number; lng?: number }) {
     // Dacă firma are pin exact pe hartă, ducem coordonatele în oprire —
@@ -793,6 +807,7 @@ export default function MapPanel({
               denumire: f.denumire,
               adresa: f.adresa,
               localitate: f.localitate,
+              judet: f.judet || judet,
               telefon: f.telefon,
               lat: pin?.lat ?? null,
               lng: pin?.lng ?? null,
@@ -808,9 +823,9 @@ export default function MapPanel({
   function addStops(fs: Firm[]) {
     // Calculul se face PE starea curentă, în afara updater-ului — updater-ul
     // trebuie să rămână pur (StrictMode îl rulează de două ori).
-    const existente = new Set(basket.map((s) => s.cui));
+    const existenteAcum = new Set(basket.map((s) => s.cui));
     const noi = fs
-      .filter((f) => !existente.has(f.cui))
+      .filter((f) => !existenteAcum.has(f.cui))
       .map((f) => {
         const pin = pins.find((p) => p.cui === f.cui && !p.aprox);
         return {
@@ -818,12 +833,19 @@ export default function MapPanel({
           denumire: f.denumire,
           adresa: f.adresa,
           localitate: f.localitate,
+          judet: f.judet || judet,
           telefon: f.telefon,
           lat: pin?.lat ?? null,
           lng: pin?.lng ?? null,
         };
       });
-    setBasket([...basket, ...noi].slice(0, 40));
+    // Dedublarea se face ÎN updater, pe starea REALĂ: două apăsări
+    // rapide (banale pe telefon) nu mai pot băga aceiași clienți de
+    // două ori.
+    setBasket((b) => {
+      const existente = new Set(b.map((s) => s.cui));
+      return [...b, ...noi.filter((n) => !existente.has(n.cui))].slice(0, 40);
+    });
     if (basket.length + noi.length > 40) {
       showToast("Ruta ține maxim 40 de opriri — restul rămân pe altă zi.");
     } else if (noi.length > 0) {
@@ -1039,6 +1061,7 @@ export default function MapPanel({
                 localitate={selectedLoc}
                 caenParam={caenParam}
                 inBasket={inBasket}
+                agentName={agentName}
                 onToggleStop={toggleStop}
                 onAddStops={addStops}
                 onClose={() => setSelectedLoc(null)}
@@ -1076,21 +1099,20 @@ export default function MapPanel({
                     opririle, chiar dacă a fost azi pe la vreuna (se întoarce
                     cu marfă, a lipsit patronul etc.). Doar rutele salvate
                     sar peste ce e deja bifat. */}
-                {planRoute(basket, [], judet).etape.length === 0 && (
+                {planCos.etape.length === 0 && (
                   <span className="text-xs font-medium text-rose-600">
                     Firmele astea n-au încă adresă pe hartă — apasă „Am fost"
                     la prima, chiar în fața magazinului, și de atunci ruta
                     merge pe poziția exactă.
                   </span>
                 )}
-                {planRoute(basket, [], judet).sarite > 0 &&
-                  planRoute(basket, [], judet).etape.length > 0 && (
+                {planCos.sarite > 0 && planCos.etape.length > 0 && (
                     <span className="text-xs font-medium text-amber-700">
-                      {planRoute(basket, [], judet).sarite} opriri n-au adresă
+                      {planCos.sarite} opriri n-au adresă
                       și nu intră în traseu — le vezi în listă mai jos.
                     </span>
                   )}
-                {planRoute(basket, [], judet).etape.map((e, i, all) => (
+                {planCos.etape.map((e, i, all) => (
                   <a
                     key={i}
                     href={e.url}
@@ -1169,6 +1191,7 @@ export default function MapPanel({
                       denumire: d.denumire,
                       adresa: d.adresa,
                       localitate: d.localitate,
+                      judet: judet,
                       telefon: d.telefon,
                       lat: pin?.lat ?? null,
                       lng: pin?.lng ?? null,
@@ -1395,6 +1418,7 @@ function LocalityFirms({
   localitate,
   caenParam,
   inBasket,
+  agentName,
   onToggleStop,
   onAddStops,
   onClose,
@@ -1406,6 +1430,7 @@ function LocalityFirms({
   localitate: string;
   caenParam: string;
   inBasket: Set<string>;
+  agentName: string;
   onToggleStop: (f: Firm) => void;
   onAddStops: (fs: Firm[]) => void;
   onClose: () => void;
@@ -1547,7 +1572,12 @@ function LocalityFirms({
               Deschizi satele zilei pe rând, apeși, apoi Salvează pe ziua ta. */}
           {(() => {
             const aiMeiDeAdaugat = firms.filter(
-              (f) => f.status === "client" && !inBasket.has(f.cui),
+              (f) =>
+                f.status === "client" &&
+                // DOAR ai mei: clienții colegului din aceeași firmă vin
+                // tot cu status „client", dar n-au ce căuta în ruta mea.
+                (agentName === "" || f.assignedAgent === agentName) &&
+                !inBasket.has(f.cui),
             );
             if (loading || aiMeiDeAdaugat.length === 0) return null;
             return (

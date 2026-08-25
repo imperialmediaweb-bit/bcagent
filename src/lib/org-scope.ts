@@ -32,3 +32,22 @@ export async function orgAgentNamesForAgent(agentId: string): Promise<string[]> 
     return [];
   }
 }
+
+/**
+ * Firma (organizația) agentului — pentru lucrurile care privesc DOAR
+ * firma lui: închiderile de prospecți, rapoartele de probleme etc.
+ * Întoarce "" pentru linkurile vechi, fără organizație.
+ */
+export async function orgIdForAgent(agentId: string): Promise<string> {
+  try {
+    const { getDB } = await import("@/lib/db");
+    const db = getDB();
+    if (!db) return "";
+    const [r] = await db<Array<{ org_id: string }>>`
+      SELECT org_id FROM org_agents WHERE agent_id = ${agentId} LIMIT 1
+    `;
+    return r?.org_id ?? "";
+  } catch {
+    return "";
+  }
+}

@@ -1,6 +1,7 @@
 import { ensureSchema, getDB, isDBEnabled } from "@/lib/db";
 import { clientIP, rateLimit, timingSafeEqual } from "@/lib/rate-limit";
-import { ANAF_BATCH_SIZE, caenLabel, queryAnafBatch } from "@/modules/prospects";
+import { ANAF_BATCH_SIZE, caenLabel } from "@/modules/prospects";
+import { queryAnafBatchDetaliat } from "@/modules/prospects/anaf";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -62,7 +63,7 @@ export async function POST(req: Request) {
     let inactiveRemoved = 0;
     for (let i = 0; i < pending.length; i += ANAF_BATCH_SIZE) {
       const batch = pending.slice(i, i + ANAF_BATCH_SIZE).map((p) => p.cui);
-      const info = await queryAnafBatch(batch);
+      const { found: info, notFound: anafNotFound } = await queryAnafBatchDetaliat(batch);
 
       // Grupăm rezultatele → 2 operații bulk (nu 500 de query-uri individuale)
       const notFound: string[] = [];
@@ -79,9 +80,15 @@ export async function POST(req: Request) {
       for (const cui of batch) {
         const firm = info.get(cui);
         if (!firm) {
-          // Negăsit la ANAF → probabil radiat de mult
-          notFound.push(cui);
-          inactiveRemoved++;
+          // Radiat DOAR dacă ANAF îl declară explicit negăsit. „Lipsește
+          // din răspuns" nu e dovadă (răspunsuri parțiale) — altfel un
+          // răspuns degradat ar stinge sute de firme vii dintr-un foc.
+          if (anafNotFound.has(cui)) {
+            notFound.push(cui);
+            inactiveRemoved++;
+            processed++;
+          }
+          continue;
         } else {
           // NU ștergem nimic pe criteriu de domeniu: platforma servește
           // agenți din TOATE domeniile, filtrarea se face în UI.
@@ -109,7 +116,9 @@ export async function POST(req: Request) {
       if (updates.length > 0) {
         await db`
           UPDATE prospects p SET
-            activ = u.activ,
+            -- REGULA DE AUR: ce a închis TERENUL („Am fost → Închis")
+            -- nu învie din ANAF, oricât ar fi de vie firma pe hârtie.
+            activ = CASE WHEN p.inchis_teren THEN FALSE ELSE u.activ END,
             tva = u.tva,
             adresa = CASE WHEN u.adresa <> '' THEN u.adresa ELSE p.adresa END,
             caen = CASE WHEN u.caen <> '' THEN u.caen ELSE p.caen END,

@@ -851,7 +851,7 @@ export default function Dashboard({
               subtitle="Verde = ai clienți acolo · Portocaliu = firme neacoperite (pete albe) — pe baza celor 1,3M firme active"
             />
             <div className="mt-4">
-              <MapPanel token={token} clients={allClients} />
+              <MapPanel token={token} clients={allClients} agentName={agentName} />
             </div>
           </section>
 

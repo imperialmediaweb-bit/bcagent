@@ -16,6 +16,9 @@ export interface NavStop {
   denumire: string;
   adresa: string;
   localitate: string;
+  /** Județul firmei — „Dumbrava" există în vreo 10 județe; fără el,
+   *  Google alege la întâmplare. */
+  judet?: string;
   /** Poziția exactă, dacă o știm (pin geocodat sau GPS de la vizită). */
   lat?: number | null;
   lng?: number | null;
@@ -100,7 +103,12 @@ export function legMapsUrl(stops: NavStop[], judet: string): string {
     .map((s) =>
       typeof s.lat === "number" && typeof s.lng === "number"
         ? `${s.lat},${s.lng}`
-        : navAddress({ adresa: s.adresa, localitate: s.localitate, judet }),
+        : navAddress({
+            adresa: s.adresa,
+            localitate: s.localitate,
+            // Județul PROPRIU al opririi bate județul hărții.
+            judet: s.judet || judet,
+          }),
     );
   if (addrs.length === 0) return "";
   const destination = addrs[addrs.length - 1];
@@ -139,11 +147,14 @@ export function planRoute<T extends NavStop>(
   judet: string,
 ): RoutePlan<T> {
   const remaining = remainingStops(stops, visitedCuis);
-  const legs = routeLegs(remaining);
+  // Opririle la care Google nu poate duce (nici coordonate, nici adresă)
+  // ies ÎNAINTE de împărțirea în etape. Altfel o etapă întreagă putea
+  // ieși goală, iar cele următoare se renumerotau — agentul apăsa
+  // „Etapa 1" și pleca de fapt de la oprirea 11, fără să afle nimic.
+  const navigabile = remaining.filter(poateNaviga);
+  const legs = routeLegs(navigabile);
   const urls = legs.map((leg) => legMapsUrl(leg, judet));
-  const etape = legs
-    .map((leg, i) => ({ url: urls[i], stops: leg.filter(poateNaviga) }))
-    .filter((e) => e.url !== "");
+  const etape = legs.map((leg, i) => ({ url: urls[i], stops: leg }));
   return {
     total: stops.length,
     done: stops.length - remaining.length,
@@ -151,7 +162,7 @@ export function planRoute<T extends NavStop>(
     legs,
     urls,
     etape,
-    sarite: remaining.filter((s) => !poateNaviga(s)).length,
+    sarite: remaining.length - navigabile.length,
     finished: stops.length > 0 && remaining.length === 0,
   };
 }

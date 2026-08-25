@@ -5,8 +5,8 @@ import { RECHECK_DAYS, sweepJudete } from "@/modules/prospects/anaf-sweep";
 export const runtime = "nodejs";
 
 /**
- * STAREA MĂTURĂRII ANAF — verificare REALĂ, cu ochii, din browser:
- *   /api/prospects/sweep-status?key=<ADMIN_SECRET>
+ * STAREA MĂTURĂRII ANAF — verificare REALĂ, cu cifre din baza de date:
+ *   curl -H "x-admin-secret: <ADMIN_SECRET>" .../api/prospects/sweep-status
  * Arată cât s-a verificat de fapt (nu ce „ar trebui"): câte firme din
  * județele lucrate au fost văzute la ANAF, câte-s la rând, câte au ieșit
  * inactive și când a fost ultima verificare.
@@ -17,7 +17,11 @@ export async function GET(req: Request) {
   if (!adminSecret) {
     return Response.json({ error: "Server not configured" }, { status: 500 });
   }
-  const key = new URL(req.url).searchParams.get("key") ?? "";
+  // Cheia vine din ANTET, ca la toate celelalte rute de admin: în adresă
+  // ar ajunge în logurile serverului, în istoricul telefonului și în
+  // Referer. Verificare:
+  //   curl -H "x-admin-secret: <cheia>" https://provendi.ro/api/prospects/sweep-status
+  const key = req.headers.get("x-admin-secret") ?? "";
   if (!timingSafeEqual(key, adminSecret)) {
     return Response.json({ error: "Unauthorized" }, { status: 401 });
   }

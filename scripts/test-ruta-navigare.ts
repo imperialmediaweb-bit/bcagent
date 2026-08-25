@@ -107,6 +107,40 @@ check(
 const doarFaraAdresa = planRoute([{ cui: "9", denumire: "X", adresa: "", localitate: "" }], [], "SV");
 check("rută doar cu opriri fără adresă → nicio etapă (UI-ul explică)", doarFaraAdresa.etape.length === 0);
 
+console.log("\n══ Opririle care nu se pot naviga NU strică etapele ══");
+const cu25 = [
+  ...Array.from({ length: 10 }, (_, i) => ({
+    cui: `3${i}`, denumire: `FARA${i}`, adresa: "", localitate: "",
+  })),
+  ...Array.from({ length: 15 }, (_, i) => ({
+    cui: `4${i}`, denumire: `BUNA${i}`, adresa: `Str. ${i} nr. 2`, localitate: "RADAUTI",
+  })),
+];
+const p25 = planRoute(cu25, [], "SV");
+check("cele 10 fără adresă sunt RAPORTATE ca sărite", p25.sarite === 10, String(p25.sarite));
+check("etapele conțin doar opriri navigabile (15 → 2 etape)", p25.etape.length === 2, String(p25.etape.length));
+check(
+  "nicio etapă goală și niciun link mort",
+  p25.etape.every((e) => e.url !== "" && e.stops.length > 0),
+);
+check(
+  "prima etapă chiar începe cu prima oprire navigabilă (nu sare 10)",
+  decodeURIComponent(p25.etape[0].url).includes("Str. 0 nr. 2"),
+  decodeURIComponent(p25.etape[0].url).slice(0, 120),
+);
+
+console.log("\n══ Județul călătorește cu oprirea ══");
+const altJudet = legMapsUrl(
+  [
+    { cui: "1", denumire: "A", adresa: "Str. 1", localitate: "DUMBRAVA", judet: "BT" },
+    { cui: "2", denumire: "B", adresa: "Str. 2", localitate: "RADAUTI" },
+  ],
+  "SV",
+);
+const dec = decodeURIComponent(altJudet);
+check("oprirea din alt județ merge cu județul EI (Botoșani)", dec.includes("Botoșani"), dec.slice(0, 140));
+check("cea fără județ propriu ia județul hărții (Suceava)", dec.includes("Suceava"));
+
 console.log("\n══ Navigarea către UN singur client ══");
 check(
   "la o singură destinație numele firmei RĂMÂNE (așa o găsește Google în sat)",

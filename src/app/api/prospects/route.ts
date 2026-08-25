@@ -77,6 +77,10 @@ export async function GET(req: Request) {
   // și întreabă „unde sunt restul de clienți?" — clienții lui reali au
   // adesea alt cod CAEN decât presetarea aleasă.
   const aiMei = url.searchParams.get("aiMei") === "1";
+  // „usor=1": doar lista, fără numărătoarea totală și fără pâlnie.
+  // Căutarea de pe prima pagină cere 8 rânduri la fiecare literă — n-are
+  // rost să numere de fiecare dată tot registrul de 1,3M de firme.
+  const usor = url.searchParams.get("usor") === "1";
   // Căutarea fără diacritice: pe telefon nimeni nu scrie „MĂGĂZINUL",
   // scrie „magazinul". Îndoim ambele părți la aceleași litere simple.
   // ATENȚIE la ordine: lower() ÎNAINTE de translate (altfel majusculele
@@ -102,8 +106,9 @@ export async function GET(req: Request) {
 
     // IZOLARE ÎNTRE FIRME: starea de lucru (status/notă/agent/sold) se vede
     // doar pe rândurile firmei apelantului; ale altora apar ca firme simple.
-    const { orgAgentNamesForAgent } = await import("@/lib/org-scope");
+    const { orgAgentNamesForAgent, orgIdForAgent } = await import("@/lib/org-scope");
     const mine = await orgAgentNamesForAgent(auth.agentId);
+    const orgId = await orgIdForAgent(auth.agentId);
     const masked = mine.length > 0;
     const mineArr = masked ? mine : [""];
 
@@ -138,7 +143,14 @@ export async function GET(req: Request) {
     // Fragment construit proaspăt la fiecare folosire (postgres.js nu
     // garantează reutilizarea aceluiași fragment în două interogări).
     const buildWhere = () => db`
-      WHERE (
+      WHERE NOT EXISTS (
+          -- Firmele pe care AGENȚII NOȘTRI le-au găsit închise pe teren
+          -- (prospecți din registrul comun) nu ne mai apar nouă; pe harta
+          -- altor agenții rămân neatinse.
+          SELECT 1 FROM prospect_inchis pi
+          WHERE pi.cui = prospects.cui AND pi.org_id = ${orgId || "-"}
+        )
+        AND (
         ((${judet} = '' OR judet = ${judet})
         AND (${localitate} = '' OR localitate ILIKE ${"%" + localitate + "%"})
         AND (${caenPattern} = '' OR caen LIKE ${caenPattern})
@@ -219,10 +231,14 @@ export async function GET(req: Request) {
                denumire ASC
       LIMIT ${limit} OFFSET ${offset}
     `;
-    const [{ count }] = await db<[{ count: string }]>`
-      SELECT COUNT(*)::text AS count FROM prospects ${buildWhere()}
-    `;
-    const [funnel] = await db<
+    const [{ count }] = usor
+      ? [{ count: String(rows.length) }]
+      : await db<[{ count: string }]>`
+          SELECT COUNT(*)::text AS count FROM prospects ${buildWhere()}
+        `;
+    const [funnel] = usor
+      ? [{ total: "0", contactati: "0", clienti: "0" }]
+      : await db<
       [{ total: string; contactati: string; clienti: string }]
     >`
       SELECT COUNT(*)::text AS total,

@@ -31,6 +31,7 @@ const fmt = (n: number) =>
   new Intl.NumberFormat("ro-RO", { maximumFractionDigits: 0 }).format(n);
 
 interface Stop {
+  judet?: string;
   cui: string;
   denumire: string;
   adresa: string;
@@ -232,6 +233,13 @@ export default function DayPanel({
 
         {route && route.stops.length > 0 && (
           <div className="mt-3 flex flex-wrap items-center gap-2">
+            {!plan.finished && plan.sarite > 0 && plan.etape.length > 0 && (
+              <span className="rounded-lg bg-amber-50 px-3 py-2 text-xs font-medium text-amber-800">
+                {plan.sarite} {plan.sarite === 1 ? "client n-are" : "clienți n-au"} adresă
+                pe hartă și {plan.sarite === 1 ? "nu intră" : "nu intră"} în traseu — îi
+                vezi mai jos în listă.
+              </span>
+            )}
             {!plan.finished && plan.etape.length === 0 && (
               <span className="rounded-lg bg-rose-50 px-3 py-2 text-sm font-medium text-rose-700">
                 Clienții din ruta de azi n-au încă adresă pe hartă. Apasă
