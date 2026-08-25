@@ -35,11 +35,19 @@ export async function GET() {
     const agents = await listOrgAgents(auth.session.orgId);
     const nume = agents.map((a) => a.name);
     const numeSauEmail = [...nume, auth.session.email];
+    // Rapoartele VECHI (dinainte să reținem firma) se REVENDICĂ o
+    // singură dată, la prima citire: primesc org_id-ul nostru și de
+    // atunci se văd doar aici. Fără revendicare, potrivirea pe nume ar
+    // rămâne o gaură permanentă: doi „Ion Popescu" din firme diferite
+    // și-ar vedea unul altuia rapoartele la fiecare listare.
+    await db`
+      UPDATE issues SET org_id = ${auth.session.orgId}
+      WHERE org_id = '' AND reporter = ANY(${numeSauEmail.length ? numeSauEmail : [""]})
+    `;
     const rows = await db<IssueRow[]>`
       SELECT id, reporter, role, page, message, ai_diagnosis, status, created_at
       FROM issues
       WHERE org_id = ${auth.session.orgId}
-         OR (org_id = '' AND reporter = ANY(${numeSauEmail.length ? numeSauEmail : [""]}))
       ORDER BY created_at DESC
       LIMIT 100
     `;

@@ -21,9 +21,11 @@ export function getDB() {
       connect_timeout: 30,
       // Schema idempotentă (CREATE ... IF NOT EXISTS) scuipă la fiecare
       // pornire zeci de NOTICE „already exists, skipping" care ÎNGROAPĂ
-      // erorile reale în logurile de producție. Le tăcem — erorile
-      // adevărate (ERROR/WARNING) trec în continuare.
-      onnotice: () => {},
+      // erorile reale în logurile de producție. Tăcem DOAR nivelul
+      // NOTICE — avertismentele (WARNING) rămân vizibile.
+      onnotice: (n) => {
+        if (n.severity !== "NOTICE") console.warn("[pg]", n.severity, n.message);
+      },
     });
   }
   return sql;

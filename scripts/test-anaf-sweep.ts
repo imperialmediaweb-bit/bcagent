@@ -40,7 +40,8 @@ async function main() {
 
   // 1 = neverificată; 2 = verificată demult; 3 = verificată IERI;
   // 4 = alt județ; 5 = închisă din teren; 6 = inactivă fiscal la ANAF;
-  // 7 = negăsită la ANAF (radiată).
+  // 7 = negăsită la ANAF (radiată); 8 = LIPSĂ din răspuns (nici found,
+  // nici notFound — răspuns parțial: nu ne atingem de ea).
   await sql`INSERT INTO prospects (cui, denumire, localitate, judet, status, assigned_agent, activ, inchis_teren, anaf_checked_at)
     VALUES
     (${cui(1)}, ${"SWEEP NEVERIFICATA " + RUN}, 'SAT X', 'SV', 'nou', '', TRUE, FALSE, NULL),
@@ -49,7 +50,8 @@ async function main() {
     (${cui(4)}, ${"SWEEP ALT JUDET " + RUN}, 'SAT Y', 'CJ', 'nou', '', TRUE, FALSE, NULL),
     (${cui(5)}, ${"SWEEP INCHISA TEREN " + RUN}, 'SAT X', 'SV', 'nou', '', FALSE, TRUE, NULL),
     (${cui(6)}, ${"SWEEP INACTIVA FISCAL " + RUN}, 'SAT X', 'SV', 'nou', '', TRUE, FALSE, NULL),
-    (${cui(7)}, ${"SWEEP RADIATA " + RUN}, 'SAT X', 'SV', 'nou', '', TRUE, FALSE, NULL)`;
+    (${cui(7)}, ${"SWEEP RADIATA " + RUN}, 'SAT X', 'SV', 'nou', '', TRUE, FALSE, NULL),
+    (${cui(8)}, ${"SWEEP LIPSA RASPUNS " + RUN}, 'SAT X', 'SV', 'nou', '', TRUE, FALSE, NULL)`;
 
   console.log("\n══ Selecția firmelor scadente ══");
   const toate = await firmeDeVerificat(sql, ["SV", "BT"], 100000);
@@ -73,11 +75,13 @@ async function main() {
     // cui(5): ANAF zice ACTIVĂ — dar terenul a închis-o!
     [cui(5), { cui: cui(5), activ: true, tva: true, radiata: false }],
     [cui(6), { cui: cui(6), activ: false, tva: false, radiata: false }],
-    // cui(7) lipsește din hartă = negăsită la ANAF (radiată)
+    // cui(7) e declarată EXPLICIT negăsită de ANAF (radiată);
+    // cui(8) lipsește și din found și din notFound (răspuns parțial).
   ]);
-  const lot = [cui(1), cui(2), cui(5), cui(6), cui(7)];
-  const r = await aplicaRezultateAnaf(sql, lot, info);
+  const lot = [cui(1), cui(2), cui(5), cui(6), cui(7), cui(8)];
+  const r = await aplicaRezultateAnaf(sql, lot, info, new Set([cui(7)]));
   check("numărătoarea inactivelor e corectă (radiată + inactivă fiscal)", r.inactive === 2, String(r.inactive));
+  check("firma lipsă din răspuns e SĂRITĂ, nu marcată", r.sarite === 1, String(r.sarite));
 
   const stare = new Map(
     (
@@ -89,20 +93,30 @@ async function main() {
   );
   check("firma activă la ANAF rămâne activă", stare.get(cui(1))?.activ === true);
   check("firma inactivă FISCAL devine inactivă", stare.get(cui(6))?.activ === false);
-  check("firma NEGĂSITĂ la ANAF (radiată) devine inactivă", stare.get(cui(7))?.activ === false);
+  check("firma DECLARATĂ negăsită de ANAF (radiată) devine inactivă", stare.get(cui(7))?.activ === false);
+  check(
+    "firma LIPSĂ din răspuns rămâne NEATINSĂ (activă, fără anaf_checked_at)",
+    stare.get(cui(8))?.activ === true && stare.get(cui(8))?.verificata === false,
+    JSON.stringify(stare.get(cui(8))),
+  );
   check(
     "REGULA DE AUR: închisă din teren RĂMÂNE închisă deși ANAF o vede activă",
     stare.get(cui(5))?.activ === false,
     JSON.stringify(stare.get(cui(5))),
   );
+  const cuRaspuns = lot.filter((c) => c !== cui(8));
   check(
-    "toate din lot au primit anaf_checked_at (nu se reiau la următorul tic)",
-    lot.every((c) => stare.get(c)?.verificata === true),
+    "cele CU răspuns au primit anaf_checked_at (nu se reiau la următorul tic)",
+    cuRaspuns.every((c) => stare.get(c)?.verificata === true),
   );
   const scadenteDupa = await firmeDeVerificat(sql, ["SV"], 100000);
   check(
-    "după aplicare, niciuna din lot nu mai e scadentă",
-    lot.every((c) => !scadenteDupa.includes(c)),
+    "după aplicare, cele cu răspuns nu mai sunt scadente",
+    cuRaspuns.every((c) => !scadenteDupa.includes(c)),
+  );
+  check(
+    "firma lipsă din răspuns RĂMÂNE scadentă (se reia data viitoare)",
+    scadenteDupa.includes(cui(8)),
   );
 
   console.log("\n══ Curățenie ══");

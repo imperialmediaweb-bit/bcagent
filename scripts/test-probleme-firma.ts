@@ -51,13 +51,11 @@ async function orgLogin(email: string, parola: string): Promise<string> {
 async function main() {
   const RUN = `pb${Date.now().toString(36).slice(-6)}`;
   const orgId = `org-${RUN}`;
-  const orgId2 = `org2-${RUN}`;
   const idA = `ag-${RUN}-a`;
   const numeA = `Agent PB A ${RUN}`;
 
   await sql`INSERT INTO organizations (id, name, email, status, agent_limit)
-            VALUES (${orgId}, 'PB TEST SRL', ${RUN + "@test.ro"}, 'trial', 5),
-                   (${orgId2}, 'PB STRAIN SRL', ${RUN + "2@test.ro"}, 'trial', 5)`;
+            VALUES (${orgId}, 'PB TEST SRL', ${RUN + "@test.ro"}, 'trial', 5)`;
   await sql`INSERT INTO org_agents (id, org_id, agent_id, name)
             VALUES (${"agt-" + RUN + "-a"}, ${orgId}, ${idA}, ${numeA})`;
   // Conturi de owner pentru ambele firme (parolă hash-uită de API-ul real
@@ -92,6 +90,14 @@ async function main() {
     SELECT o.id FROM organizations o JOIN org_users u ON u.org_id = o.id
     WHERE u.email = ${emailB} LIMIT 1
   `;
+  if (!orgA || !orgB) {
+    // Signup picat — curățăm ce am pus și ieșim cinstit, fără resturi.
+    await sql`DELETE FROM org_agents WHERE agent_id = ${idA}`;
+    await sql`DELETE FROM organizations WHERE id = ${orgId}`;
+    await sql.end();
+    console.log("❌ signup-ul de test a picat — nu pot continua");
+    process.exit(1);
+  }
   await sql`UPDATE org_agents SET org_id = ${orgA.id} WHERE agent_id = ${idA}`;
 
   const exp = Math.floor(Date.now() / 1000) + 3600;
@@ -135,7 +141,7 @@ async function main() {
   await sql`DELETE FROM issues WHERE message IN (${mesaj}, ${mesajVechi})`;
   await sql`DELETE FROM org_agents WHERE agent_id = ${idA}`;
   await sql`DELETE FROM org_users WHERE email IN (${emailA}, ${emailB})`;
-  await sql`DELETE FROM organizations WHERE id IN (${orgId}, ${orgId2}, ${orgA.id}, ${orgB.id})`;
+  await sql`DELETE FROM organizations WHERE id IN (${orgId}, ${orgA.id}, ${orgB.id})`;
   console.log("  · datele de test șterse");
 
   await sql.end();

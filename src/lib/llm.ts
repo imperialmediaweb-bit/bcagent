@@ -5,13 +5,12 @@ import { streamWithGemini, geminiVision } from "./llm-gemini";
 export type Provider = "openai" | "anthropic" | "gemini";
 
 /**
- * Fiecare provider cu treaba lui:
- *   analiza — rapoarte/insights pe cifre    → OpenAI (implicit)
- *   coach   — logică, sfaturi, roleplay     → Claude (implicit)
- *   vision  — poze de la raft/stand         → Gemini (implicit)
+ * CLAUDE e implicitul pentru TOATE sarcinile (analiza, coach, vision) —
+ * decizia din 25.08: creditele stau pe Claude. Ceilalți furnizori sunt
+ * rezervă: la cheie lipsă SAU la eroare de RULARE (credit terminat, 429)
+ * se trece automat pe următorul disponibil (failover).
  * Suprascriere per sarcină: AI_PROVIDER_ANALIZA / AI_PROVIDER_COACH /
- * AI_PROVIDER_VISION (sau global AI_PROVIDER). Dacă preferatul nu are
- * cheie, cade automat pe oricare disponibil.
+ * AI_PROVIDER_VISION (sau global AI_PROVIDER).
  */
 export type AITask = "analiza" | "coach" | "vision";
 
@@ -219,7 +218,7 @@ export function isVisionEnabled(): boolean {
   return getProvider("vision") !== null;
 }
 
-/** Analizează o imagine cu providerul de „vision" (Gemini implicit). */
+/** Analizează o imagine cu providerul de „vision" (Claude implicit, cu failover). */
 export async function visionCompletion(o: VisionOptions): Promise<string> {
   const primar = getProvider("vision");
   if (!primar) {

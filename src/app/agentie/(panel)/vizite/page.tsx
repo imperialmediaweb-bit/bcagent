@@ -26,6 +26,17 @@ interface Visit {
   visitedAt: string;
 }
 
+// UN singur adevăr pentru perioade: dropdown-ul și subtitlul PDF-ului
+// se trag din aceeași listă — nu mai pot diverge la redenumiri.
+const PERIOADE: Array<{ value: number; label: string }> = [
+  { value: 7, label: "Ultimele 7 zile" },
+  { value: 30, label: "Ultima lună" },
+  { value: 60, label: "Ultimele 2 luni" },
+  { value: 90, label: "Ultimele 3 luni" },
+  { value: 180, label: "Ultimele 6 luni" },
+  { value: 365, label: "Ultimul an" },
+];
+
 const RESULT_BADGES: Record<string, { label: string; cls: string }> = {
   gandeste: { label: "🤔 se gândește", cls: "bg-amber-50 text-amber-700" },
   ne_suna: { label: "📞 ne sună", cls: "bg-sky-50 text-sky-700" },
@@ -101,13 +112,11 @@ export default function VizitePage() {
             onChange={(e) => setDays(parseInt(e.target.value))}
             className={`${inputClass} mt-0 sm:w-48`}
           >
-            <option value={7}>Ultimele 7 zile</option>
-            <option value={30}>Ultima lună</option>
-            <option value={60}>Ultimele 2 luni</option>
-            <option value={90}>Ultimele 3 luni</option>
-            <option value={180}>Ultimele 6 luni</option>
-            <option value={365}>Ultimul an</option>
-            <option value={365}>Ultimul an</option>
+            {PERIOADE.map((p) => (
+              <option key={p.value} value={p.value}>
+                {p.label}
+              </option>
+            ))}
           </select>
         </div>
       </Card>
@@ -219,16 +228,15 @@ function ClientVoice({ agent, days }: { agent: string; days: number }) {
             <button
               type="button"
               onClick={() => {
-                const zile: Record<number, string> = {
-                  7: "ultimele 7 zile", 30: "ultima lună", 60: "ultimele 2 luni",
-                  90: "ultimele 3 luni", 180: "ultimele 6 luni", 365: "ultimul an",
-                };
+                const eticheta =
+                  PERIOADE.find((p) => p.value === days)?.label.toLowerCase() ??
+                  `ultimele ${days} zile`;
                 const f = window.open("", "_blank");
                 if (!f) return;
                 f.document.write(
                   paginaRaport({
                     titlu: "Vocea clientului — ce zic clienții",
-                    subtitlu: `Perioada: ${zile[days] ?? `ultimele ${days} zile`} · ${count} note de vizită · generat ${new Date().toLocaleDateString("ro-RO")} din notele dictate de agenți pe teren`,
+                    subtitlu: `Perioada: ${eticheta} · ${count} note de vizită · generat ${new Date().toLocaleDateString("ro-RO")} din notele dictate de agenți pe teren`,
                     corpMd: text,
                   }),
                 );

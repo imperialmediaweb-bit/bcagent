@@ -56,8 +56,23 @@ interface AnafResponse {
 export async function queryAnafBatch(
   cuis: string[],
 ): Promise<Map<string, AnafFirmInfo>> {
+  return (await queryAnafBatchDetaliat(cuis)).found;
+}
+
+/**
+ * Varianta STRICTĂ, pentru măturarea automată: pe lângă firmele găsite,
+ * întoarce și lista EXPLICITĂ de CUI-uri pe care ANAF le declară negăsite
+ * (data.notFound). Diferența contează enorm: „lipsește din răspuns" NU
+ * înseamnă „radiată" — ANAF răspunde uneori 200 cu corp de eroare sau
+ * parțial; doar ce declară EL negăsit se marchează inactiv, restul se
+ * reia data viitoare. Aruncă dacă răspunsul nu e întreg (cod ≠ 200).
+ */
+export async function queryAnafBatchDetaliat(
+  cuis: string[],
+): Promise<{ found: Map<string, AnafFirmInfo>; notFound: Set<string> }> {
   const result = new Map<string, AnafFirmInfo>();
-  if (cuis.length === 0) return result;
+  const notFound = new Set<string>();
+  if (cuis.length === 0) return { found: result, notFound };
   if (cuis.length > ANAF_BATCH_SIZE) {
     throw new Error(`Batch ANAF prea mare: ${cuis.length} > ${ANAF_BATCH_SIZE}`);
   }
@@ -75,6 +90,14 @@ export async function queryAnafBatch(
     throw new Error(`ANAF a răspuns cu ${res.status}`);
   }
   const data = (await res.json()) as AnafResponse;
+  if (data.cod !== undefined && data.cod !== 200) {
+    // 200 HTTP cu corp de eroare — răspunsul nu e de încredere.
+    throw new Error(`ANAF a răspuns cu cod intern ${data.cod}`);
+  }
+  for (const nf of data.notFound ?? []) {
+    const cui = String(nf).replace(/\D/g, "");
+    if (cui) notFound.add(cui);
+  }
   for (const entry of data.found ?? []) {
     const cui = String(entry.date_generale?.cui ?? "").trim();
     if (!cui) continue;
@@ -92,5 +115,5 @@ export async function queryAnafBatch(
       telefon: normalizePhone(String(entry.date_generale?.telefon ?? "")),
     });
   }
-  return result;
+  return { found: result, notFound };
 }

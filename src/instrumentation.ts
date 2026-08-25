@@ -15,8 +15,7 @@ export async function register() {
 
   const ruleaza = async () => {
     try {
-      const { getDB } = await import("@/lib/db");
-      const { ensureSchema } = await import("@/lib/db");
+      const { getDB, ensureSchema } = await import("@/lib/db");
       const db = getDB();
       if (!db) return;
       await ensureSchema();

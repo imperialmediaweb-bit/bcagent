@@ -17,7 +17,7 @@
  */
 
 import type { Sql } from "postgres";
-import { queryAnafBatch, ANAF_BATCH_SIZE, type AnafFirmInfo } from "./anaf";
+import { queryAnafBatchDetaliat, ANAF_BATCH_SIZE, type AnafFirmInfo } from "./anaf";
 
 export const RECHECK_DAYS = 30;
 const LOCK_KEY = 771_204_001; // cheie fixă pentru pg_advisory_lock
@@ -47,26 +47,33 @@ export async function firmeDeVerificat(
 }
 
 /**
- * Aplică răspunsul ANAF pe un batch: negăsit = radiat → inactiv; găsit →
- * starea de la ANAF, DAR fără să reînvie închiderile din teren. Toate
- * primesc anaf_checked_at = NOW(). Întoarce câte au devenit inactive.
+ * Aplică răspunsul ANAF pe un batch. REGULĂ STRICTĂ: inactivă devine DOAR
+ * firma pe care ANAF o declară EXPLICIT negăsită (radiată) sau inactivă
+ * fiscal — „lipsește din răspuns" nu e dovadă (răspuns parțial/degradat)
+ * și se reia data viitoare, fără anaf_checked_at. Închiderile din teren
+ * nu sunt reînviate niciodată. Întoarce câte au devenit inactive și câte
+ * au fost sărite.
  */
 export async function aplicaRezultateAnaf(
   db: Sql,
   batch: string[],
   info: Map<string, AnafFirmInfo>,
-): Promise<{ inactive: number }> {
+  anafNotFound: Set<string>,
+): Promise<{ inactive: number; sarite: number }> {
   const notFound: string[] = [];
   const updates: Array<{ cui: string; activ: boolean; tva: boolean }> = [];
   let inactive = 0;
+  let sarite = 0;
   for (const cui of batch) {
     const firm = info.get(cui);
-    if (!firm) {
+    if (firm) {
+      updates.push({ cui, activ: firm.activ, tva: firm.tva });
+      if (!firm.activ) inactive++;
+    } else if (anafNotFound.has(cui)) {
       notFound.push(cui);
       inactive++;
     } else {
-      updates.push({ cui, activ: firm.activ, tva: firm.tva });
-      if (!firm.activ) inactive++;
+      sarite++; // nici găsită, nici declarată negăsită — nu ne atingem
     }
   }
   if (notFound.length > 0) {
@@ -88,7 +95,7 @@ export async function aplicaRezultateAnaf(
       WHERE p.cui = u.cui
     `;
   }
-  return { inactive };
+  return { inactive, sarite };
 }
 
 /**
@@ -99,35 +106,47 @@ export async function aplicaRezultateAnaf(
 export async function anafSweepTick(
   db: Sql,
   maxBatches = 10,
-): Promise<{ verificate: number; inactive: number; ramase: number } | null> {
-  const [{ lock }] = await db<[{ lock: boolean }]>`
-    SELECT pg_try_advisory_lock(${LOCK_KEY}) AS lock
-  `;
-  if (!lock) return null; // altă instanță mătură deja
+): Promise<{ verificate: number; inactive: number; sarite: number; ramase: number } | null> {
+  // Lock-ul advisory e legat de CONEXIUNE — prin pool, lock-ul s-ar lua pe
+  // o conexiune și unlock-ul ar nimeri alta (sau conexiunea idle ar muri
+  // și lock-ul ar pica în mijlocul măturării). De-aia REZERVĂM o singură
+  // conexiune pentru tot ticul: lock, toate query-urile și unlock-ul stau
+  // pe același fir.
+  const con = await db.reserve();
   try {
-    const judete = sweepJudete();
-    if (judete.length === 0) return { verificate: 0, inactive: 0, ramase: 0 };
-    const cuis = await firmeDeVerificat(db, judete, maxBatches * ANAF_BATCH_SIZE);
-    let verificate = 0;
-    let inactive = 0;
-    for (let i = 0; i < cuis.length; i += ANAF_BATCH_SIZE) {
-      const batch = cuis.slice(i, i + ANAF_BATCH_SIZE);
-      const info = await queryAnafBatch(batch);
-      const r = await aplicaRezultateAnaf(db, batch, info);
-      verificate += batch.length;
-      inactive += r.inactive;
-      if (i + ANAF_BATCH_SIZE < cuis.length) {
-        await new Promise((res) => setTimeout(res, 1100));
-      }
-    }
-    const [{ ramase }] = await db<[{ ramase: string }]>`
-      SELECT COUNT(*)::text AS ramase FROM prospects
-      WHERE judet = ANY(${judete})
-        AND (anaf_checked_at IS NULL
-             OR anaf_checked_at < NOW() - (${RECHECK_DAYS} || ' days')::interval)
+    const [{ lock }] = await con<[{ lock: boolean }]>`
+      SELECT pg_try_advisory_lock(${LOCK_KEY}) AS lock
     `;
-    return { verificate, inactive, ramase: parseInt(ramase, 10) };
+    if (!lock) return null; // altă instanță mătură deja
+    try {
+      const judete = sweepJudete();
+      if (judete.length === 0) return { verificate: 0, inactive: 0, sarite: 0, ramase: 0 };
+      const cuis = await firmeDeVerificat(con as unknown as Sql, judete, maxBatches * ANAF_BATCH_SIZE);
+      let verificate = 0;
+      let inactive = 0;
+      let sarite = 0;
+      for (let i = 0; i < cuis.length; i += ANAF_BATCH_SIZE) {
+        const batch = cuis.slice(i, i + ANAF_BATCH_SIZE);
+        const { found, notFound } = await queryAnafBatchDetaliat(batch);
+        const r = await aplicaRezultateAnaf(con as unknown as Sql, batch, found, notFound);
+        verificate += batch.length - r.sarite;
+        inactive += r.inactive;
+        sarite += r.sarite;
+        if (i + ANAF_BATCH_SIZE < cuis.length) {
+          await new Promise((res) => setTimeout(res, 1100));
+        }
+      }
+      const [{ ramase }] = await con<[{ ramase: string }]>`
+        SELECT COUNT(*)::text AS ramase FROM prospects
+        WHERE judet = ANY(${judete})
+          AND (anaf_checked_at IS NULL
+               OR anaf_checked_at < NOW() - (${RECHECK_DAYS} || ' days')::interval)
+      `;
+      return { verificate, inactive, sarite, ramase: parseInt(ramase, 10) };
+    } finally {
+      await con`SELECT pg_advisory_unlock(${LOCK_KEY})`;
+    }
   } finally {
-    await db`SELECT pg_advisory_unlock(${LOCK_KEY})`;
+    con.release();
   }
 }
