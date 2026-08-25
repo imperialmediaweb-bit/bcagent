@@ -1,6 +1,7 @@
 "use client";
 
 import AiMarkdown from "@/components/AiMarkdown";
+import { paginaRaport } from "@/lib/md-print";
 import { useCallback, useEffect, useState } from "react";
 import { Sparkles } from "lucide-react";
 import {
@@ -101,8 +102,11 @@ export default function VizitePage() {
             className={`${inputClass} mt-0 sm:w-48`}
           >
             <option value={7}>Ultimele 7 zile</option>
-            <option value={30}>Ultimele 30 zile</option>
-            <option value={90}>Ultimele 90 zile</option>
+            <option value={30}>Ultima lună</option>
+            <option value={60}>Ultimele 2 luni</option>
+            <option value={90}>Ultimele 3 luni</option>
+            <option value={180}>Ultimele 6 luni</option>
+            <option value={365}>Ultimul an</option>
             <option value={365}>Ultimul an</option>
           </select>
         </div>
@@ -204,11 +208,37 @@ function ClientVoice({ agent, days }: { agent: string; days: number }) {
       )}
       {text && (
         <div className="voice-md mt-3 rounded-lg border border-indigo-100 bg-white p-4 text-sm leading-relaxed text-slate-800">
-          {count > 0 && (
-            <p className="mb-2 text-xs font-medium text-indigo-600">
-              Din {count} note de vizită.
-            </p>
-          )}
+          <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+            {count > 0 && (
+              <p className="text-xs font-medium text-indigo-600">
+                Din {count} note de vizită.
+              </p>
+            )}
+            {/* Raportul pleacă mai departe: managerul îl salvează PDF din
+                fereastra de tipărire și-l trimite patronului pe WhatsApp. */}
+            <button
+              type="button"
+              onClick={() => {
+                const zile: Record<number, string> = {
+                  7: "ultimele 7 zile", 30: "ultima lună", 60: "ultimele 2 luni",
+                  90: "ultimele 3 luni", 180: "ultimele 6 luni", 365: "ultimul an",
+                };
+                const f = window.open("", "_blank");
+                if (!f) return;
+                f.document.write(
+                  paginaRaport({
+                    titlu: "Vocea clientului — ce zic clienții",
+                    subtitlu: `Perioada: ${zile[days] ?? `ultimele ${days} zile`} · ${count} note de vizită · generat ${new Date().toLocaleDateString("ro-RO")} din notele dictate de agenți pe teren`,
+                    corpMd: text,
+                  }),
+                );
+                f.document.close();
+              }}
+              className="rounded-lg border border-indigo-200 bg-white px-2.5 py-1 text-xs font-semibold text-indigo-700 hover:bg-indigo-50"
+            >
+              ⬇️ Descarcă PDF
+            </button>
+          </div>
           <AiMarkdown text={text} />
         </div>
       )}

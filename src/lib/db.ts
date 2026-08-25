@@ -126,6 +126,10 @@ export async function ensureSchema(): Promise<void> {
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
     CREATE INDEX IF NOT EXISTS issues_status ON issues(status, created_at DESC);
+    -- Firma raportorului: administratorul/managerul firmei își vede
+    -- rapoartele propriilor agenți în panoul lui, nu doar platforma.
+    ALTER TABLE issues ADD COLUMN IF NOT EXISTS org_id TEXT NOT NULL DEFAULT '';
+    CREATE INDEX IF NOT EXISTS issues_org ON issues(org_id, created_at DESC);
     -- Rutele agenților: șabloane pe zile (Luni — Rădăuți) cu opriri ordonate.
     CREATE TABLE IF NOT EXISTS routes (
       id TEXT PRIMARY KEY,

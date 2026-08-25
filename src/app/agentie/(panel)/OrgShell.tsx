@@ -6,6 +6,7 @@ import { useState } from "react";
 import ReportIssue from "@/app/ReportIssue";
 import Logo from "@/app/Logo";
 import {
+  Bug,
   Building2,
   ClipboardList,
   FileText,
@@ -34,6 +35,7 @@ const NAV = [
   { href: "/agentie/clienti", label: "Clienți", icon: Building2 },
   { href: "/agentie/solduri", label: "Solduri", icon: Wallet },
   { href: "/agentie/decont", label: "Decont", icon: Receipt },
+  { href: "/agentie/probleme", label: "Probleme", icon: Bug },
   { href: "/agentie/echipa", label: "Echipa", icon: Users },
   { href: "/agentie/setari", label: "Setări", icon: Settings },
 ];

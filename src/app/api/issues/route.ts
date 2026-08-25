@@ -45,18 +45,33 @@ export async function POST(req: Request) {
     return Response.json({ error: "Invalid JSON" }, { status: 400 });
   }
 
-  // Cine raportează: sesiune de agenție SAU link de agent.
+  // Cine raportează: sesiune de agenție SAU link de agent. Reținem și
+  // FIRMA raportorului — administratorul firmei vede raportul în panoul
+  // lui („Volanschi a trimis un raport și nu-l văd nicăieri").
   let reporter = "";
   let role = "";
+  let orgId = "";
   const orgSession = await getOrgSession();
   if (orgSession) {
     reporter = orgSession.email;
     role = orgSession.role;
+    orgId = orgSession.orgId;
   } else if (body.token && process.env.TOKEN_SECRET) {
     const p = await verifyFieldToken(body.token, process.env.TOKEN_SECRET);
     if (p) {
       reporter = p.agentName;
       role = "agent";
+      try {
+        const dbOrg = getDB();
+        if (dbOrg) {
+          const [rand] = await dbOrg<Array<{ org_id: string }>>`
+            SELECT org_id FROM org_agents WHERE agent_id = ${p.agentId} LIMIT 1
+          `;
+          orgId = rand?.org_id ?? "";
+        }
+      } catch {
+        // fără firmă găsită — raportul tot ajunge la platformă
+      }
     }
   }
   if (!reporter) {
@@ -103,10 +118,10 @@ export async function POST(req: Request) {
     await ensureSchema();
     const id = `iss_${crypto.randomUUID().replace(/-/g, "").slice(0, 16)}`;
     await db`
-      INSERT INTO issues (id, source, reporter, role, page, message, context, ai_diagnosis)
+      INSERT INTO issues (id, source, reporter, role, page, message, context, ai_diagnosis, org_id)
       VALUES (${id}, 'user', ${reporter}, ${role}, ${page}, ${message},
               ${db.json((body.context ?? {}) as Record<string, string>)},
-              ${aiDiagnosis})
+              ${aiDiagnosis}, ${orgId})
     `;
 
     // Soluția pentru utilizator, extrasă din triaj — o vede pe loc.
