@@ -46,6 +46,19 @@ export function navAddress(
     .join(", ");
 }
 
+/**
+ * Poate Google să ne ducă la oprirea asta? Are ori coordonate exacte, ori
+ * măcar o adresă/sat. Fără nimic din astea, punctul ar trimite ruta în
+ * mijlocul județului — mai bine îl sărim și SPUNEM câte am sărit.
+ */
+export function poateNaviga(s: NavStop): boolean {
+  return (
+    (typeof s.lat === "number" && typeof s.lng === "number") ||
+    String(s.adresa ?? "").trim() !== "" ||
+    String(s.localitate ?? "").trim() !== ""
+  );
+}
+
 /** Opririle rămase: cele care NU au fost vizitate (după CUI). */
 export function remainingStops<T extends { cui: string }>(
   stops: T[],
@@ -83,12 +96,7 @@ export function legMapsUrl(stops: NavStop[], judet: string): string {
     .slice(0, MAX_STOPS_PER_LEG)
     // Fără coordonate ȘI fără adresă/sat n-avem ce trimite: oprirea aia
     // ar duce ruta în mijlocul județului. O sărim — restul rutei merge.
-    .filter(
-      (s) =>
-        (typeof s.lat === "number" && typeof s.lng === "number") ||
-        String(s.adresa ?? "").trim() !== "" ||
-        String(s.localitate ?? "").trim() !== "",
-    )
+    .filter(poateNaviga)
     .map((s) =>
       typeof s.lat === "number" && typeof s.lng === "number"
         ? `${s.lat},${s.lng}`
@@ -113,8 +121,13 @@ export interface RoutePlan<T extends NavStop> {
   remaining: T[];
   /** Etapele rămase (fiecare = un link de navigare). */
   legs: T[][];
-  /** Linkurile de navigare, unul per etapă. */
+  /** Linkurile de navigare, unul per etapă (poate conține și goale). */
   urls: string[];
+  /** Etapele CARE CHIAR SE POT PORNI: linkul și opririle lui, împreună —
+   *  ca eticheta „Etapa 2 (7 opriri)" să nu se mai desincronizeze. */
+  etape: Array<{ url: string; stops: T[] }>;
+  /** Câte opriri s-au sărit (n-au nici coordonate, nici adresă). */
+  sarite: number;
   /** Ruta e terminată complet. */
   finished: boolean;
 }
@@ -127,12 +140,18 @@ export function planRoute<T extends NavStop>(
 ): RoutePlan<T> {
   const remaining = remainingStops(stops, visitedCuis);
   const legs = routeLegs(remaining);
+  const urls = legs.map((leg) => legMapsUrl(leg, judet));
+  const etape = legs
+    .map((leg, i) => ({ url: urls[i], stops: leg.filter(poateNaviga) }))
+    .filter((e) => e.url !== "");
   return {
     total: stops.length,
     done: stops.length - remaining.length,
     remaining,
     legs,
-    urls: legs.map((leg) => legMapsUrl(leg, judet)),
+    urls,
+    etape,
+    sarite: remaining.filter((s) => !poateNaviga(s)).length,
     finished: stops.length > 0 && remaining.length === 0,
   };
 }

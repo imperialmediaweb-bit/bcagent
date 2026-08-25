@@ -84,6 +84,29 @@ check("fiecare etapă are linkul ei", plan.urls.filter(Boolean).length === 3);
 const planContinuat = planRoute(multe, ["90", "91", "92"], "SV");
 check("continuarea sare peste cele bifate azi", planContinuat.remaining.length === 20 && planContinuat.done === 3);
 
+console.log("\n══ Etapele PERECHE (link ↔ opriri) ══");
+const mixt = [
+  { cui: "1", denumire: "A", adresa: "", localitate: "" }, // fără adresă
+  ...Array.from({ length: 12 }, (_, i) => ({
+    cui: `2${i}`,
+    denumire: `B${i}`,
+    adresa: `Str. ${i}`,
+    localitate: "RADAUTI",
+  })),
+];
+const pm = planRoute(mixt, [], "SV");
+check("oprirea fără adresă e numărată ca sărită", pm.sarite === 1, String(pm.sarite));
+check(
+  "fiecare etapă are linkul ei ȘI opririle ei (nimic desincronizat)",
+  pm.etape.every((e) => e.url !== "" && e.stops.length > 0),
+);
+check(
+  "numărul de opriri din etape = total minus cele sărite",
+  pm.etape.reduce((n, e) => n + e.stops.length, 0) === mixt.length - pm.sarite,
+);
+const doarFaraAdresa = planRoute([{ cui: "9", denumire: "X", adresa: "", localitate: "" }], [], "SV");
+check("rută doar cu opriri fără adresă → nicio etapă (UI-ul explică)", doarFaraAdresa.etape.length === 0);
+
 console.log("\n══ Navigarea către UN singur client ══");
 check(
   "la o singură destinație numele firmei RĂMÂNE (așa o găsește Google în sat)",

@@ -15,10 +15,24 @@ import { VisitButtons, gmapsDir, type Firm } from "./MapPanel";
  * (cu dictare), Comandă, Navighează, Sună. Fără să mai cauți prin sate.
  */
 
-export default function CautareClient({ token }: { token: string }) {
+export default function CautareClient({
+  token,
+  onVisitSaved,
+}: {
+  token: string;
+  /** Bifarea unei vizite de AICI trebuie să reîmprospăteze restul
+   *  panoului (ziua, scadenții, ruta) — altfel „Continuă ruta" l-ar
+   *  trimite pe agent înapoi la clientul pe care tocmai l-a bifat. */
+  onVisitSaved?: () => void;
+}) {
   const [q, setQ] = useState("");
   const [rezultate, setRezultate] = useState<Firm[]>([]);
   const [cautand, setCautand] = useState(false);
+  const [eroare, setEroare] = useState<string | null>(null);
+  // Numărul cererii: dacă un răspuns vechi ajunge după unul nou, îl
+  // ignorăm (altfel lista ar sări înapoi la ce s-a scris înainte).
+  const cerereRef = useRef(0);
+  const abortRef = useRef<AbortController | null>(null);
   const [visitFor, setVisitFor] = useState<Firm | null>(null);
   const [orderFor, setOrderFor] = useState<Firm | null>(null);
   const [toast, setToast] = useState<string | null>(null);
@@ -35,12 +49,20 @@ export default function CautareClient({ token }: { token: string }) {
     if (timerRef.current) clearTimeout(timerRef.current);
     const text = q.trim();
     if (text.length < 2) {
+      cerereRef.current++;
+      abortRef.current?.abort();
       setRezultate([]);
+      setEroare(null);
       setCautand(false);
       return;
     }
     setCautand(true);
+    setEroare(null);
     timerRef.current = setTimeout(async () => {
+      const alMeu = ++cerereRef.current;
+      abortRef.current?.abort();
+      const ctrl = new AbortController();
+      abortRef.current = ctrl;
       try {
         const params = new URLSearchParams({
           token,
@@ -50,14 +72,28 @@ export default function CautareClient({ token }: { token: string }) {
           // Clienții MEI primii și mereu vizibili, peste orice filtru.
           aiMei: "1",
         });
-        const res = await fetch(`/api/prospects?${params}`);
-        if (!res.ok) return;
+        const res = await fetch(`/api/prospects?${params}`, { signal: ctrl.signal });
+        if (alMeu !== cerereRef.current) return; // a venit deja un răspuns mai nou
+        if (!res.ok) {
+          const d = (await res.json().catch(() => null)) as { error?: string } | null;
+          setRezultate([]);
+          setEroare(
+            res.status === 401
+              ? "Linkul tău a expirat — cere-i managerului unul nou."
+              : (d?.error ?? "Nu am putut căuta acum. Încearcă din nou."),
+          );
+          return;
+        }
         const data = (await res.json()) as { prospects?: Firm[] };
+        if (alMeu !== cerereRef.current) return;
         setRezultate(data.prospects ?? []);
-      } catch {
-        // fără rețea — lista rămâne cum era
+      } catch (e) {
+        if ((e as Error)?.name === "AbortError") return;
+        if (alMeu !== cerereRef.current) return;
+        setRezultate([]);
+        setEroare("Fără internet acum — încearcă din nou când ai semnal.");
       } finally {
-        setCautand(false);
+        if (alMeu === cerereRef.current) setCautand(false);
       }
     }, 350);
     return () => {
@@ -108,6 +144,7 @@ export default function CautareClient({ token }: { token: string }) {
       }
       setVisitFor(null);
       showToast("Vizită salvată ✓");
+      onVisitSaved?.();
       setRezultate((rs) =>
         result === "inchis"
           ? rs.filter((x) => x.cui !== f.cui)
@@ -145,7 +182,13 @@ export default function CautareClient({ token }: { token: string }) {
         {cautand && <Loader2 className="h-4 w-4 shrink-0 animate-spin text-slate-400" />}
       </div>
 
-      {q.trim().length >= 2 && !cautand && rezultate.length === 0 && (
+      {eroare && (
+        <p className="mt-3 rounded-lg bg-rose-50 px-3 py-2 text-sm font-medium text-rose-700">
+          {eroare}
+        </p>
+      )}
+
+      {!eroare && q.trim().length >= 2 && !cautand && rezultate.length === 0 && (
         <p className="mt-3 text-sm text-slate-500">
           Nimic găsit pentru „{q.trim()}". Încearcă doar o parte din nume
           (ex. „oliver" în loc de „Oliver Market SRL").

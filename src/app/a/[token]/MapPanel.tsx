@@ -562,27 +562,6 @@ export default function MapPanel({
       // PINII CLIENȚILOR: fiecare client, un punct. Apeși pe punct și-i
       // vezi numele — așa se vede pe hartă cine e vecin cu cine, iar ruta
       // se face pe vecinătate, nu la nimereală.
-      // EU, aici: cerc albastru + zona de precizie. Se desenează ultimul,
-      // ca să fie deasupra tuturor.
-      if (euSunt) {
-        L.circle([euSunt.lat, euSunt.lng], {
-          radius: Math.max(20, Math.min(300, euSunt.acc)),
-          color: "#2563eb",
-          fillColor: "#3b82f6",
-          fillOpacity: 0.12,
-          weight: 1,
-        }).addTo(layer);
-        const eu = L.circleMarker([euSunt.lat, euSunt.lng], {
-          radius: 8,
-          color: "#ffffff",
-          fillColor: "#2563eb",
-          fillOpacity: 1,
-          weight: 3,
-        });
-        eu.bindTooltip("Ești aici", { direction: "top" });
-        eu.addTo(layer);
-        bounds.push([euSunt.lat, euSunt.lng]);
-      }
       if (aratPins && pins.length > 0) {
         for (const p of pins) {
           const punct = L.circleMarker([p.lat, p.lng], {
@@ -625,7 +604,7 @@ export default function MapPanel({
                   adresa: p.adresa,
                   localitate: p.localitate,
                   telefon: p.telefon,
-                } as Firm, { lat: p.lat, lng: p.lng });
+                } as Firm, p.aprox ? undefined : { lat: p.lat, lng: p.lng });
                 map.closePopup();
               },
               { once: true },
@@ -710,6 +689,28 @@ export default function MapPanel({
         // „Programul meu” sau din scadenți). Cât timp răsfoiești firmele
         // unei localități și adaugi opriri, harta stă pe loc — altfel ar
         // sări de sub deget și n-ai mai nimeri bula următoare.
+      // EU, AICI — desenat ULTIMUL, ca să stea deasupra pinilor și a
+      // numerelor de rută. NU intră în încadrarea hărții: altfel apăsarea
+      // butonului ar depărta harta la nivel de județ în loc să mă apropie.
+      if (euSunt) {
+        L.circle([euSunt.lat, euSunt.lng], {
+          radius: Math.max(20, Math.min(300, euSunt.acc)),
+          color: "#2563eb",
+          fillColor: "#3b82f6",
+          fillOpacity: 0.12,
+          weight: 1,
+        }).addTo(layer);
+        const eu = L.circleMarker([euSunt.lat, euSunt.lng], {
+          radius: 8,
+          color: "#ffffff",
+          fillColor: "#2563eb",
+          fillOpacity: 1,
+          weight: 3,
+        });
+        eu.bindTooltip("Ești aici", { direction: "top" });
+        eu.addTo(layer);
+        eu.bringToFront();
+      }
         if (puncte.length > 0 && !selectedLoc && ruteFit.current !== basket.length) {
           ruteFit.current = basket.length;
           map.fitBounds(puncte, { padding: [60, 60], maxZoom: 13 });
@@ -769,7 +770,10 @@ export default function MapPanel({
   function toggleStop(f: Firm, pozitie?: { lat?: number; lng?: number }) {
     // Dacă firma are pin exact pe hartă, ducem coordonatele în oprire —
     // ruta se navighează pe ele, nu pe adresa de sat.
-    const pin = pozitie ?? pins.find((p) => p.cui === f.cui);
+    // DOAR pinii exacți dau coordonate rutei — cei aproximativi sunt
+    // centrul satului, iar pe adresă Google se descurcă mai bine.
+    const gasit = pins.find((p) => p.cui === f.cui && !p.aprox);
+    const pin = pozitie ?? gasit;
     setBasket((b) =>
       b.some((s) => s.cui === f.cui)
         ? b.filter((s) => s.cui !== f.cui)
@@ -799,7 +803,7 @@ export default function MapPanel({
     const noi = fs
       .filter((f) => !existente.has(f.cui))
       .map((f) => {
-        const pin = pins.find((p) => p.cui === f.cui);
+        const pin = pins.find((p) => p.cui === f.cui && !p.aprox);
         return {
           cui: f.cui,
           denumire: f.denumire,
@@ -1057,23 +1061,32 @@ export default function MapPanel({
                     opririle, chiar dacă a fost azi pe la vreuna (se întoarce
                     cu marfă, a lipsit patronul etc.). Doar rutele salvate
                     sar peste ce e deja bifat. */}
-                {planRoute(basket, [], judet).urls.filter(Boolean).length === 0 && (
+                {planRoute(basket, [], judet).etape.length === 0 && (
                   <span className="text-xs font-medium text-rose-600">
                     Firmele astea n-au încă adresă pe hartă — apasă „Am fost"
                     la prima, chiar în fața magazinului, și de atunci ruta
                     merge pe poziția exactă.
                   </span>
                 )}
-                {planRoute(basket, [], judet).urls.filter(Boolean).map((u, i, all) => (
+                {planRoute(basket, [], judet).sarite > 0 &&
+                  planRoute(basket, [], judet).etape.length > 0 && (
+                    <span className="text-xs font-medium text-amber-700">
+                      {planRoute(basket, [], judet).sarite} opriri n-au adresă
+                      și nu intră în traseu — le vezi în listă mai jos.
+                    </span>
+                  )}
+                {planRoute(basket, [], judet).etape.map((e, i, all) => (
                   <a
                     key={i}
-                    href={u}
+                    href={e.url}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="inline-flex items-center gap-1.5 rounded-md bg-indigo-600 px-3 py-1.5 text-xs font-medium text-white shadow-sm hover:bg-indigo-700"
                   >
                     <Navigation className="h-3.5 w-3.5" />
-                    {all.length > 1 ? `Pornește etapa ${i + 1}` : "Pornește ruta"}
+                    {all.length > 1
+                      ? `Pornește etapa ${i + 1} (${e.stops.length})`
+                      : "Pornește ruta"}
                   </a>
                 ))}
                 <button
@@ -1135,7 +1148,7 @@ export default function MapPanel({
               onClick={() => {
                 setBasket(
                   dueClients.slice(0, 40).map((d) => {
-                    const pin = pins.find((p) => p.cui === d.cui);
+                    const pin = pins.find((p) => p.cui === d.cui && !p.aprox);
                     return {
                       cui: d.cui,
                       denumire: d.denumire,
@@ -1249,9 +1262,9 @@ export default function MapPanel({
                       )}
                     </p>
                   </button>
-                  {!plan.finished && plan.urls[0] && (
+                  {!plan.finished && plan.etape[0] && (
                     <a
-                      href={plan.urls[0]}
+                      href={plan.etape[0].url}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="rounded-md p-1.5 text-indigo-600 hover:bg-indigo-50"
@@ -1278,15 +1291,15 @@ export default function MapPanel({
                     <span className="text-[11px] text-slate-500">
                       Nu încap într-un drum — {plan.legs.length} etape:
                     </span>
-                    {plan.urls.filter(Boolean).map((u, i) => (
+                    {plan.etape.map((e, i) => (
                       <a
                         key={i}
-                        href={u}
+                        href={e.url}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="rounded-full bg-indigo-50 px-2 py-0.5 text-[11px] font-semibold text-indigo-700 ring-1 ring-inset ring-indigo-200 hover:bg-indigo-100"
                       >
-                        {i + 1}: {plan.legs[i].length} opriri
+                        {i + 1}: {e.stops.length} opriri
                       </a>
                     ))}
                   </div>

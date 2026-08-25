@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 
 /**
  * ACTUALIZARE FĂRĂ SĂ FACĂ NIMENI NIMIC.
@@ -14,8 +14,16 @@ import { useEffect } from "react";
  * fost în altă parte (WhatsApp, telefon) — deci nu în timp ce scrie o
  * comandă sau dictează o notă. Dacă nu revine niciodată, verificăm și la
  * fiecare 10 minute, dar tot cu aceleași reguli de siguranță.
+ *
+ * Iar dacă e ceva în lucru (scrie o comandă, dictează), NU-i smulgem
+ * pagina de sub mână: apare o BANDĂ jos — „E o versiune nouă · Actualizează"
+ * — și o apasă când e liber. Fără versiune nouă, nu apare nicio bandă,
+ * deci nimeni nu mai trebuie să dea refresh „de siguranță".
  */
 export default function AutoUpdate() {
+  // Doar când CHIAR există versiune nouă pe server (altfel: nimic pe ecran).
+  const [versiuneNoua, setVersiuneNoua] = useState(false);
+
   useEffect(() => {
     let versiuneMea = "";
     let oprit = false;
@@ -89,9 +97,15 @@ export default function AutoUpdate() {
           versiuneMea = v;
           return;
         }
-        if (v !== versiuneMea && reincarca && !eOcupat()) {
-          oprit = true;
-          window.location.reload();
+        if (v !== versiuneMea) {
+          // Versiune nouă. Dacă e liber, o luăm singuri (ca până acum);
+          // dacă e în mijlocul unei comenzi, îi arătăm banda și decide el.
+          if (reincarca && !eOcupat()) {
+            oprit = true;
+            window.location.reload();
+            return;
+          }
+          setVersiuneNoua(true);
         }
       } catch {
         // fără semnal — reîncercăm data viitoare
@@ -114,5 +128,27 @@ export default function AutoUpdate() {
     };
   }, []);
 
-  return null;
+  if (!versiuneNoua) return null;
+  return (
+    <div className="fixed inset-x-0 bottom-0 z-[9999] flex items-center justify-center gap-3 bg-[#ff4d00] px-4 py-3 text-white shadow-[0_-4px_16px_rgba(0,0,0,0.25)]">
+      <span className="text-sm font-semibold">
+        ✨ E o versiune nouă a aplicației
+      </span>
+      <button
+        type="button"
+        onClick={() => window.location.reload()}
+        className="rounded-lg bg-white px-3 py-1.5 text-sm font-bold text-[#ff4d00] shadow-sm"
+      >
+        Actualizează
+      </button>
+      <button
+        type="button"
+        onClick={() => setVersiuneNoua(false)}
+        aria-label="Ascunde"
+        className="text-lg font-bold text-white/80 hover:text-white"
+      >
+        ×
+      </button>
+    </div>
+  );
 }

@@ -134,6 +134,8 @@ export default function Dashboard({
   const [agentRates, setAgentRates] = useState<Record<string, number>>({});
   const [savedAt, setSavedAt] = useState<Date | null>(null);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  // Bifarea unei vizite din căutare trebuie să reîmprospăteze „Ziua mea".
+  const [refreshTeren, setRefreshTeren] = useState(0);
   // Meniul arată DOAR secțiunea aleasă (aerisit); „tot" = pagina lungă veche.
   const [view, setView] = useState<string>("acasa");
   // „Am terminat de întrebat serverul" — secțiunile de analiză apar abia
@@ -789,8 +791,8 @@ export default function Dashboard({
           {/* CĂUTAREA, prima pe pagină (cererea agenților): scrii două
               litere din numele clientului și-l ai, cu tot cu butoanele
               „Am fost" și „Comandă" — fără să-l mai cauți prin sate. */}
-          <CautareClient token={token} />
-          <DayPanel token={token} />
+          <CautareClient token={token} onVisitSaved={() => setRefreshTeren((n) => n + 1)} />
+          <DayPanel token={token} refreshKey={refreshTeren} />
           <VanPanel token={token} />
           <Hero
             agentName={agentName}

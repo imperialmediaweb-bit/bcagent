@@ -38,7 +38,15 @@ interface Stop {
   telefon: string;
 }
 
-export default function DayPanel({ token }: { token: string }) {
+export default function DayPanel({
+  token,
+  refreshKey = 0,
+}: {
+  token: string;
+  /** Crește când s-a bifat o vizită în altă parte a panoului (căutarea de
+   *  pe prima pagină) — ziua, scadenții și ruta se reîncarcă imediat. */
+  refreshKey?: number;
+}) {
   const [visitsToday, setVisitsToday] = useState<number | null>(null);
   const [due, setDue] = useState<number | null>(null);
   const [ordersToday, setOrdersToday] = useState<number | null>(null);
@@ -124,7 +132,7 @@ export default function DayPanel({ token }: { token: string }) {
       window.removeEventListener("focus", onVizibil);
       document.removeEventListener("visibilitychange", onVizibil);
     };
-  }, [token]);
+  }, [token, refreshKey]);
 
   // Fără DB / fără nimic de arătat → nu ocupăm ecranul degeaba.
   const anything =
@@ -224,22 +232,29 @@ export default function DayPanel({ token }: { token: string }) {
 
         {route && route.stops.length > 0 && (
           <div className="mt-3 flex flex-wrap items-center gap-2">
+            {!plan.finished && plan.etape.length === 0 && (
+              <span className="rounded-lg bg-rose-50 px-3 py-2 text-sm font-medium text-rose-700">
+                Clienții din ruta de azi n-au încă adresă pe hartă. Apasă
+                „Am fost" la primul, chiar în fața magazinului — de atunci
+                ruta merge pe poziția exactă.
+              </span>
+            )}
             {plan.finished ? (
               <span className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-50 px-3 py-2 text-sm font-semibold text-emerald-700 ring-1 ring-inset ring-emerald-200">
                 ✓ Ruta de azi e făcută toată ({plan.total} opriri)
               </span>
             ) : (
-              plan.urls.map((u, i, all) => (
+              plan.etape.map((e, i, all) => (
                 <a
                   key={i}
-                  href={u}
+                  href={e.url}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="inline-flex items-center gap-1.5 rounded-lg bg-indigo-600 px-3 py-2 text-sm font-medium text-white shadow-sm hover:bg-indigo-700"
                 >
                   <Navigation className="h-4 w-4" />
                   {all.length > 1
-                    ? `Etapa ${i + 1} (${plan.legs[i].length} opriri)`
+                    ? `Etapa ${i + 1} (${e.stops.length} opriri)`
                     : plan.done > 0
                       ? `Continuă ruta (${plan.remaining.length} rămase)`
                       : "Pornește ruta de azi"}

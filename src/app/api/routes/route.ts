@@ -15,6 +15,10 @@ interface Stop {
   adresa: string;
   localitate: string;
   telefon: string;
+  /** Poziția exactă a magazinului, dacă o știm — ruta salvată navighează
+   *  pe COORDONATE, nu pe adresa de sat (altfel Google refuză traseul). */
+  lat?: number | null;
+  lng?: number | null;
 }
 
 const DAYS = ["", "luni", "marti", "miercuri", "joi", "vineri", "sambata", "duminica"];
@@ -23,13 +27,24 @@ function sanitizeStops(raw: unknown): Stop[] {
   if (!Array.isArray(raw)) return [];
   return raw
     .filter((s): s is Record<string, unknown> => !!s && typeof s === "object")
-    .map((s) => ({
-      cui: String(s.cui ?? "").replace(/\D/g, "").slice(0, 12),
-      denumire: String(s.denumire ?? "").slice(0, 200),
-      adresa: String(s.adresa ?? "").slice(0, 300),
-      localitate: String(s.localitate ?? "").slice(0, 120),
-      telefon: String(s.telefon ?? "").slice(0, 40),
-    }))
+    .map((s) => {
+      // Coordonatele se păstrează DOAR dacă-s numere plauzibile (România) —
+      // altfel ruta salvată ar duce omul aiurea.
+      const lat = Number(s.lat);
+      const lng = Number(s.lng);
+      const bune =
+        Number.isFinite(lat) && Number.isFinite(lng) &&
+        lat >= 43.3 && lat <= 48.4 && lng >= 20.1 && lng <= 30.0;
+      return {
+        cui: String(s.cui ?? "").replace(/\D/g, "").slice(0, 12),
+        denumire: String(s.denumire ?? "").slice(0, 200),
+        adresa: String(s.adresa ?? "").slice(0, 300),
+        localitate: String(s.localitate ?? "").slice(0, 120),
+        telefon: String(s.telefon ?? "").slice(0, 40),
+        lat: bune ? lat : null,
+        lng: bune ? lng : null,
+      };
+    })
     .filter((s) => s.cui !== "")
     .slice(0, 40);
 }
