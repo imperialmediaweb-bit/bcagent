@@ -35,6 +35,8 @@ interface Locality {
   localitate: string;
   count: number;
   cuTelefon: number;
+  /** Clienții MEI din localitate (numărați de server, sigur, nu ghicit). */
+  clienti?: number;
   lat: number | null;
   lng: number | null;
 }
@@ -530,7 +532,9 @@ export default function MapPanel({
       for (const loc of localities) {
         if (loc.lat === null || loc.lng === null) continue;
         const key = normLoc(loc.localitate);
-        const clientCount = clientLocalities.get(key) ?? 0;
+        // Verde dacă am clienți acolo — după numărătoarea SERVERULUI
+        // (clienții alocați mie) sau după potrivirea fișierului meu.
+        const clientCount = Math.max(loc.clienti ?? 0, clientLocalities.get(key) ?? 0);
         const isCovered = clientCount > 0;
         const isSelected = selectedLoc === loc.localitate;
         const radius = Math.max(6, Math.min(26, 4 + Math.sqrt(loc.count) * 1.6));
@@ -1269,6 +1273,9 @@ function LocalityFirms({
           localitate,
           limit: "100",
           onlyActive: "1",
+          // Clienții MEI apar mereu, chiar dacă au alt CAEN decât domeniul
+          // ales — altfel agentul își caută degeaba clienții în sat.
+          aiMei: "1",
         });
         if (caenParam) params.set("caenIn", caenParam);
         const res = await fetch(`/api/prospects?${params}`);

@@ -54,6 +54,8 @@ interface LocalityRow {
   localitate: string;
   count: string;
   cu_telefon: string;
+  /** Câți CLIENȚI ai apelantului sunt în localitate (bula devine verde). */
+  clienti: string;
   lat: number | null;
   lng: number | null;
   failed: boolean | null;
@@ -75,7 +77,8 @@ export async function GET(req: Request) {
   }
   const url = new URL(req.url);
   const token = url.searchParams.get("token");
-  if (!token || !(await verifyFieldToken(token, tokenSecret))) {
+  const payload = token ? await verifyFieldToken(token, tokenSecret) : null;
+  if (!payload) {
     return Response.json({ error: "Token invalid sau expirat" }, { status: 401 });
   }
 
@@ -98,20 +101,27 @@ export async function GET(req: Request) {
   try {
     await ensureSchema();
 
+    // LOCALITĂȚILE CU CLIENȚII APELANTULUI intră MEREU pe hartă (peste
+    // filtrul de domeniu/activ) și primele la geocodare — altfel satul
+    // clientului fără nicio firmă pe domeniul ales n-avea bulă deloc și
+    // agentul întreba „unde-s restul de clienți?".
     const rows = await db<LocalityRow[]>`
       SELECT p.localitate,
              COUNT(*)::text AS count,
              COUNT(*) FILTER (WHERE p.telefon IS NOT NULL AND p.telefon <> '')::text AS cu_telefon,
+             COUNT(*) FILTER (WHERE p.status = 'client' AND p.assigned_agent = ${payload.agentName})::text AS clienti,
              g.lat, g.lng, g.failed
       FROM prospects p
       LEFT JOIN geo_localitati g
         ON g.judet = ${judet} AND g.localitate = p.localitate
       WHERE p.judet = ${judet}
         AND p.localitate <> ''
-        AND (p.activ IS DISTINCT FROM FALSE)
-        AND (${caenPatterns.length === 0} OR p.caen LIKE ANY(${caenPatterns}))
+        AND (((p.activ IS DISTINCT FROM FALSE)
+              AND (${caenPatterns.length === 0} OR p.caen LIKE ANY(${caenPatterns})))
+             OR (p.status = 'client' AND p.assigned_agent = ${payload.agentName}))
       GROUP BY p.localitate, g.lat, g.lng, g.failed
-      ORDER BY COUNT(*) DESC
+      ORDER BY COUNT(*) FILTER (WHERE p.status = 'client' AND p.assigned_agent = ${payload.agentName}) DESC,
+               COUNT(*) DESC
       LIMIT 300
     `;
 
@@ -159,6 +169,7 @@ export async function GET(req: Request) {
         localitate: r.localitate,
         count: parseInt(r.count, 10),
         cuTelefon: parseInt(r.cu_telefon, 10),
+        clienti: parseInt(r.clienti, 10),
         lat: r.lat,
         lng: r.lng,
       })),

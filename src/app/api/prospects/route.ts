@@ -71,6 +71,12 @@ export async function GET(req: Request) {
   const onlyActive = url.searchParams.get("onlyActive") === "1";
   const onlyTva = url.searchParams.get("onlyTva") === "1";
   const withPhone = url.searchParams.get("withPhone") === "1";
+  // `aiMei=1`: CLIENȚII apelantului apar MEREU (în județul/localitatea
+  // cerută), chiar dacă nu se potrivesc pe domeniu/CAEN sau îs marcați
+  // inactivi în registrul MF. Altfel, agentul deschide satul lui pe hartă
+  // și întreabă „unde sunt restul de clienți?" — clienții lui reali au
+  // adesea alt cod CAEN decât presetarea aleasă.
+  const aiMei = url.searchParams.get("aiMei") === "1";
   const limit = Math.min(
     500,
     Math.max(1, parseInt(url.searchParams.get("limit") ?? "100", 10) || 100),
@@ -97,7 +103,8 @@ export async function GET(req: Request) {
     // Fragment construit proaspăt la fiecare folosire (postgres.js nu
     // garantează reutilizarea aceluiași fragment în două interogări).
     const buildWhere = () => db`
-      WHERE (${judet} = '' OR judet = ${judet})
+      WHERE (
+        ((${judet} = '' OR judet = ${judet})
         AND (${localitate} = '' OR localitate ILIKE ${"%" + localitate + "%"})
         AND (${caenPattern} = '' OR caen LIKE ${caenPattern})
         AND (${caenInPatterns.length === 0} OR caen LIKE ANY(${caenInPatterns}))
@@ -116,7 +123,16 @@ export async function GET(req: Request) {
         AND (${!onlyActive} OR activ IS DISTINCT FROM FALSE)
         AND (${!onlyTva} OR tva IS TRUE)
         AND (${!withPhone} OR (telefon IS NOT NULL AND telefon <> ''))
-        AND (${search} = '' OR denumire ILIKE ${"%" + search + "%"} OR cui LIKE ${search + "%"} OR adresa ILIKE ${"%" + search + "%"})
+        AND (${search} = '' OR denumire ILIKE ${"%" + search + "%"} OR cui LIKE ${search + "%"} OR adresa ILIKE ${"%" + search + "%"}))
+        -- CLIENȚII MEI: mereu vizibili în zona cerută, peste orice filtru
+        -- de domeniu/stare — doar județ/localitate/căutare se respectă.
+        OR (${aiMei}
+            AND status = 'client'
+            AND assigned_agent = ${auth.agentName}
+            AND (${judet} = '' OR judet = ${judet})
+            AND (${localitate} = '' OR localitate ILIKE ${"%" + localitate + "%"})
+            AND (${search} = '' OR denumire ILIKE ${"%" + search + "%"} OR cui LIKE ${search + "%"} OR adresa ILIKE ${"%" + search + "%"}))
+      )
     `;
 
     const rows = await db<ProspectRow[]>`
