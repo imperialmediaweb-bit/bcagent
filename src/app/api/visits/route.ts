@@ -150,6 +150,12 @@ export async function POST(req: Request) {
     denumire?: string;
     result?: string;
     note?: string;
+    /** Poziția GPS a telefonului ÎN MOMENTUL vizitei (opțional) — cu ea
+     *  pinul firmei devine EXACT, nu „undeva în sat". */
+    lat?: number;
+    lng?: number;
+    /** Precizia raportată de GPS, în metri. */
+    acc?: number;
   };
   try {
     body = await req.json();
@@ -196,7 +202,26 @@ export async function POST(req: Request) {
         WHERE cui = ${cui}
       `;
     }
-    return Response.json({ ok: true });
+    // PINUL ÎNVAȚĂ DE LA OM: agentul stă chiar în fața magazinului când
+    // apasă „Am fost" — dacă telefonul dă un fix bun (≤250m, în România),
+    // firma primește coordonatele EXACTE și pinul nu mai e „prin sat".
+    const lat = Number(body.lat);
+    const lng = Number(body.lng);
+    const acc = Number(body.acc ?? 9999);
+    const fixBun =
+      Number.isFinite(lat) && Number.isFinite(lng) &&
+      lat >= 43.3 && lat <= 48.4 && lng >= 20.1 && lng <= 30.0 &&
+      Number.isFinite(acc) && acc > 0 && acc <= 250;
+    if (fixBun) {
+      await db`
+        INSERT INTO geo_firme (cui, lat, lng, aprox, failed)
+        VALUES (${cui}, ${lat}, ${lng}, FALSE, FALSE)
+        ON CONFLICT (cui) DO UPDATE
+          SET lat = EXCLUDED.lat, lng = EXCLUDED.lng,
+              aprox = FALSE, failed = FALSE, updated_at = NOW()
+      `;
+    }
+    return Response.json({ ok: true, pinExact: fixBun });
   } catch (e) {
     console.error("[visits POST]", e);
     return Response.json({ error: "Eroare la salvarea vizitei" }, { status: 500 });

@@ -574,7 +574,14 @@ export default function MapPanel({
               <div style="font-size:11px;color:#64748b">${escHtml(p.adresa || p.localitate)}${p.aprox ? " · ≈ poziție aproximativă (adresa n-are stradă/nr.)" : ""}</div>
               <div style="margin-top:6px;display:flex;gap:6px;flex-wrap:wrap">
                 ${p.telefon ? `<a href="tel:${escHtml(p.telefon)}" style="font-size:12px;font-weight:600;color:#0f766e;text-decoration:none">📞 Sună</a>` : ""}
-                <a href="${escHtml(gmapsDir(p.adresa ? `${p.adresa}, ${p.localitate}` : p.localitate))}" target="_blank" rel="noopener" style="font-size:12px;font-weight:600;color:#1d4ed8;text-decoration:none">🧭 Navighează</a>
+                <a href="${escHtml(
+                  // Pin EXACT (adresă geocodată sau GPS de la vizită) →
+                  // navigăm fix pe coordonate; aproximativ → căutăm firma
+                  // pe NUME + sat, ca Google să găsească magazinul real.
+                  p.aprox
+                    ? gmapsDir(`${p.denumire}, ${p.adresa ? `${p.adresa}, ` : ""}${p.localitate}`)
+                    : gmapsDir(`${p.lat},${p.lng}`),
+                )}" target="_blank" rel="noopener" style="font-size:12px;font-weight:600;color:#1d4ed8;text-decoration:none">🧭 Navighează</a>
                 <button data-pin-ruta="${escHtml(p.cui)}" style="font-size:12px;font-weight:700;color:${inRuta ? "#b91c1c" : "#4f46e5"};background:none;border:none;padding:0;cursor:pointer">${inRuta ? "− Scoate din rută" : "+ Pune în rută"}</button>
               </div>
             </div>`,
@@ -1304,6 +1311,30 @@ function LocalityFirms({
 
   async function saveVisit(f: Firm, result: string, note: string) {
     try {
+      // Agentul e CHIAR LA FIRMĂ acum — dacă telefonul dă poziția în ≤3s,
+      // pinul firmei devine exact (nu „undeva în sat"). Fără permisiune
+      // sau fără semnal GPS, vizita se salvează normal, fără poziție.
+      const pozitie = await new Promise<{ lat: number; lng: number; acc: number } | null>(
+        (resolve) => {
+          if (!navigator.geolocation) return resolve(null);
+          const ceas = setTimeout(() => resolve(null), 3000);
+          navigator.geolocation.getCurrentPosition(
+            (p) => {
+              clearTimeout(ceas);
+              resolve({
+                lat: p.coords.latitude,
+                lng: p.coords.longitude,
+                acc: p.coords.accuracy,
+              });
+            },
+            () => {
+              clearTimeout(ceas);
+              resolve(null);
+            },
+            { enableHighAccuracy: true, timeout: 2800, maximumAge: 60_000 },
+          );
+        },
+      );
       const res = await fetch("/api/visits", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -1313,6 +1344,7 @@ function LocalityFirms({
           denumire: f.denumire,
           result,
           note,
+          ...(pozitie ?? {}),
         }),
       });
       if (!res.ok) {
@@ -1385,8 +1417,11 @@ function LocalityFirms({
               <li key={f.cui} className="min-w-0 max-w-full px-4 py-2.5">
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0">
-                    <p className="flex items-center gap-1.5 text-sm font-medium text-slate-800">
-                      <span className="truncate">{f.denumire}</span>
+                    {/* Numele și adresa se văd ÎNTREGI (se rup pe rânduri) —
+                        la sate strada și numărul erau tăiate cu „…" și
+                        agenții nu vedeau unde e firma. */}
+                    <p className="flex flex-wrap items-center gap-1.5 text-sm font-medium text-slate-800">
+                      <span className="min-w-0 break-words">{f.denumire}</span>
                       {f.status === "client" && (
                         <span className="shrink-0 rounded-full bg-emerald-50 px-1.5 py-0.5 text-[10px] font-medium text-emerald-700 ring-1 ring-inset ring-emerald-200">
                           client
@@ -1403,7 +1438,7 @@ function LocalityFirms({
                         </span>
                       )}
                     </p>
-                    <p className="truncate text-xs text-slate-500">
+                    <p className="break-words text-xs text-slate-500">
                       {f.adresa || "fără adresă"}
                     </p>
                   </div>

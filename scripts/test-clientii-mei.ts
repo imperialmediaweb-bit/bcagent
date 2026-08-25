@@ -169,7 +169,44 @@ async function main() {
     JSON.stringify(satGolC),
   );
 
+  console.log("\n══ Pinul învață poziția EXACTĂ din GPS la „Am fost” ══");
+  const vizita = (extra: Record<string, unknown>) =>
+    fetch(`${BASE}/api/visits`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        token: tokA, cui: cui(5), denumire: "CLIENTUL MEU TRANSPORT",
+        result: "client", note: "", ...extra,
+      }),
+    });
+  const rGps = await vizita({ lat: 47.6512, lng: 26.2534, acc: 18 });
+  const dGps = (await rGps.json()) as { ok?: boolean; pinExact?: boolean };
+  check("vizita cu fix GPS bun răspunde pinExact=true", dGps.ok === true && dGps.pinExact === true, JSON.stringify(dGps));
+  const [gf] = await sql<Array<{ lat: number; lng: number; aprox: boolean }>>`
+    SELECT lat, lng, aprox FROM geo_firme WHERE cui = ${cui(5)}
+  `;
+  check(
+    "geo_firme are coordonatele exacte, aprox=false",
+    !!gf && Math.abs(gf.lat - 47.6512) < 1e-6 && Math.abs(gf.lng - 26.2534) < 1e-6 && gf.aprox === false,
+    JSON.stringify(gf),
+  );
+  const rSlab = await vizita({ lat: 47.7, lng: 26.3, acc: 800 });
+  const dSlab = (await rSlab.json()) as { pinExact?: boolean };
+  check("fix GPS SLAB (800m) NU suprascrie pinul", dSlab.pinExact === false);
+  const rAfara = await vizita({ lat: 51.5, lng: -0.12, acc: 10 });
+  const dAfara = (await rAfara.json()) as { pinExact?: boolean };
+  check("coordonate din afara României respinse", dAfara.pinExact === false);
+  const [gf2] = await sql<Array<{ lat: number }>>`
+    SELECT lat FROM geo_firme WHERE cui = ${cui(5)}
+  `;
+  check("pinul exact a rămas neatins după fixurile proaste", !!gf2 && Math.abs(gf2.lat - 47.6512) < 1e-6);
+  const rFara = await vizita({});
+  const dFara = (await rFara.json()) as { ok?: boolean; pinExact?: boolean };
+  check("vizita FĂRĂ poziție merge normal (GPS opțional)", dFara.ok === true && dFara.pinExact === false);
+
   console.log("\n══ Curățenie ══");
+  await sql`DELETE FROM geo_firme WHERE cui = ${cui(5)}`;
+  await sql`DELETE FROM visits WHERE cui = ${cui(5)}`;
   await sql`DELETE FROM prospects WHERE cui LIKE ${"88" + baza + "%"}`;
   await sql`DELETE FROM geo_localitati WHERE localitate IN (${SAT}, ${SAT_GOL})`;
   await sql`DELETE FROM org_agents WHERE org_id IN (${orgId}, ${orgId2})`;
