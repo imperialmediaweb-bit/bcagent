@@ -206,14 +206,6 @@ async function main() {
   const listaFaraMoarta = await lista(tokA, SAT, true);
   check("…și chiar nu mai apare în lista satului", !listaFaraMoarta.some((f) => f.cui === cui(8)));
   // Izolare: agentul firmei străine nu poate stinge clientul ACTIV al nostru.
-  await fetch(`${BASE}/api/visits`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ token: tokC, cui: cui(2), denumire: "x", result: "inchis", note: "" }),
-  });
-  const [alMeu] = await sql<Array<{ activ: boolean }>>`SELECT activ FROM prospects WHERE cui = ${cui(2)}`;
-  check("firma străină NU poate închide clientul altei agenții", alMeu?.activ !== true ? alMeu?.activ === false : true);
-  // cui(2) era deja inactiv în MF (FALSE la inserare) — verificăm pe unul activ:
   const [alMeu5] = await sql<Array<{ activ: boolean | null }>>`SELECT activ FROM prospects WHERE cui = ${cui(5)}`;
   await fetch(`${BASE}/api/visits`, {
     method: "POST",

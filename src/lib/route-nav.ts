@@ -25,10 +25,20 @@ import { countyName, normalizeCounty } from "@/modules/prospects";
  *  agentul din Timiș/Constanța ar fi navigat greșit. Acceptăm și cod, și
  *  nume, și cod numeric (normalizeCounty le duce pe toate la cod). */
 export function navAddress(
-  f: { adresa: string; localitate: string; judet?: string },
+  f: { adresa: string; localitate: string; judet?: string; denumire?: string },
 ): string {
   const judetNume = f.judet ? countyName(normalizeCounty(f.judet)) : "";
-  return [f.adresa, f.localitate, judetNume, "Romania"]
+  // Fără NUMĂR în adresă (satele din registru, des), Google ar duce în
+  // centrul satului — atunci căutăm firma pe NUME + sat, ca să găsească
+  // magazinul real.
+  const areNumar = /\d/.test(f.adresa || "");
+  return [
+    !areNumar && f.denumire ? f.denumire : "",
+    f.adresa,
+    f.localitate,
+    judetNume,
+    "Romania",
+  ]
     .filter(Boolean)
     .join(", ");
 }

@@ -183,26 +183,33 @@ export async function POST(req: Request) {
       VALUES (${payload.agentId}, ${payload.agentName}, ${cui},
               ${String(body.denumire ?? "").slice(0, 200)}, ${result}, ${note})
     `;
+    // IZOLARE (o singură dată, pentru toate scrierile de mai jos): pe
+    // firmele altei agenții nu se atinge nimic. „Ai mei" = numele din
+    // firma mea SAU chiar numele meu (linkurile vechi, fără organizație).
+    // La orice eroare de citire, orgAgentNamesForAgent întoarce [] —
+    // atunci rămâne doar numele meu, adică FAIL-ÎNCHIS, nu bypass.
+    const { orgAgentNamesForAgent } = await import("@/lib/org-scope");
+    const mine = await orgAgentNamesForAgent(payload.agentId);
+    const aiMei = mine.length ? mine : [payload.agentName];
+
     // „ÎNCHIS" din teren: agentul a văzut cu ochii lui că firma nu mai
     // există (pensiuni moarte de 10 ani, PFA-uri uitate în registru) —
     // o scoatem de pe hartă și din liste pentru toată lumea. Registrul
     // MF nu le radiază; terenul da.
     if (result === "inchis") {
-      // Izolare: nu stingi firma dacă e clientul ÎN LUCRU al altei agenții.
-      const { orgAgentNamesForAgent } = await import("@/lib/org-scope");
-      const mine = await orgAgentNamesForAgent(payload.agentId);
       await db`
         UPDATE prospects
         SET activ = FALSE, updated_at = NOW()
         WHERE cui = ${cui}
-          AND (${mine.length === 0}
-               OR COALESCE(assigned_agent, '') = ''
-               OR assigned_agent = ANY(${mine.length ? mine : [""]}))
+          AND (COALESCE(assigned_agent, '') = ''
+               OR assigned_agent = ${payload.agentName}
+               OR assigned_agent = ANY(${aiMei}))
       `;
     }
     const status = STATUS_FOR_RESULT[result];
     if (status) {
-      // Vizita alocă firma agentului care a fost la ea (dacă nu era a altcuiva).
+      // Vizita alocă firma agentului care a fost la ea (dacă nu era a
+      // altcuiva) — și NU modifică starea/nota clientului altei agenții.
       await db`
         UPDATE prospects
         SET status = ${status},
@@ -217,11 +224,15 @@ export async function POST(req: Request) {
             END,
             updated_at = NOW()
         WHERE cui = ${cui}
+          AND (COALESCE(assigned_agent, '') = ''
+               OR assigned_agent = ${payload.agentName}
+               OR assigned_agent = ANY(${aiMei}))
       `;
     }
     // PINUL ÎNVAȚĂ DE LA OM: agentul stă chiar în fața magazinului când
     // apasă „Am fost" — dacă telefonul dă un fix bun (≤250m, în România),
     // firma primește coordonatele EXACTE și pinul nu mai e „prin sat".
+    // Tot cu izolare: poziția firmelor altei agenții nu se atinge.
     const lat = Number(body.lat);
     const lng = Number(body.lng);
     const acc = Number(body.acc ?? 9999);
@@ -229,16 +240,23 @@ export async function POST(req: Request) {
       Number.isFinite(lat) && Number.isFinite(lng) &&
       lat >= 43.3 && lat <= 48.4 && lng >= 20.1 && lng <= 30.0 &&
       Number.isFinite(acc) && acc > 0 && acc <= 250;
+    let pinScris = false;
     if (fixBun) {
-      await db`
+      const scris = await db`
         INSERT INTO geo_firme (cui, lat, lng, aprox, failed)
-        VALUES (${cui}, ${lat}, ${lng}, FALSE, FALSE)
+        SELECT p.cui, ${lat}, ${lng}, FALSE, FALSE
+        FROM prospects p
+        WHERE p.cui = ${cui}
+          AND (COALESCE(p.assigned_agent, '') = ''
+               OR p.assigned_agent = ${payload.agentName}
+               OR p.assigned_agent = ANY(${aiMei}))
         ON CONFLICT (cui) DO UPDATE
           SET lat = EXCLUDED.lat, lng = EXCLUDED.lng,
               aprox = FALSE, failed = FALSE, updated_at = NOW()
       `;
+      pinScris = scris.count > 0;
     }
-    return Response.json({ ok: true, pinExact: fixBun });
+    return Response.json({ ok: true, pinExact: pinScris });
   } catch (e) {
     console.error("[visits POST]", e);
     return Response.json({ error: "Eroare la salvarea vizitei" }, { status: 500 });

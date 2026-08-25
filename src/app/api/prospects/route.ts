@@ -108,6 +108,9 @@ export async function GET(req: Request) {
         SELECT lat, lng FROM geo_localitati
         WHERE judet = ${judet} AND localitate ILIKE ${"%" + localitate + "%"}
           AND lat IS NOT NULL
+        -- Potrivirea EXACTĂ întâi, apoi cea mai scurtă — altfel „MOARA"
+        -- putea nimeri aleator centrul din „MOARA NICA".
+        ORDER BY (localitate = ${localitate}) DESC, length(localitate) ASC
         LIMIT 1
       `;
       if (centru && centru.lat !== null && centru.lng !== null) {
@@ -184,7 +187,10 @@ export async function GET(req: Request) {
              updated_at
       FROM prospects
       ${buildWhere()}
-      ORDER BY denumire ASC
+      -- Clienții MEI primii: altfel, într-o localitate cu mai multe firme
+      -- decât limita cerută, LIMIT i-ar tăia exact pe ei (alfabetic).
+      ORDER BY (${aiMei} AND status = 'client' AND assigned_agent = ${auth.agentName}) DESC,
+               denumire ASC
       LIMIT ${limit} OFFSET ${offset}
     `;
     const [{ count }] = await db<[{ count: string }]>`

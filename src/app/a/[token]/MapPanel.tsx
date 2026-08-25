@@ -26,7 +26,7 @@ import {
 } from "@/modules/prospects";
 import OrderModal from "./OrderModal";
 import MicButton from "./MicButton";
-import { planRoute } from "@/lib/route-nav";
+import { navAddress, planRoute } from "@/lib/route-nav";
 
 const fmt = (n: number) =>
   new Intl.NumberFormat("ro-RO", { maximumFractionDigits: 0 }).format(n);
@@ -125,23 +125,9 @@ function normLoc(s: string): string {
     .trim();
 }
 
-/** Adresa completă pentru navigare — telefonul geocodează la moment.
- *  Când adresa n-are NUMĂR (sau lipsește), Google ar duce în centrul
- *  satului — atunci căutăm firma pe NUME + sat, ca să găsească magazinul
- *  real (așa l-a găsit pe „Moruz Iulian"). */
-function navAddress(f: { adresa: string; localitate: string; judet?: string; denumire?: string }): string {
-  const areNumar = /\d/.test(f.adresa || "");
-  const parts = [
-    !areNumar && f.denumire ? f.denumire : "",
-    f.adresa,
-    f.localitate,
-    f.judet ? countyName(f.judet) : "",
-    "Romania",
-  ]
-    .filter(Boolean)
-    .join(", ");
-  return parts;
-}
+// Navigarea folosește navAddress din lib/route-nav — UN singur loc care
+// știe regula „fără număr în adresă → caută pe NUME + sat" (altfel Google
+// duce în centrul satului). Aceeași regulă pe listă, pe pin și pe rute.
 
 /** Text din baza de date pus în HTML — orice caracter periculos devine
  *  inofensiv (numele firmelor vin din surse externe). */
@@ -586,10 +572,10 @@ export default function MapPanel({
                 ${p.telefon ? `<a href="tel:${escHtml(p.telefon)}" style="font-size:12px;font-weight:600;color:#0f766e;text-decoration:none">📞 Sună</a>` : ""}
                 <a href="${escHtml(
                   // Pin EXACT (adresă geocodată sau GPS de la vizită) →
-                  // navigăm fix pe coordonate; aproximativ → căutăm firma
-                  // pe NUME + sat, ca Google să găsească magazinul real.
+                  // navigăm fix pe coordonate; aproximativ → navAddress
+                  // (nume + sat + județ), ca Google să găsească magazinul.
                   p.aprox
-                    ? gmapsDir(`${p.denumire}, ${p.adresa ? `${p.adresa}, ` : ""}${p.localitate}`)
+                    ? gmapsDir(navAddress({ ...p, judet }))
                     : gmapsDir(`${p.lat},${p.lng}`),
                 )}" target="_blank" rel="noopener" style="font-size:12px;font-weight:600;color:#1d4ed8;text-decoration:none">🧭 Navighează</a>
                 <button data-pin-ruta="${escHtml(p.cui)}" style="font-size:12px;font-weight:700;color:${inRuta ? "#b91c1c" : "#4f46e5"};background:none;border:none;padding:0;cursor:pointer">${inRuta ? "− Scoate din rută" : "+ Pune în rută"}</button>
@@ -772,25 +758,24 @@ export default function MapPanel({
    *  dubluri), ca agentul să-și facă ziua din 3-4 sate în 30 de secunde:
    *  sat → butonul „Clienții mei în rută" → următorul sat → Salvează pe zi. */
   function addStops(fs: Firm[]) {
-    setBasket((b) => {
-      const existente = new Set(b.map((s) => s.cui));
-      const noi = fs
-        .filter((f) => !existente.has(f.cui))
-        .map((f) => ({
-          cui: f.cui,
-          denumire: f.denumire,
-          adresa: f.adresa,
-          localitate: f.localitate,
-          telefon: f.telefon,
-        }));
-      const rezultat = [...b, ...noi].slice(0, 40);
-      if (b.length + noi.length > 40) {
-        showToast("Ruta ține maxim 40 de opriri — restul rămân pe altă zi.");
-      } else if (noi.length > 0) {
-        showToast(`${noi.length} clienți puși în rută ✓`);
-      }
-      return rezultat;
-    });
+    // Calculul se face PE starea curentă, în afara updater-ului — updater-ul
+    // trebuie să rămână pur (StrictMode îl rulează de două ori).
+    const existente = new Set(basket.map((s) => s.cui));
+    const noi = fs
+      .filter((f) => !existente.has(f.cui))
+      .map((f) => ({
+        cui: f.cui,
+        denumire: f.denumire,
+        adresa: f.adresa,
+        localitate: f.localitate,
+        telefon: f.telefon,
+      }));
+    setBasket([...basket, ...noi].slice(0, 40));
+    if (basket.length + noi.length > 40) {
+      showToast("Ruta ține maxim 40 de opriri — restul rămân pe altă zi.");
+    } else if (noi.length > 0) {
+      showToast(`${noi.length} clienți puși în rută ✓`);
+    }
     setActiveRouteId(null);
   }
 
@@ -1370,7 +1355,9 @@ function LocalityFirms({
               clearTimeout(ceas);
               resolve(null);
             },
-            { enableHighAccuracy: true, timeout: 2800, maximumAge: 60_000 },
+            // maximumAge 0: DOAR fix proaspăt — un fix „ținut minte” de la
+            // clientul anterior ar deveni pinul greșit al firmei curente.
+            { enableHighAccuracy: true, timeout: 2800, maximumAge: 0 },
           );
         },
       );
