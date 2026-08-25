@@ -180,6 +180,15 @@ export async function ensureSchema(): Promise<void> {
     -- Solduri/restanțe clienți (importate din SAGA) — direct pe firmă.
     ALTER TABLE prospects ADD COLUMN IF NOT EXISTS sold_cents BIGINT;
     ALTER TABLE prospects ADD COLUMN IF NOT EXISTS sold_updated_at TIMESTAMPTZ;
+    -- Igiena listei de firme, din două direcții care NU se calcă:
+    --   inchis_teren = agentul a văzut cu ochii lui că nu mai există
+    --     (verificarea ANAF lunară n-are voie s-o reînvie — legal poate
+    --     fi activă, dar magazinul e mort);
+    --   anaf_checked_at = ultima verificare la ANAF (radiat/inactiv
+    --     fiscal), ca măturarea lunară să știe ce e vechi.
+    ALTER TABLE prospects ADD COLUMN IF NOT EXISTS inchis_teren BOOLEAN NOT NULL DEFAULT FALSE;
+    ALTER TABLE prospects ADD COLUMN IF NOT EXISTS anaf_checked_at TIMESTAMPTZ;
+    CREATE INDEX IF NOT EXISTS prospects_anaf_sweep ON prospects(judet, anaf_checked_at);
     -- Comenzile luate din teren: agentul le bate pe telefon la client,
     -- depozitul le vede instant, contabila le exportă pentru SAGA.
     CREATE TABLE IF NOT EXISTS orders (

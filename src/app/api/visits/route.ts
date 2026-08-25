@@ -197,9 +197,11 @@ export async function POST(req: Request) {
     // o scoatem de pe hartă și din liste pentru toată lumea. Registrul
     // MF nu le radiază; terenul da.
     if (result === "inchis") {
+      // inchis_teren: steag separat, ca verificarea ANAF lunară să NU
+      // reînvie firma (legal poate fi activă, dar magazinul e mort).
       await db`
         UPDATE prospects
-        SET activ = FALSE, updated_at = NOW()
+        SET activ = FALSE, inchis_teren = TRUE, updated_at = NOW()
         WHERE cui = ${cui}
           AND (COALESCE(assigned_agent, '') = ''
                OR assigned_agent = ${payload.agentName}
