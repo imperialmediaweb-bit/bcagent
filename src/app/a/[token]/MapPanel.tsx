@@ -49,7 +49,7 @@ interface MatchInfo {
   judet: string;
 }
 
-interface Firm {
+export interface Firm {
   cui: string;
   denumire: string;
   adresa: string;
@@ -67,6 +67,10 @@ interface Stop {
   adresa: string;
   localitate: string;
   telefon: string;
+  /** Poziția exactă, dacă o știm — ruta navighează pe coordonate, nu pe
+   *  adresă, ca Google să nu mai refuze traseul la adrese de sat. */
+  lat?: number | null;
+  lng?: number | null;
 }
 
 interface SavedRoute {
@@ -140,7 +144,7 @@ function escHtml(s: string): string {
     .replace(/'/g, "&#39;");
 }
 
-function gmapsDir(address: string): string {
+export function gmapsDir(address: string): string {
   return `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(address)}&travelmode=driving`;
 }
 
@@ -173,6 +177,11 @@ export default function MapPanel({
   }
   const [pins, setPins] = useState<PinClient[]>([]);
   const [aratPins, setAratPins] = useState(false);
+  // UNDE SUNT EU (cererea lui Costin, 25.08): punct albastru pe hartă, ca
+  // reper când cauți un magazin — vezi pe loc ce clienți ai lângă tine.
+  const [euSunt, setEuSunt] = useState<{ lat: number; lng: number; acc: number } | null>(null);
+  const [cautPozitia, setCautPozitia] = useState(false);
+  const [eroarePozitie, setEroarePozitie] = useState<string | null>(null);
   const [pinsLoading, setPinsLoading] = useState(false);
   const [pinsDeGeocodat, setPinsDeGeocodat] = useState(0);
 
@@ -553,6 +562,27 @@ export default function MapPanel({
       // PINII CLIENȚILOR: fiecare client, un punct. Apeși pe punct și-i
       // vezi numele — așa se vede pe hartă cine e vecin cu cine, iar ruta
       // se face pe vecinătate, nu la nimereală.
+      // EU, aici: cerc albastru + zona de precizie. Se desenează ultimul,
+      // ca să fie deasupra tuturor.
+      if (euSunt) {
+        L.circle([euSunt.lat, euSunt.lng], {
+          radius: Math.max(20, Math.min(300, euSunt.acc)),
+          color: "#2563eb",
+          fillColor: "#3b82f6",
+          fillOpacity: 0.12,
+          weight: 1,
+        }).addTo(layer);
+        const eu = L.circleMarker([euSunt.lat, euSunt.lng], {
+          radius: 8,
+          color: "#ffffff",
+          fillColor: "#2563eb",
+          fillOpacity: 1,
+          weight: 3,
+        });
+        eu.bindTooltip("Ești aici", { direction: "top" });
+        eu.addTo(layer);
+        bounds.push([euSunt.lat, euSunt.lng]);
+      }
       if (aratPins && pins.length > 0) {
         for (const p of pins) {
           const punct = L.circleMarker([p.lat, p.lng], {
@@ -595,7 +625,7 @@ export default function MapPanel({
                   adresa: p.adresa,
                   localitate: p.localitate,
                   telefon: p.telefon,
-                } as Firm);
+                } as Firm, { lat: p.lat, lng: p.lng });
                 map.closePopup();
               },
               { once: true },
@@ -692,7 +722,7 @@ export default function MapPanel({
     return () => {
       disposed = true;
     };
-  }, [localities, clientLocalities, selectedLoc, basket, pins, aratPins]);
+  }, [localities, clientLocalities, selectedLoc, basket, pins, aratPins, euSunt]);
 
   useEffect(
     () => () => {
@@ -736,7 +766,10 @@ export default function MapPanel({
   /* ── coșul de rută ── */
   const inBasket = useMemo(() => new Set(basket.map((s) => s.cui)), [basket]);
 
-  function toggleStop(f: Firm) {
+  function toggleStop(f: Firm, pozitie?: { lat?: number; lng?: number }) {
+    // Dacă firma are pin exact pe hartă, ducem coordonatele în oprire —
+    // ruta se navighează pe ele, nu pe adresa de sat.
+    const pin = pozitie ?? pins.find((p) => p.cui === f.cui);
     setBasket((b) =>
       b.some((s) => s.cui === f.cui)
         ? b.filter((s) => s.cui !== f.cui)
@@ -748,6 +781,8 @@ export default function MapPanel({
               adresa: f.adresa,
               localitate: f.localitate,
               telefon: f.telefon,
+              lat: pin?.lat ?? null,
+              lng: pin?.lng ?? null,
             },
           ].slice(0, 40),
     );
@@ -763,13 +798,18 @@ export default function MapPanel({
     const existente = new Set(basket.map((s) => s.cui));
     const noi = fs
       .filter((f) => !existente.has(f.cui))
-      .map((f) => ({
-        cui: f.cui,
-        denumire: f.denumire,
-        adresa: f.adresa,
-        localitate: f.localitate,
-        telefon: f.telefon,
-      }));
+      .map((f) => {
+        const pin = pins.find((p) => p.cui === f.cui);
+        return {
+          cui: f.cui,
+          denumire: f.denumire,
+          adresa: f.adresa,
+          localitate: f.localitate,
+          telefon: f.telefon,
+          lat: pin?.lat ?? null,
+          lng: pin?.lng ?? null,
+        };
+      });
     setBasket([...basket, ...noi].slice(0, 40));
     if (basket.length + noi.length > 40) {
       showToast("Ruta ține maxim 40 de opriri — restul rămân pe altă zi.");
@@ -896,6 +936,51 @@ export default function MapPanel({
           >
             📍 {aratPins ? "Ascunde clienții de pe hartă" : "Arată clienții pe hartă"}
           </button>
+          <button
+            type="button"
+            onClick={() => {
+              setEroarePozitie(null);
+              if (euSunt) {
+                setEuSunt(null);
+                return;
+              }
+              if (!navigator.geolocation) {
+                setEroarePozitie("Telefonul nu-mi dă poziția.");
+                return;
+              }
+              setCautPozitia(true);
+              navigator.geolocation.getCurrentPosition(
+                (poz) => {
+                  setCautPozitia(false);
+                  const p = {
+                    lat: poz.coords.latitude,
+                    lng: poz.coords.longitude,
+                    acc: poz.coords.accuracy,
+                  };
+                  setEuSunt(p);
+                  // Ne mutăm pe poziția lui, ca să vadă ce are în jur.
+                  leafletRef.current?.map.setView([p.lat, p.lng], 14);
+                },
+                () => {
+                  setCautPozitia(false);
+                  setEroarePozitie(
+                    "N-am voie la locație. Apasă lacătul din bara de adresă → Locație → Permite.",
+                  );
+                },
+                { enableHighAccuracy: true, timeout: 8000, maximumAge: 15_000 },
+              );
+            }}
+            className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold transition ${
+              euSunt
+                ? "bg-blue-600 text-white shadow-sm"
+                : "bg-blue-50 text-blue-700 hover:bg-blue-100"
+            }`}
+          >
+            {cautPozitia ? "🛰️ te caut..." : euSunt ? "🙋 Ascunde-mă" : "🙋 Unde sunt eu"}
+          </button>
+          {eroarePozitie && (
+            <span className="text-xs font-medium text-rose-600">{eroarePozitie}</span>
+          )}
           {aratPins && (
             <span className="text-xs text-slate-500">
               {pinsLoading && pins.length === 0
@@ -972,7 +1057,14 @@ export default function MapPanel({
                     opririle, chiar dacă a fost azi pe la vreuna (se întoarce
                     cu marfă, a lipsit patronul etc.). Doar rutele salvate
                     sar peste ce e deja bifat. */}
-                {planRoute(basket, [], judet).urls.map((u, i, all) => (
+                {planRoute(basket, [], judet).urls.filter(Boolean).length === 0 && (
+                  <span className="text-xs font-medium text-rose-600">
+                    Firmele astea n-au încă adresă pe hartă — apasă „Am fost"
+                    la prima, chiar în fața magazinului, și de atunci ruta
+                    merge pe poziția exactă.
+                  </span>
+                )}
+                {planRoute(basket, [], judet).urls.filter(Boolean).map((u, i, all) => (
                   <a
                     key={i}
                     href={u}
@@ -1042,13 +1134,18 @@ export default function MapPanel({
               type="button"
               onClick={() => {
                 setBasket(
-                  dueClients.slice(0, 40).map((d) => ({
-                    cui: d.cui,
-                    denumire: d.denumire,
-                    adresa: d.adresa,
-                    localitate: d.localitate,
-                    telefon: d.telefon,
-                  })),
+                  dueClients.slice(0, 40).map((d) => {
+                    const pin = pins.find((p) => p.cui === d.cui);
+                    return {
+                      cui: d.cui,
+                      denumire: d.denumire,
+                      adresa: d.adresa,
+                      localitate: d.localitate,
+                      telefon: d.telefon,
+                      lat: pin?.lat ?? null,
+                      lng: pin?.lng ?? null,
+                    };
+                  }),
                 );
                 setActiveRouteId(null);
                 showToast("Ruta săptămânii pregătită ✓");
@@ -1181,7 +1278,7 @@ export default function MapPanel({
                     <span className="text-[11px] text-slate-500">
                       Nu încap într-un drum — {plan.legs.length} etape:
                     </span>
-                    {plan.urls.map((u, i) => (
+                    {plan.urls.filter(Boolean).map((u, i) => (
                       <a
                         key={i}
                         href={u}
@@ -1666,7 +1763,7 @@ function BriefModal({
   );
 }
 
-function VisitButtons({
+export function VisitButtons({
   onPick,
   onCancel,
 }: {

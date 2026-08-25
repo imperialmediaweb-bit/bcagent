@@ -75,6 +75,7 @@ import MapPanel from "./MapPanel";
 import ImportClients from "./ImportClients";
 import { TargetPanel, ExpensesPanel } from "./AgentExtras";
 import CoachPanel from "./CoachPanel";
+import CautareClient from "./CautareClient";
 import DayPanel from "./DayPanel";
 import VanPanel from "./VanPanel";
 import ReportIssue from "@/app/ReportIssue";
@@ -785,6 +786,10 @@ export default function Dashboard({
 
         <main className="mx-auto min-w-0 max-w-7xl space-y-8 overflow-x-clip px-4 py-8 sm:px-6 lg:px-8">
           <div id="acasa" className={"scroll-mt space-y-8" + vis("acasa")}>
+          {/* CĂUTAREA, prima pe pagină (cererea agenților): scrii două
+              litere din numele clientului și-l ai, cu tot cu butoanele
+              „Am fost" și „Comandă" — fără să-l mai cauți prin sate. */}
+          <CautareClient token={token} />
           <DayPanel token={token} />
           <VanPanel token={token} />
           <Hero

@@ -16,6 +16,9 @@ export interface NavStop {
   denumire: string;
   adresa: string;
   localitate: string;
+  /** Poziția exactă, dacă o știm (pin geocodat sau GPS de la vizită). */
+  lat?: number | null;
+  lng?: number | null;
 }
 
 import { countyName, normalizeCounty } from "@/modules/prospects";
@@ -68,9 +71,29 @@ export function routeLegs<T>(stops: T[], size = MAX_STOPS_PER_LEG): T[][] {
  * pierdute în tăcere.
  */
 export function legMapsUrl(stops: NavStop[], judet: string): string {
+  // Pe RUTĂ (mai multe opriri) Google e mult mai pretențios decât la o
+  // singură destinație: dacă un punct nu se rezolvă, refuză TOT traseul
+  // („nu am găsit ruta"). De-aia aici folosim, în ordine:
+  //   1. coordonatele exacte, când le avem (pin geocodat / GPS de la
+  //      „Am fost") — nu pot fi greșit înțelese;
+  //   2. adresa SIMPLĂ (stradă, sat, județ) — FĂRĂ numele firmei.
+  // Numele firmei ajută la navigarea către UN client (caută magazinul),
+  // dar ca punct de trecere pe rută strică rezolvarea.
   const addrs = stops
     .slice(0, MAX_STOPS_PER_LEG)
-    .map((s) => navAddress({ ...s, judet }));
+    // Fără coordonate ȘI fără adresă/sat n-avem ce trimite: oprirea aia
+    // ar duce ruta în mijlocul județului. O sărim — restul rutei merge.
+    .filter(
+      (s) =>
+        (typeof s.lat === "number" && typeof s.lng === "number") ||
+        String(s.adresa ?? "").trim() !== "" ||
+        String(s.localitate ?? "").trim() !== "",
+    )
+    .map((s) =>
+      typeof s.lat === "number" && typeof s.lng === "number"
+        ? `${s.lat},${s.lng}`
+        : navAddress({ adresa: s.adresa, localitate: s.localitate, judet }),
+    );
   if (addrs.length === 0) return "";
   const destination = addrs[addrs.length - 1];
   const waypoints = addrs.slice(0, -1).join("|");
