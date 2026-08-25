@@ -76,13 +76,45 @@ export async function streamCompletion(
   opts: StreamOptions,
   task: AITask = "analiza",
 ): Promise<void> {
-  const provider = getProvider(task);
-  if (provider === "openai") return streamWithOpenAI(opts);
-  if (provider === "anthropic") return streamWithAnthropic(opts);
-  if (provider === "gemini") return streamWithGemini(opts);
-  throw new Error(
-    "AI provider neconfigurat — setează OPENAI_API_KEY, ANTHROPIC_API_KEY sau GEMINI_API_KEY.",
-  );
+  const primar = getProvider(task);
+  if (!primar) {
+    throw new Error(
+      "AI provider neconfigurat — setează OPENAI_API_KEY, ANTHROPIC_API_KEY sau GEMINI_API_KEY.",
+    );
+  }
+  // FAILOVER: dacă preferatul pică LA RULARE (credit terminat, cheie
+  // moartă, 429), trecem pe următorul furnizor configurat în loc să-i
+  // arătăm omului o eroare — exact cazul „Vocea clientului" moartă pe
+  // OpenAI fără credit, cu Claude plin de credit alături. Repetăm DOAR
+  // dacă preferatul n-a apucat să scrie nimic (altfel textul s-ar dubla).
+  const deIncercat: Provider[] = [
+    primar,
+    ...TASK_PREFERENCE[task].filter((p) => p !== primar && available(p)),
+  ];
+  let ultimaEroare: unknown = null;
+  for (const provider of deIncercat) {
+    let aScris = false;
+    const o: StreamOptions = {
+      ...opts,
+      onText: (t) => {
+        aScris = true;
+        opts.onText(t);
+      },
+    };
+    try {
+      if (provider === "openai") return await streamWithOpenAI(o);
+      if (provider === "anthropic") return await streamWithAnthropic(o);
+      return await streamWithGemini(o);
+    } catch (e) {
+      if (aScris) throw e;
+      ultimaEroare = e;
+      console.warn(
+        `[llm] ${provider} a picat pe „${task}”, încerc următorul furnizor:`,
+        e instanceof Error ? e.message : e,
+      );
+    }
+  }
+  throw ultimaEroare ?? new Error("Toți furnizorii AI au eșuat.");
 }
 
 /* ─────────────────────── analiză de imagine ───────────────────────── */
@@ -185,12 +217,32 @@ export function isVisionEnabled(): boolean {
 
 /** Analizează o imagine cu providerul de „vision" (Gemini implicit). */
 export async function visionCompletion(o: VisionOptions): Promise<string> {
-  const provider = getProvider("vision");
-  if (provider === "gemini")
-    return geminiVision(o.system, o.prompt, o.imageBase64, o.mimeType, o.maxTokens);
-  if (provider === "openai") return openaiVision(o);
-  if (provider === "anthropic") return anthropicVision(o);
-  throw new Error("Niciun provider AI cu suport de imagini configurat.");
+  const primar = getProvider("vision");
+  if (!primar) {
+    throw new Error("Niciun provider AI cu suport de imagini configurat.");
+  }
+  // Același failover ca la streamCompletion: poza de factură nu moare
+  // doar pentru că furnizorul preferat a rămas fără credit.
+  const deIncercat: Provider[] = [
+    primar,
+    ...TASK_PREFERENCE.vision.filter((p) => p !== primar && available(p)),
+  ];
+  let ultimaEroare: unknown = null;
+  for (const provider of deIncercat) {
+    try {
+      if (provider === "gemini")
+        return await geminiVision(o.system, o.prompt, o.imageBase64, o.mimeType, o.maxTokens);
+      if (provider === "openai") return await openaiVision(o);
+      return await anthropicVision(o);
+    } catch (e) {
+      ultimaEroare = e;
+      console.warn(
+        `[llm] ${provider} a picat pe „vision”, încerc următorul furnizor:`,
+        e instanceof Error ? e.message : e,
+      );
+    }
+  }
+  throw ultimaEroare ?? new Error("Toți furnizorii AI au eșuat.");
 }
 
 export const SYSTEM_PROMPT = `Ești "Provendi Analyst" — un analist senior de vânzări pentru Provendi, o platformă SaaS de analytics dedicată agenților de vânzări din retail și distribuție (FMCG, tutun, băuturi, food, non-food).

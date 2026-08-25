@@ -19,6 +19,11 @@ export function getDB() {
       max: 5,
       idle_timeout: 20,
       connect_timeout: 30,
+      // Schema idempotentă (CREATE ... IF NOT EXISTS) scuipă la fiecare
+      // pornire zeci de NOTICE „already exists, skipping" care ÎNGROAPĂ
+      // erorile reale în logurile de producție. Le tăcem — erorile
+      // adevărate (ERROR/WARNING) trec în continuare.
+      onnotice: () => {},
     });
   }
   return sql;
