@@ -66,7 +66,7 @@ export async function GET(req: Request) {
     .filter((s) => s.length >= 2)
     .slice(0, 40);
   const status = url.searchParams.get("status") ?? "";
-  const search = url.searchParams.get("search") ?? "";
+  const search = (url.searchParams.get("search") ?? "").trim();
   const agent = url.searchParams.get("agent") ?? "";
   const onlyActive = url.searchParams.get("onlyActive") === "1";
   const onlyTva = url.searchParams.get("onlyTva") === "1";
@@ -77,6 +77,17 @@ export async function GET(req: Request) {
   // și întreabă „unde sunt restul de clienți?" — clienții lui reali au
   // adesea alt cod CAEN decât presetarea aleasă.
   const aiMei = url.searchParams.get("aiMei") === "1";
+  // Căutarea fără diacritice: pe telefon nimeni nu scrie „MĂGĂZINUL",
+  // scrie „magazinul". Îndoim ambele părți la aceleași litere simple.
+  // ATENȚIE la ordine: lower() ÎNAINTE de translate (altfel majusculele
+  // cu diacritice — „MĂGĂZIN" — scapă neîndoite).
+  const cautNeted = search
+    .toLowerCase()
+    .replace(/[ăâ]/g, "a")
+    .replace(/î/g, "i")
+    .replace(/[șş]/g, "s")
+    .replace(/[țţ]/g, "t")
+    .trim();
   const limit = Math.min(
     500,
     Math.max(1, parseInt(url.searchParams.get("limit") ?? "100", 10) || 100),
@@ -147,7 +158,11 @@ export async function GET(req: Request) {
         AND (${!onlyActive} OR activ IS DISTINCT FROM FALSE)
         AND (${!onlyTva} OR tva IS TRUE)
         AND (${!withPhone} OR (telefon IS NOT NULL AND telefon <> ''))
-        AND (${search} = '' OR denumire ILIKE ${"%" + search + "%"} OR cui LIKE ${search + "%"} OR adresa ILIKE ${"%" + search + "%"}))
+        AND (${search} = ''
+             OR denumire ILIKE ${"%" + search + "%"}
+             OR translate(lower(denumire), 'ăâîșțşţ', 'aaistst') LIKE ${"%" + cautNeted + "%"}
+             OR cui LIKE ${search + "%"}
+             OR adresa ILIKE ${"%" + search + "%"}))
         -- CLIENȚII MEI: mereu vizibili în zona cerută, peste orice filtru
         -- de domeniu/stare — doar județ/localitate/căutare se respectă.
         OR (${aiMei}
@@ -166,7 +181,13 @@ export async function GET(req: Request) {
                          AND g.lat BETWEEN ${(centruLat ?? 0) - 0.03} AND ${(centruLat ?? 0) + 0.03}
                          AND g.lng BETWEEN ${(centruLng ?? 0) - 0.045} AND ${(centruLng ?? 0) + 0.045}
                      )))
-            AND (${search} = '' OR denumire ILIKE ${"%" + search + "%"} OR cui LIKE ${search + "%"} OR adresa ILIKE ${"%" + search + "%"}))
+            -- Pe clienții MEI (listă mică) ne permitem potrivirea fără
+            -- diacritice: „magazinul" găsește „MĂGĂZINUL".
+            AND (${search} = ''
+                 OR translate(lower(denumire), 'ăâîșțşţ', 'aaistst') LIKE ${"%" + cautNeted + "%"}
+                 OR cui LIKE ${search + "%"}
+                 OR translate(lower(adresa), 'ăâîșțşţ', 'aaistst') LIKE ${"%" + cautNeted + "%"}
+                 OR translate(lower(localitate), 'ăâîșțşţ', 'aaistst') LIKE ${"%" + cautNeted + "%"}))
       )
     `;
 
@@ -189,7 +210,12 @@ export async function GET(req: Request) {
       ${buildWhere()}
       -- Clienții MEI primii: altfel, într-o localitate cu mai multe firme
       -- decât limita cerută, LIMIT i-ar tăia exact pe ei (alfabetic).
+      -- 1) clienții MEI, 2) potrivirile pe NUME (nu doar pe localitate),
+      -- 3) alfabetic. Altfel, căutând „rad" primeai 8 clienți din
+      -- Rădăuți și tocmai firma căutată rămânea pe dinafară.
       ORDER BY (${aiMei} AND status = 'client' AND assigned_agent = ${auth.agentName}) DESC,
+               (${search} <> '' AND translate(lower(denumire), 'ăâîșțşţ', 'aaistst')
+                  LIKE ${"%" + cautNeted + "%"}) DESC,
                denumire ASC
       LIMIT ${limit} OFFSET ${offset}
     `;

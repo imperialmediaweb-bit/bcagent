@@ -29,6 +29,9 @@ export default function CautareClient({
   const [rezultate, setRezultate] = useState<Firm[]>([]);
   const [cautand, setCautand] = useState(false);
   const [eroare, setEroare] = useState<string | null>(null);
+  // Reîncercare după o eroare: pe teren, semnalul cade des. Fără asta,
+  // agentul trebuia să schimbe textul ca să se caute din nou.
+  const [reincercare, setReincercare] = useState(0);
   // Numărul cererii: dacă un răspuns vechi ajunge după unul nou, îl
   // ignorăm (altfel lista ar sări înapoi la ce s-a scris înainte).
   const cerereRef = useRef(0);
@@ -99,7 +102,7 @@ export default function CautareClient({
     return () => {
       if (timerRef.current) clearTimeout(timerRef.current);
     };
-  }, [q, token]);
+  }, [q, token, reincercare]);
 
   async function saveVisit(f: Firm, result: string, note: string) {
     try {
@@ -183,9 +186,18 @@ export default function CautareClient({
       </div>
 
       {eroare && (
-        <p className="mt-3 rounded-lg bg-rose-50 px-3 py-2 text-sm font-medium text-rose-700">
-          {eroare}
-        </p>
+        <div className="mt-3 flex flex-wrap items-center gap-2 rounded-lg bg-rose-50 px-3 py-2">
+          <span className="min-w-0 flex-1 break-words text-sm font-medium text-rose-700">
+            {eroare}
+          </span>
+          <button
+            type="button"
+            onClick={() => setReincercare((n) => n + 1)}
+            className="shrink-0 rounded-lg bg-rose-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-rose-700"
+          >
+            Încearcă din nou
+          </button>
+        </div>
       )}
 
       {!eroare && q.trim().length >= 2 && !cautand && rezultate.length === 0 && (

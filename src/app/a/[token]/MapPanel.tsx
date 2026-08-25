@@ -181,6 +181,9 @@ export default function MapPanel({
   // reper când cauți un magazin — vezi pe loc ce clienți ai lângă tine.
   const [euSunt, setEuSunt] = useState<{ lat: number; lng: number; acc: number } | null>(null);
   const [cautPozitia, setCautPozitia] = useState(false);
+  // Când desenarea e pornită DOAR de „Unde sunt eu", harta NU se
+  // reîncadrează pe județ — altfel butonul ar depărta în loc să apropie.
+  const doarPozitiaMea = useRef(false);
   const [eroarePozitie, setEroarePozitie] = useState<string | null>(null);
   const [pinsLoading, setPinsLoading] = useState(false);
   const [pinsDeGeocodat, setPinsDeGeocodat] = useState(0);
@@ -711,11 +714,16 @@ export default function MapPanel({
         eu.addTo(layer);
         eu.bringToFront();
       }
-        if (puncte.length > 0 && !selectedLoc && ruteFit.current !== basket.length) {
+        if (
+          puncte.length > 0 &&
+          !selectedLoc &&
+          !doarPozitiaMea.current &&
+          ruteFit.current !== basket.length
+        ) {
           ruteFit.current = basket.length;
           map.fitBounds(puncte, { padding: [60, 60], maxZoom: 13 });
         }
-      } else if (bounds.length > 0 && !selectedLoc) {
+      } else if (bounds.length > 0 && !selectedLoc && !doarPozitiaMea.current) {
         ultimulCadru.current = bounds;
         map.fitBounds(bounds, { padding: [30, 30], maxZoom: 11 });
       }
@@ -723,6 +731,7 @@ export default function MapPanel({
     return () => {
       disposed = true;
     };
+    doarPozitiaMea.current = false;
   }, [localities, clientLocalities, selectedLoc, basket, pins, aratPins, euSunt]);
 
   useEffect(
@@ -961,9 +970,15 @@ export default function MapPanel({
                     lng: poz.coords.longitude,
                     acc: poz.coords.accuracy,
                   };
+                  doarPozitiaMea.current = true;
                   setEuSunt(p);
                   // Ne mutăm pe poziția lui, ca să vadă ce are în jur.
-                  leafletRef.current?.map.setView([p.lat, p.lng], 14);
+                  // După desenare (redesenarea rulează imediat), ca să nu
+                  // fie suprascris de încadrarea automată.
+                  setTimeout(
+                    () => leafletRef.current?.map.setView([p.lat, p.lng], 14),
+                    60,
+                  );
                 },
                 () => {
                   setCautPozitia(false);

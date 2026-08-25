@@ -302,6 +302,21 @@ export async function ensureSchema(): Promise<void> {
       CREATE INDEX IF NOT EXISTS prospects_localitate_trgm
         ON prospects USING gin (localitate gin_trgm_ops);
     `);
+    // Căutarea FĂRĂ DIACRITICE (agenții scriu „magazinul", registrul are
+    // „MĂGĂZINUL") are nevoie de index pe forma îndoită. Se construiește
+    // CONCURENT și în FUNDAL: pe 1,3M de firme durează, iar aplicația
+    // n-are voie să stea. Până e gata, căutarea merge oricum (mai lent).
+    void db
+      .unsafe(
+        `CREATE INDEX CONCURRENTLY IF NOT EXISTS prospects_denumire_neted_trgm
+           ON prospects USING gin (translate(lower(denumire), 'ăâîșțşţ', 'aaistst') gin_trgm_ops)`,
+      )
+      .catch((e: unknown) =>
+        console.warn(
+          "[db] indexul de căutare fără diacritice nu s-a construit:",
+          e instanceof Error ? e.message : e,
+        ),
+      );
   } catch (e) {
     console.warn(
       "[db] pg_trgm indisponibil — căutarea după nume va fi mai lentă:",
