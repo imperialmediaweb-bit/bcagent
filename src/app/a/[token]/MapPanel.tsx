@@ -209,6 +209,38 @@ export default function MapPanel({
   const ultimulCadru = useRef<Array<[number, number]> | null>(null);
   const geocodeRound = useRef(0);
 
+  // JUDEȚUL AGENTULUI: harta nu se mai deschide pentru toți pe Suceava —
+  // se deschide singură pe județul unde are OMUL clienții lui, iar dacă
+  // și-a ales vreodată alt județ din listă, i-l ținem minte pe telefon.
+  const judetAlesDeOm = useRef(false);
+  useEffect(() => {
+    try {
+      const salvat = localStorage.getItem("harta-judet");
+      if (salvat && COUNTY_LIST.some((c) => c.code === salvat)) {
+        judetAlesDeOm.current = true;
+        setJudet(salvat);
+      }
+    } catch {
+      // stocare blocată — rămâne implicitul
+    }
+  }, []);
+  useEffect(() => {
+    if (judetAlesDeOm.current || matches.length === 0) return;
+    const numar = new Map<string, number>();
+    for (const m of matches) {
+      if (m.judet) numar.set(m.judet, (numar.get(m.judet) ?? 0) + 1);
+    }
+    let alJui = "";
+    let maxim = 0;
+    for (const [j, n] of numar) {
+      if (n > maxim && COUNTY_LIST.some((c) => c.code === j)) {
+        alJui = j;
+        maxim = n;
+      }
+    }
+    if (alJui) setJudet(alJui);
+  }, [matches]);
+
   const caenParam = useMemo(() => {
     const p = DOMAIN_PRESETS.find((x) => x.id === preset);
     return p ? p.caens.join(",") : "";
@@ -535,7 +567,7 @@ export default function MapPanel({
           punct.bindPopup(
             `<div style="min-width:190px">
               <div style="font-weight:700;font-size:13px;margin-bottom:2px">${escHtml(p.denumire)}</div>
-              <div style="font-size:11px;color:#64748b">${escHtml(p.adresa || p.localitate)}${p.aprox ? " · loc aproximativ" : ""}</div>
+              <div style="font-size:11px;color:#64748b">${escHtml(p.adresa || p.localitate)}${p.aprox ? " · ≈ poziție aproximativă (adresa n-are stradă/nr.)" : ""}</div>
               <div style="margin-top:6px;display:flex;gap:6px;flex-wrap:wrap">
                 ${p.telefon ? `<a href="tel:${escHtml(p.telefon)}" style="font-size:12px;font-weight:600;color:#0f766e;text-decoration:none">📞 Sună</a>` : ""}
                 <a href="${escHtml(gmapsDir(p.adresa ? `${p.adresa}, ${p.localitate}` : p.localitate))}" target="_blank" rel="noopener" style="font-size:12px;font-weight:600;color:#1d4ed8;text-decoration:none">🧭 Navighează</a>

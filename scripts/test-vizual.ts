@@ -178,6 +178,13 @@ async function panouAgent(browser: Browser) {
   }
 
   section("PANOUL AGENTULUI — harta chiar se DESENEAZĂ (nu gri)");
+  // Firmele demo abia acum există (s-au creat la deschiderea panoului) —
+  // pe o bază proaspătă localitățile lor n-au încă coordonate. Le punem
+  // acum și REÎNCĂRCĂM pagina (harta își ia localitățile o singură dată,
+  // la montare), ca bulele să apară indiferent de starea bazei de test.
+  await seedGeo();
+  await page.reload({ waitUntil: "networkidle" });
+  await page.waitForTimeout(2000);
   await page.locator("button, a").filter({ hasText: "Harta pieței" }).first().click();
   await page.waitForTimeout(4000);
   const harta = await page.evaluate(() => {

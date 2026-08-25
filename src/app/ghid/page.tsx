@@ -1,6 +1,7 @@
 import Link from "next/link";
 import Logo from "@/app/Logo";
 import type { Metadata } from "next";
+import poze from "./poze.json";
 
 export const metadata: Metadata = {
   title: "Ghidul Provendi — ce face fiecare funcție",
@@ -68,6 +69,45 @@ function Atentie({ children }: { children: React.ReactNode }) {
   );
 }
 
+/** Capitolele ghidului în imagini: fiecare grupă = un moment din ziua
+ *  agentului, cu pozele lui (numerele sunt pozițiile din poze.json). */
+const CAPITOLE_POZE: Array<{ titlu: string; dela: number; panala: number }> = [
+  { titlu: "🔑 Intri prima dată", dela: 1, panala: 4 },
+  { titlu: "🗺️ Harta și ruta zilei", dela: 5, panala: 11 },
+  { titlu: "🎤 La client: vizita pe voce", dela: 12, panala: 15 },
+  { titlu: "🛒 Comanda", dela: 16, panala: 19 },
+  { titlu: "🚐 Duba, petele albe, Antrenorul", dela: 20, panala: 24 },
+  { titlu: "📊 Cifrele tale", dela: 25, panala: 30 },
+];
+
+/** O poză din ghid: captura reală din aplicație + ce apeși acolo.
+ *  Numărul stă PE poză (colț) ca să se vadă ordinea dintr-o privire. */
+function PozaPas({ n, img, titlu, text, prioritar }: { n: number; img: string; titlu: string; text: string; prioritar: boolean }) {
+  return (
+    <figure className="overflow-hidden rounded-xl border-2 border-[#161412] bg-white">
+      <div className="relative">
+        {/* Poză 472×960 (telefon) — height auto păstrează proporția fără salt de layout */}
+        <img
+          src={`/ghid-poze/${img}`}
+          alt={`Pasul ${n}: ${titlu}`}
+          width={472}
+          height={960}
+          loading={prioritar ? "eager" : "lazy"}
+          decoding="async"
+          className="h-auto w-full border-b-2 border-[#161412] bg-[#f5efe4]"
+        />
+        <span className="absolute left-2 top-2 flex h-8 w-8 items-center justify-center rounded-full border-2 border-[#161412] bg-[#ffd23f] text-sm font-black text-[#161412] shadow-[2px_2px_0_rgba(22,20,18,0.9)]">
+          {n}
+        </span>
+      </div>
+      <figcaption className="p-3">
+        <p className="break-words font-bold leading-snug text-[#161412]">{titlu}</p>
+        <p className="mt-0.5 break-words text-sm leading-snug text-[#161412]/70">{text}</p>
+      </figcaption>
+    </figure>
+  );
+}
+
 function Panel({ id, title, subtitle, children }: { id: string; title: string; subtitle: string; children: React.ReactNode }) {
   return (
     <section id={id} className="scroll-mt-20">
@@ -127,6 +167,7 @@ export default async function GhidPage({
             {!doarAgent && (
               <a href="#training" className="rounded-full border-2 border-[#161412] bg-[#ff4d00] px-3 py-1 text-white">🎓 Training de la zero</a>
             )}
+            <a href="#poze" className={`rounded-full border-2 border-[#161412] px-3 py-1 ${doarAgent ? "bg-[#ff4d00] text-white" : "bg-white"}`}>📷 În imagini</a>
             <a href="#agent" className="rounded-full border-2 border-[#161412] bg-[#ffd23f] px-3 py-1">📱 Agentul</a>
             <a href="#pascupas" className="rounded-full border-2 border-[#161412] bg-white px-3 py-1">📖 Pas cu pas</a>
             {!doarAgent && (
@@ -138,6 +179,50 @@ export default async function GhidPage({
             <a href="#intrare" className="rounded-full border-2 border-[#161412] bg-white px-3 py-1">🔑 Cum intri</a>
           </nav>
         </header>
+
+        <Panel
+          id="poze"
+          title="📷 Ghidul în imagini — pas cu pas"
+          subtitle="Capturi reale din aplicație, în ordinea zilei de teren. Ce e cu chenar roșu = acolo apeși."
+        >
+          {/* MEGA-OPTIMIZAT PENTRU MOBIL: capitolele sunt pliate (<details>,
+              zero JavaScript) — pozele dintr-un capitol închis NU se descarcă
+              deloc, deci pagina se deschide instant și pe semnal slab de
+              teren. Primul capitol e deschis, restul la un apas. */}
+          <div className="space-y-3">
+            {CAPITOLE_POZE.map((cap, ci) => (
+              <details
+                key={cap.titlu}
+                open={ci === 0}
+                className="group rounded-xl border-2 border-[#161412] bg-[#f5efe4]"
+              >
+                <summary className="flex min-h-12 cursor-pointer select-none items-center gap-2 px-3 py-2.5 font-extrabold text-[#161412] [&::-webkit-details-marker]:hidden">
+                  <span className="min-w-0 flex-1 break-words text-base leading-snug">
+                    {cap.titlu}
+                  </span>
+                  <span className="shrink-0 rounded-full border-2 border-[#161412] bg-white px-2 py-0.5 text-xs font-black">
+                    {cap.panala - cap.dela + 1} poze
+                  </span>
+                  <span className="shrink-0 text-sm transition-transform group-open:rotate-180">
+                    ▼
+                  </span>
+                </summary>
+                <div className="grid gap-3 px-3 pb-3 sm:grid-cols-2 lg:grid-cols-3">
+                  {poze.slice(cap.dela - 1, cap.panala).map((p, i) => (
+                    <PozaPas
+                      key={p.img}
+                      n={cap.dela + i}
+                      img={p.img}
+                      titlu={p.titlu}
+                      text={p.text}
+                      prioritar={cap.dela + i <= 2}
+                    />
+                  ))}
+                </div>
+              </details>
+            ))}
+          </div>
+        </Panel>
 
         {!doarAgent && (
         <Panel
