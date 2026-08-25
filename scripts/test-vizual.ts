@@ -69,6 +69,11 @@ function watchErrors(page: Page): string[] {
     // Zgomot de mediu, nu bug de aplicație: hărțile OpenStreetMap și
     // fonturile externe pot fi blocate în rețeaua de test.
     if (/tile\.openstreetmap|ERR_TUNNEL|ERR_NAME_NOT_RESOLVED|favicon/i.test(t)) return;
+    // O resursă de pe ALT server care nu s-a încărcat (proxy cu certificat
+    // propriu, DNS blocat, rețea de test) e tot mediu. Ce pică de pe
+    // serverul NOSTRU rămâne eroare — acolo chiar e vina aplicației.
+    const dinAfara = !(m.location()?.url ?? "").startsWith(BASE);
+    if (dinAfara && /Failed to load resource|net::ERR_/i.test(t)) return;
     errs.push(`CONSOLĂ: ${t.slice(0, 160)}`);
   });
   return errs;
