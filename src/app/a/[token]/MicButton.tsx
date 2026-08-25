@@ -123,16 +123,34 @@ export default function MicButton({
     rec.lang = "ro-RO";
     rec.interimResults = live;
     rec.continuous = live;
+    // ANTI-REPETARE (Android). Chrome pe telefon retrimite aceleași
+    // rezultate iar și iar, în versiuni tot mai lungi („a" → „a zis" →
+    // „a zis că nu vrea"), uneori marcate „finale" de mai multe ori.
+    // Dacă adaugi fiecare versiune, nota devine păsărească: „a a a zis
+    // a zis că...". Ținem evidența pe INDEX: fiecare bucată finalizată
+    // intră în notă O SINGURĂ dată, iar la repornirea automată a
+    // ascultării evidența se golește (indexurile o iau de la zero).
+    const finalizate: (string | undefined)[] = [];
+    let ultimaAdaugata = "";
     rec.onresult = (e) => {
       let interim = "";
-      for (let i = e.resultIndex; i < e.results.length; i++) {
+      let nou = "";
+      for (let i = 0; i < e.results.length; i++) {
         const r = e.results[i];
-        const txt = r[0]?.transcript ?? "";
+        const txt = (r[0]?.transcript ?? "").trim();
         if (r.isFinal) {
-          if (txt.trim()) onText(txt.trim());
+          if (txt && finalizate[i] === undefined) {
+            nou += (nou ? " " : "") + txt;
+          }
+          finalizate[i] = txt;
         } else {
           interim += txt;
         }
+      }
+      // plasă dublă: exact aceeași frază trimisă de două ori la rând se ignoră
+      if (nou && nou !== ultimaAdaugata) {
+        ultimaAdaugata = nou;
+        onText(nou);
       }
       if (live && onInterim) onInterim(interim);
     };
@@ -140,6 +158,7 @@ export default function MicButton({
       // Continuu: dacă agentul n-a apăsat stop, repornim.
       if (wantOn.current && live) {
         try {
+          finalizate.length = 0; // indexurile reîncep de la zero
           rec.start();
           return;
         } catch {
