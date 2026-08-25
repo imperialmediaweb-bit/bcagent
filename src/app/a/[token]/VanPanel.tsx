@@ -101,7 +101,9 @@ export default function VanPanel({ token }: { token: string }) {
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
-        className="flex w-full items-center justify-between gap-2 text-left"
+        // Deschizătorul are înălțime de deget: în mașină, cu mănuși sau în
+        // mers, un rând de 24px nu se nimerește. Zona apăsabilă e tot rândul.
+        className="flex min-h-11 w-full items-center justify-between gap-2 py-1 text-left"
       >
         <h2 className="flex items-center gap-2 text-sm font-semibold text-slate-800">
           <Truck className="h-4 w-4 text-emerald-600" />

@@ -181,11 +181,11 @@ export default function DayPanel({
             <p className="flex items-center gap-1.5 text-xs font-medium text-slate-500">
               <RouteIcon className="h-3.5 w-3.5" /> Ruta de azi
             </p>
-            <p className="mt-1 truncate text-lg font-semibold text-slate-900">
+            <p className="mt-1 break-words text-base font-semibold leading-snug text-slate-900 sm:text-lg">
               {route ? `${route.stops.length} opriri` : "—"}
             </p>
             {route && (
-              <p className="truncate text-xs text-slate-500">{route.name}</p>
+              <p className="break-words text-xs leading-snug text-slate-500">{route.name}</p>
             )}
           </a>
           <a
@@ -200,7 +200,7 @@ export default function DayPanel({
               <CalendarClock className="h-3.5 w-3.5" /> De vizitat (7z)
             </p>
             <p
-              className={`mt-1 text-lg font-semibold ${
+              className={`mt-1 break-words text-base font-semibold leading-snug sm:text-lg ${
                 (due ?? 0) > 0 ? "text-rose-600" : "text-emerald-600"
               }`}
             >
@@ -214,7 +214,7 @@ export default function DayPanel({
             <p className="flex items-center gap-1.5 text-xs font-medium text-slate-500">
               <ClipboardList className="h-3.5 w-3.5" /> Vizite azi
             </p>
-            <p className="mt-1 text-lg font-semibold text-slate-900">
+            <p className="mt-1 break-words text-base font-semibold leading-snug text-slate-900 sm:text-lg">
               {fmt(visitsToday ?? 0)}
             </p>
           </a>
@@ -225,7 +225,7 @@ export default function DayPanel({
             <p className="flex items-center gap-1.5 text-xs font-medium text-slate-500">
               <ShoppingCart className="h-3.5 w-3.5" /> Comenzi azi
             </p>
-            <p className="mt-1 text-lg font-semibold text-slate-900">
+            <p className="mt-1 break-words text-base font-semibold leading-snug text-slate-900 sm:text-lg">
               {fmt(ordersToday ?? 0)}
             </p>
           </a>
