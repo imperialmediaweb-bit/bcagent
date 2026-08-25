@@ -15,10 +15,14 @@ export type Provider = "openai" | "anthropic" | "gemini";
  */
 export type AITask = "analiza" | "coach" | "vision";
 
+// CLAUDE PRIMUL peste tot (decizia din 25.08: creditele stau pe Claude;
+// OpenAI rămas fără credit dădea erori la analize). Ceilalți rămân ca
+// rezervă prin failover, iar AI_PROVIDER / AI_PROVIDER_<TASK> pot
+// suprascrie oricând ordinea din env, fără cod.
 const TASK_PREFERENCE: Record<AITask, Provider[]> = {
-  analiza: ["openai", "anthropic", "gemini"],
+  analiza: ["anthropic", "openai", "gemini"],
   coach: ["anthropic", "openai", "gemini"],
-  vision: ["gemini", "openai", "anthropic"],
+  vision: ["anthropic", "gemini", "openai"],
 };
 
 export interface LLMMessage {

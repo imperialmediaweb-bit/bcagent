@@ -42,7 +42,7 @@ async function main() {
     avertismente.push(args.map(String).join(" "));
   };
 
-  console.log("\n══ „analiza”: OpenAI pică → se încearcă Anthropic ══");
+  console.log("\n══ „analiza”: Claude primul; dacă pică → se încearcă OpenAI ══");
   let text = "";
   let eroare: unknown = null;
   try {
@@ -61,8 +61,8 @@ async function main() {
   console.warn = warnOriginal;
   const incercari = avertismente.filter((a) => a.includes("a picat"));
   check("ambii furnizori au fost ÎNCERCAȚI (2 avertismente de picare)", incercari.length === 2, JSON.stringify(incercari));
-  check("primul încercat a fost OpenAI (preferatul „analizei”)", incercari[0]?.includes("openai") === true, incercari[0]);
-  check("al doilea a fost Anthropic (failover-ul)", incercari[1]?.includes("anthropic") === true, incercari[1]);
+  check("primul încercat a fost CLAUDE (acolo-s creditele)", incercari[0]?.includes("anthropic") === true, incercari[0]);
+  check("al doilea a fost OpenAI (failover-ul)", incercari[1]?.includes("openai") === true, incercari[1]);
   check("nu s-a scris niciun text la om înainte de eroare", text === "");
   check("la final tot eroare e (ambele chei-s false) — nu succes mincinos", eroare !== null);
 
