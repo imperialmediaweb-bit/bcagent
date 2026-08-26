@@ -1021,6 +1021,7 @@ function HartaCard({ orgId }: { orgId: string }) {
         totalPuncte?: number;
         nesigure?: number;
         clientiCuLoc?: number;
+        magazineSalvate?: number;
         faraLocPeHarta?: number;
       }>(`/api/platform/orgs/${orgId}/harta`, {
         method: "POST",
@@ -1034,6 +1035,9 @@ function HartaCard({ orgId }: { orgId: string }) {
               ? ` Acum ${d.clientiCuLoc} dintre clienții firmei au locul exact pe hartă.`
               : "") +
             (d.nesigure ? ` ${d.nesigure} n-au fost sigure — le pun agenții din teren.` : "") +
+            (d.magazineSalvate
+              ? ` Plus ${d.magazineSalvate} magazine de prospectat, cu locul lor.`
+              : "") +
             (d.faraLocPeHarta
               ? ` ${d.faraLocPeHarta} firme erau în hartă fără coordonate.`
               : ""),

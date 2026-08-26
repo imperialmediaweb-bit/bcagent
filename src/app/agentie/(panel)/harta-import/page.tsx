@@ -36,6 +36,7 @@ interface Automat {
   totalClienti: number;
   totalDinRegistru?: number;
   clientiCuLoc?: number;
+  magazineSalvate?: number;
   sarite?: { faraLocPeHarta: number; inafara: number; liniiSiZone: number };
   nepotrivite: Rand[];
 }
@@ -281,11 +282,21 @@ export default function HartaImportPage() {
               </>
             )}
           </p>
+          {(gata.magazineSalvate ?? 0) > 0 && (
+            <p className="mt-2 break-words rounded-lg bg-violet-50 p-3 text-sm leading-snug text-violet-900">
+              🟣 Am păstrat și <b>{gata.magazineSalvate}</b> magazine din hartă
+              care nu sunt în listele tale. Nu-s pierdute: sunt magazine
+              adevărate, cu locul pus de mână. Agenții le văd pe hartă cu
+              butonul „Magazine din harta veche" și au drumul gata știut —
+              bune de prospectat. Când ajung acolo, spun dacă magazinul mai
+              există sau nu.
+            </p>
+          )}
           {gata.nepotrivite.length > 0 && (
             <details className="mt-3">
               <summary className="cursor-pointer break-words text-sm font-medium leading-snug text-amber-700">
-                {gata.nepotrivite.length} n-am fost sigur — apasă dacă vrei să
-                le pui și pe alea (nu e obligatoriu)
+                {gata.nepotrivite.length} n-am putut lega de o firmă din
+                listele tale — apasă dacă vrei să te uiți (nu e obligatoriu)
               </summary>
               <ul className="mt-2 divide-y divide-slate-100">
                 {gata.nepotrivite.slice(0, 200).map((n) => (
