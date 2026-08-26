@@ -25,6 +25,9 @@ interface InClient {
   name: string;
   cui: string;
   agent: string;
+  /** Adresa de livrare din fișier — unde e magazinul, nu sediul social. */
+  adresa: string;
+  localitate: string;
 }
 
 export async function POST(req: Request) {
@@ -52,6 +55,8 @@ export async function POST(req: Request) {
       name: String(c.name ?? "").trim().slice(0, 200),
       cui: String(c.cui ?? "").replace(/\D/g, "").slice(0, 12),
       agent: String(c.agent ?? "").trim().slice(0, 128),
+      adresa: String(c.adresa ?? "").trim().slice(0, 300),
+      localitate: String(c.localitate ?? "").trim().slice(0, 120),
     }))
     .filter((c) => c.name.length >= 4 || c.cui.length >= 2)
     .slice(0, 5000);
@@ -186,6 +191,9 @@ export async function POST(req: Request) {
       localitate: string;
       judet: string;
       agent: string;
+      /** Adresa de livrare adusă din fișier (poate fi goală). */
+      adresaLivrare: string;
+      localitateLivrare: string;
       wasClient: boolean;
       via: "cui" | "nume";
     }> = [];
@@ -200,6 +208,8 @@ export async function POST(req: Request) {
         localitate: r.localitate,
         judet: r.judet,
         agent: resolveAgent(c.agent),
+        adresaLivrare: c.adresa,
+        localitateLivrare: c.localitate,
         wasClient: r.status === "client",
         via: "cui",
       });
@@ -222,6 +232,8 @@ export async function POST(req: Request) {
         localitate: r.localitate,
         judet: r.judet,
         agent: resolveAgent(c.agent),
+        adresaLivrare: c.adresa,
+        localitateLivrare: c.localitate,
         wasClient: r.status === "client",
         via: "nume",
       });

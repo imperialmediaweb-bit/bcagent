@@ -104,6 +104,13 @@ export async function ensureSchema(): Promise<void> {
     ALTER TABLE prospects ADD COLUMN IF NOT EXISTS telefon TEXT DEFAULT '';
     ALTER TABLE prospects ADD COLUMN IF NOT EXISTS email TEXT DEFAULT '';
     ALTER TABLE prospects ADD COLUMN IF NOT EXISTS contact TEXT DEFAULT '';
+    -- ADRESA DE LIVRARE: unde se duce marfa, adică UNDE E MAGAZINUL.
+    -- Coloana adresa e sediul social, de la Finanțe — la un PFA, casa lui;
+    -- de-aia „Navighează" îl lăsa rece pe Costin la Andronache. Asta e
+    -- scrisă de firmă și verificată de fiecare livrare din ultimii ani.
+    -- Stă pe COLOANA EI: nu ștergem sediul social, doar îl întrecem.
+    ALTER TABLE prospects ADD COLUMN IF NOT EXISTS adresa_livrare TEXT NOT NULL DEFAULT '';
+    ALTER TABLE prospects ADD COLUMN IF NOT EXISTS localitate_livrare TEXT NOT NULL DEFAULT '';
     CREATE INDEX IF NOT EXISTS prospects_judet ON prospects(judet);
     CREATE INDEX IF NOT EXISTS prospects_status ON prospects(status);
     CREATE INDEX IF NOT EXISTS prospects_caen ON prospects(caen);

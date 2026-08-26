@@ -24,6 +24,8 @@ interface ProspectRow {
   cui: string;
   denumire: string;
   adresa: string;
+  /** Adresa vine din livrare (cea adevărată), nu din sediul social? */
+  din_livrare?: boolean;
   localitate: string;
   judet: string;
   caen: string;
@@ -210,7 +212,18 @@ export async function GET(req: Request) {
     `;
 
     const rows = await db<ProspectRow[]>`
-      SELECT cui, denumire, adresa, localitate, judet, caen, caen_desc,
+      SELECT cui, denumire,
+             -- ADRESA DE LIVRARE BATE SEDIUL SOCIAL.
+             -- Sediul e de la Finanțe: la un PFA, casa omului — de-aia
+             -- „Navighează" îl lăsa rece pe Costin la Andronache. Adresa de
+             -- livrare e scrisă de firmă și verificată de fiecare mașină
+             -- care a dus marfă acolo. Când o avem, ea e adevărul.
+             CASE WHEN COALESCE(adresa_livrare, '') <> ''
+                  THEN adresa_livrare ELSE adresa END AS adresa,
+             CASE WHEN COALESCE(localitate_livrare, '') <> ''
+                  THEN localitate_livrare ELSE localitate END AS localitate,
+             (COALESCE(adresa_livrare, '') <> '') AS din_livrare,
+             judet, caen, caen_desc,
              tva, activ,
              -- Firma are LOCUL EI pe hartă (pus de agent sau învățat de la
              -- GPS)? Fără asta, „șterge locul pus" apărea și la firmele
@@ -277,6 +290,8 @@ export async function GET(req: Request) {
         cui: r.cui,
         denumire: r.denumire,
         adresa: r.adresa,
+        // Ca agentul să știe pe ce se bizuie când apasă „Navighează".
+        adresaExacta: r.din_livrare === true,
         localitate: r.localitate,
         judet: r.judet,
         caen: r.caen,

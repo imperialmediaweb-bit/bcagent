@@ -347,7 +347,11 @@ function ImportUniversCard({
       );
       setResult({
         ...d,
-        fileInfo: `${f.name} — coloane: ${parsed.columns.name}${parsed.columns.cui ? ", " + parsed.columns.cui : ""}${parsed.columns.agent ? ", " + parsed.columns.agent : ""}`,
+        // Ce coloane am citit, scrise pe ecran. Dacă adresa de livrare
+        // există în fișier și n-o vede aici, înseamnă că antetul e scris
+        // altfel decât mă așteptam — și-mi poate spune, în loc să
+        // bănuiască de ce agenții tot ajung la sediul social.
+        fileInfo: `${f.name} — coloane: ${parsed.columns.name}${parsed.columns.cui ? ", " + parsed.columns.cui : ""}${parsed.columns.agent ? ", " + parsed.columns.agent : ""}${parsed.columns.adresa ? ", " + parsed.columns.adresa + " (adresa de livrare)" : " · fără adresă de livrare în fișier"}${parsed.columns.localitate ? ", " + parsed.columns.localitate : ""}`,
       });
       onDone();
     } catch (e) {
@@ -370,6 +374,9 @@ function ImportUniversCard({
             <strong>denumirea</strong>; <strong>CUI</strong> și{" "}
             <strong>agentul</strong> dacă există. Îi potrivim cu firmele
             oficiale (adresă, telefon, hartă) și îi distribuim pe agenți.
+            {" "}Dacă fișierul are și <strong>adresa de livrare</strong> (sau
+            punctul de lucru), o luăm — aia e adresa magazinului, nu sediul
+            din acte, și de-acolo navighează agenții.
           </p>
         </div>
         <button

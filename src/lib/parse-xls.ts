@@ -719,18 +719,33 @@ export interface ClientFileRow {
   name: string;
   cui: string;
   agent: string;
+  /** Adresa de livrare / punctul de lucru — unde e magazinul, de fapt. */
+  adresa: string;
+  /** Localitatea de livrare, dacă e pe coloană separată. */
+  localitate: string;
 }
 
 export interface ClientsParseResult {
   clients: ClientFileRow[];
   sheetName: string;
-  columns: { name: string; cui: string; agent: string };
+  columns: { name: string; cui: string; agent: string; adresa: string; localitate: string };
 }
 
 const CLIENT_NAME_HEADERS =
   /denumire|client|firma|firmă|nume|societate|magazin|partener/i;
 const CLIENT_CUI_HEADERS = /\bcui\b|cod\s*fiscal|\bcif\b|cod\s*unic/i;
 const CLIENT_AGENT_HEADERS = /agent|vanzator|vânzător|reprezentant|gestionar/i;
+// ADRESA DE LIVRARE — unde se duce marfa, adică UNDE E MAGAZINUL.
+// Registrul Finanțelor dă sediul social: la un PFA, casa omului; la un SRL,
+// biroul contabilului. De-aia „Navighează" îl lăsa rece pe Costin. Adresa
+// asta e scrisă de ei și verificată de fiecare livrare din ultimii ani —
+// e cea mai bună pe care o putem avea, și era în fișier de la început.
+// Căutăm întâi livrarea/punctul de lucru; adresa simplă e ultima variantă,
+// fiindcă în multe exporturi ea E sediul social.
+const CLIENT_LIVRARE_HEADERS =
+  /livrare|punct\s*de\s*lucru|punct\s*lucru|adresa\s*punct|loc\s*livrare|destinatie|destinație/i;
+const CLIENT_ADRESA_HEADERS = /adres|strada|str\.|sediu/i;
+const CLIENT_LOC_HEADERS = /localit|oras|oraș|comuna|comună|sat\b|municipiu/i;
 
 /**
  * Fișierele text românești (CSV/TXT din SAGA sau Excel vechi) vin adesea
@@ -780,7 +795,7 @@ export async function parseClientsFile(
   let best: ClientsParseResult = {
     clients: [],
     sheetName: "",
-    columns: { name: "", cui: "", agent: "" },
+    columns: { name: "", cui: "", agent: "", adresa: "", localitate: "" },
   };
 
   for (const sheetName of wb.SheetNames) {
@@ -799,11 +814,16 @@ export async function parseClientsFile(
     let nameCol = -1;
     let cuiCol = -1;
     let agentCol = -1;
+    let adresaCol = -1;
+    let locCol = -1;
     for (let r = 0; r < Math.min(10, aoa.length); r++) {
       const row = aoa[r] ?? [];
       let n = -1;
       let c = -1;
       let a = -1;
+      let adr = -1;
+      let adrSimpla = -1;
+      let loc = -1;
       for (let i = 0; i < row.length; i++) {
         const h = cellText(row[i]);
         if (!h) continue;
@@ -815,12 +835,19 @@ export async function parseClientsFile(
         if (n === -1 && CLIENT_NAME_HEADERS.test(h)) n = i;
         if (c === -1 && CLIENT_CUI_HEADERS.test(h)) c = i;
         if (a === -1 && CLIENT_AGENT_HEADERS.test(h)) a = i;
+        // Livrarea bate adresa simplă: în multe exporturi „Adresa" E
+        // sediul social, iar aia o avem deja de la Finanțe.
+        if (adr === -1 && CLIENT_LIVRARE_HEADERS.test(h)) adr = i;
+        if (adrSimpla === -1 && CLIENT_ADRESA_HEADERS.test(h)) adrSimpla = i;
+        if (loc === -1 && CLIENT_LOC_HEADERS.test(h)) loc = i;
       }
       if (n !== -1) {
         headerRow = r;
         nameCol = n;
         cuiCol = c;
         agentCol = a;
+        adresaCol = adr !== -1 ? adr : adrSimpla;
+        locCol = loc;
         break;
       }
     }
@@ -857,6 +884,8 @@ export async function parseClientsFile(
             ? cellText(row[cuiCol]).replace(/\D/g, "").slice(0, 12)
             : "",
         agent: agentCol !== -1 ? cellText(row[agentCol]).slice(0, 128) : "",
+        adresa: adresaCol !== -1 ? cellText(row[adresaCol]).slice(0, 300) : "",
+        localitate: locCol !== -1 ? cellText(row[locCol]).slice(0, 120) : "",
       });
     }
 
@@ -869,6 +898,8 @@ export async function parseClientsFile(
           name: headerRow >= 0 ? cellText(headers[nameCol]) : `coloana ${nameCol + 1}`,
           cui: cuiCol !== -1 ? cellText(headers[cuiCol]) : "",
           agent: agentCol !== -1 ? cellText(headers[agentCol]) : "",
+          adresa: adresaCol !== -1 ? cellText(headers[adresaCol]) : "",
+          localitate: locCol !== -1 ? cellText(headers[locCol]) : "",
         },
       };
     }
