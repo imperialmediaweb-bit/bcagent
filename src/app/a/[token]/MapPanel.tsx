@@ -231,6 +231,20 @@ export default function MapPanel({
   // mea" (Bogdan, 26.08). Harta arată tot județul; agentul umblă azi în
   // cinci sate. Comutatorul le lasă doar pe alea.
   const [zonaAzi, setZonaAzi] = useState<{ zi: string; localitati: string[] } | null>(null);
+  // MAGAZINELE DIN HARTA VECHE a firmei: magazine adevărate, cu locul pus
+  // de mână, care n-au pereche în registru. Sunt puncte de prospectare
+  // gata verificate — de-aia merită văzute pe hartă.
+  const [magHarta, setMagHarta] = useState<
+    Array<{
+      id: string;
+      nume: string;
+      adresa: string;
+      lat: number;
+      lng: number;
+      confirmat?: boolean;
+    }>
+  >([]);
+  const [aratMag, setAratMag] = useState(false);
   const [doarZona, setDoarZona] = useState(false);
   // CUI-urile bifate azi („Am fost") — o rută lungă se continuă a doua zi
   // exact de unde a rămas, fără opririle deja făcute.
@@ -263,6 +277,27 @@ export default function MapPanel({
   // atârnă comutatorul „doar zona de azi".
   useEffect(() => {
     let viu = true;
+    fetch(`/api/prospects/magazine-harta?token=${encodeURIComponent(token)}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then(
+        (
+          d: {
+            magazine?: Array<{
+              id: string;
+              nume: string;
+              adresa: string;
+              lat: number;
+              lng: number;
+              confirmat?: boolean;
+            }>;
+          } | null,
+        ) => {
+          if (viu && d?.magazine?.length) setMagHarta(d.magazine);
+        },
+      )
+      .catch(() => {
+        // fără semnal: harta merge normal, doar fără stratul ăsta
+      });
     fetch(`/api/routes/zona?token=${encodeURIComponent(token)}`)
       .then((r) => (r.ok ? r.json() : null))
       .then((d: { zi?: string; localitati?: string[] } | null) => {
@@ -319,6 +354,61 @@ export default function MapPanel({
     }
     return map;
   }, [matches, judet]);
+
+  /**
+   * Agentul spune ce a găsit la magazinul din harta veche. La „Există" ia
+   * și poziția telefonului: dacă e chiar acolo, pinul se mută pe locul
+   * adevărat — harta veche poate fi de acum trei ani.
+   */
+  const confirmaMagazin = useCallback(
+    async (id: string, stare: "exista" | "inchis") => {
+      const trimite = async (lat?: number, lng?: number) => {
+        try {
+          const r = await fetch("/api/prospects/magazine-harta", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ token, id, stare, lat, lng }),
+          });
+          if (!r.ok) {
+            setToast("N-am putut salva. Încearcă din nou.");
+            setTimeout(() => setToast(null), 2500);
+            return;
+          }
+          if (stare === "inchis") {
+            setMagHarta((l) => l.filter((m) => m.id !== id));
+            setToast("Am tăiat magazinul — nu mai trimitem pe nimeni acolo.");
+          } else {
+            setMagHarta((l) =>
+              l.map((m) =>
+                m.id === id
+                  ? { ...m, confirmat: true, lat: lat ?? m.lat, lng: lng ?? m.lng }
+                  : m,
+              ),
+            );
+            setToast("Confirmat — magazinul există. Mulțumesc!");
+          }
+          setTimeout(() => setToast(null), 2500);
+        } catch {
+          setToast("Fără semnal — încearcă din nou când prinzi rețea.");
+          setTimeout(() => setToast(null), 2500);
+        }
+      };
+      if (stare === "exista" && navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(
+          (p) =>
+            trimite(
+              p.coords.accuracy <= 250 ? p.coords.latitude : undefined,
+              p.coords.accuracy <= 250 ? p.coords.longitude : undefined,
+            ),
+          () => trimite(),
+          { enableHighAccuracy: true, timeout: 8000, maximumAge: 15_000 },
+        );
+      } else {
+        await trimite();
+      }
+    },
+    [token],
+  );
 
   function showToast(msg: string) {
     setToast(msg);
@@ -756,6 +846,57 @@ export default function MapPanel({
         // „Programul meu” sau din scadenți). Cât timp răsfoiești firmele
         // unei localități și adaugi opriri, harta stă pe loc — altfel ar
         // sări de sub deget și n-ai mai nimeri bula următoare.
+      // MAGAZINELE DIN HARTA VECHE: puncte mici, mov, cu numele lor. Nu-s
+      // firme din registru, deci nu intră în bule și n-au buton de vizită —
+      // sunt locuri de prospectat, cu drum gata știut.
+      if (aratMag && magHarta.length > 0) {
+        for (const m of magHarta) {
+          const punct = L.circleMarker([m.lat, m.lng], {
+            radius: 5,
+            color: "#ffffff",
+            fillColor: "#7c3aed",
+            fillOpacity: 0.95,
+            weight: 2,
+          });
+          punct.bindPopup(
+            `<div style="min-width:180px">
+              <div style="font-weight:700;font-size:13px">${escHtml(m.nume)}</div>
+              ${m.adresa ? `<div style="font-size:11px;color:#475569;margin-top:2px">${escHtml(m.adresa.slice(0, 120))}</div>` : ""}
+              <div style="font-size:11px;color:#7c3aed;margin-top:4px">${
+                m.confirmat
+                  ? "✅ confirmat de un coleg — magazinul există"
+                  : "magazin din harta veche — nimeni n-a trecut încă pe la el"
+              }</div>
+              <a href="${escHtml(gmapsDir(`${m.lat},${m.lng}`))}" target="_blank" rel="noopener" style="display:inline-block;margin-top:6px;font-size:12px;font-weight:600;color:#1d4ed8;text-decoration:none">🧭 Navighează</a>
+              <div style="display:flex;gap:6px;margin-top:8px">
+                <button data-mag-ok="${escHtml(m.id)}" style="flex:1;font-size:12px;font-weight:700;color:#fff;background:#059669;border:none;border-radius:6px;padding:6px 8px;cursor:pointer">✅ Există</button>
+                <button data-mag-nu="${escHtml(m.id)}" style="flex:1;font-size:12px;font-weight:700;color:#b91c1c;background:#fee2e2;border:none;border-radius:6px;padding:6px 8px;cursor:pointer">✕ Nu mai e</button>
+              </div>
+            </div>`,
+          );
+          // Butoanele din balonaș prind viață abia când se deschide.
+          punct.on("popupopen", () => {
+            for (const [attr, stare] of [
+              ["data-mag-ok", "exista"],
+              ["data-mag-nu", "inchis"],
+            ] as const) {
+              const b = document.querySelector<HTMLButtonElement>(
+                `[${attr}="${CSS.escape(m.id)}"]`,
+              );
+              b?.addEventListener(
+                "click",
+                () => {
+                  void confirmaMagazin(m.id, stare);
+                  map.closePopup();
+                },
+                { once: true },
+              );
+            }
+          });
+          punct.addTo(layer);
+        }
+      }
+
       // EU, AICI — desenat ULTIMUL, ca să stea deasupra pinilor și a
       // numerelor de rută. NU intră în încadrarea hărții: altfel apăsarea
       // butonului ar depărta harta la nivel de județ în loc să mă apropie.
@@ -807,7 +948,7 @@ export default function MapPanel({
     return () => {
       disposed = true;
     };
-  }, [localities, clientLocalities, selectedLoc, basket, pins, aratPins, euSunt, doarZona, zonaAzi]);
+  }, [localities, clientLocalities, selectedLoc, basket, pins, aratPins, euSunt, doarZona, zonaAzi, aratMag, magHarta, confirmaMagazin]);
 
   useEffect(
     () => () => {
@@ -1064,6 +1205,23 @@ export default function MapPanel({
               {doarZona
                 ? `Arată tot județul`
                 : `Doar zona de ${ZI_FRUMOS[zonaAzi.zi] ?? "azi"} (${zonaAzi.localitati.length} sate)`}
+            </button>
+          )}
+          {magHarta.length > 0 && (
+            <button
+              type="button"
+              onClick={() => setAratMag((v) => !v)}
+              className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold transition ${
+                aratMag
+                  ? "bg-violet-700 text-white shadow-sm"
+                  : "bg-violet-50 text-violet-700 hover:bg-violet-100"
+              }`}
+              title="Magazine din harta veche a firmei — locuri de prospectat, cu drumul gata știut"
+            >
+              🟣{" "}
+              {aratMag
+                ? "Ascunde magazinele din harta veche"
+                : `Magazine din harta veche (${magHarta.length})`}
             </button>
           )}
           {doarZona && buleInZona === 0 && (

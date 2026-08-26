@@ -334,11 +334,57 @@ export async function POST(req: Request) {
         `;
         if (r.count > 0) scrise++;
       }
+      // MAGAZINELE FĂRĂ PERECHE nu se aruncă: sunt magazine ADEVĂRATE, cu
+      // locul pus de mână de cineva care a fost acolo — exact ce caută
+      // agentul când prospectează. Le ținem deoparte, ale firmei ăsteia,
+      // și apar pe harta agenților ei. Fără CUI n-au ce căuta în registrul
+      // comun, unde le-ar vedea toate agențiile.
+      const orfane = potriviri.filter((p) => !p.client);
+      let magazineSalvate = 0;
+      if (orfane.length > 0) {
+        const randuri = orfane.slice(0, 20000).map((p) => ({
+          // Identificator stabil: același magazin reimportat nu se dublează.
+          id: `${auth.session.orgId}:${p.punct.lat.toFixed(5)},${p.punct.lng.toFixed(5)}`.slice(0, 120),
+          org_id: auth.session.orgId,
+          nume: p.punct.nume.slice(0, 200),
+          adresa: (p.punct.descriere ?? "").slice(0, 300),
+          localitate: "",
+          judet: "",
+          lat: p.punct.lat,
+          lng: p.punct.lng,
+          strat: ((p.punct as { strat?: string }).strat ?? "").slice(0, 120),
+        }));
+        for (let i = 0; i < randuri.length; i += 500) {
+          const bucata = randuri.slice(i, i + 500);
+          const r = await db`
+            INSERT INTO magazin_harta ${db(
+              bucata,
+              "id", "org_id", "nume", "adresa", "localitate", "judet",
+              "lat", "lng", "strat",
+            )}
+            ON CONFLICT (id) DO UPDATE
+              SET nume = EXCLUDED.nume, lat = EXCLUDED.lat, lng = EXCLUDED.lng,
+                  adresa = EXCLUDED.adresa, strat = EXCLUDED.strat
+          `;
+          magazineSalvate += r.count;
+        }
+      }
+      // Câți dintre CLIENȚII firmei au acum locul exact — cifra care
+      // contează pentru manager, nu „câte pinuri am citit".
+      const [acoperire] = await db<[{ cu_loc: string }]>`
+        SELECT COUNT(*)::text AS cu_loc
+        FROM prospects p
+        JOIN org_agents oa ON oa.name = p.assigned_agent
+        JOIN geo_firme g ON g.cui = p.cui
+        WHERE oa.org_id = ${auth.session.orgId}
+      `;
       const deVazut = potriviri.filter((p) => !p.client || p.scor < 0.9);
       return Response.json({
         ok: true,
         automat: true,
         scrise,
+        clientiCuLoc: parseInt(acoperire.cu_loc, 10),
+        magazineSalvate,
         totalPuncte: puncte.length,
         totalClienti: clienti.length,
         totalDinRegistru: dinRegistru.length,

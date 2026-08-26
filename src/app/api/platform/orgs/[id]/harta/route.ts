@@ -184,6 +184,44 @@ export async function POST(
       `;
       if (r.count > 0) scrise++;
     }
+
+    // MAGAZINELE CARE N-AU PERECHE ÎN REGISTRU nu se aruncă. Sunt magazine
+    // ADEVĂRATE, cu locul pus de mână de cineva care a fost acolo — adică
+    // exact ce caută agentul când prospectează. Le ținem deoparte, ale
+    // firmei care le-a adus, și apar pe harta agenților ei ca „magazine din
+    // harta veche". Fără CUI n-au ce căuta în registrul comun, unde le-ar
+    // vedea toate agențiile.
+    const orfane = potriviri.filter((p) => !p.client);
+    let magazineSalvate = 0;
+    if (orfane.length > 0) {
+      const randuri = orfane.slice(0, 20000).map((p) => ({
+        // Identificator stabil: același magazin reimportat nu se dublează.
+        id: `${orgId}:${p.punct.lat.toFixed(5)},${p.punct.lng.toFixed(5)}`.slice(0, 120),
+        org_id: orgId,
+        nume: p.punct.nume.slice(0, 200),
+        adresa: (p.punct.descriere ?? "").slice(0, 300),
+        localitate: "",
+        judet: "",
+        lat: p.punct.lat,
+        lng: p.punct.lng,
+        strat: ((p.punct as { strat?: string }).strat ?? "").slice(0, 120),
+      }));
+      for (let i = 0; i < randuri.length; i += 500) {
+        const bucata = randuri.slice(i, i + 500);
+        const r = await db`
+          INSERT INTO magazin_harta ${db(
+            bucata,
+            "id", "org_id", "nume", "adresa", "localitate", "judet",
+            "lat", "lng", "strat",
+          )}
+          ON CONFLICT (id) DO UPDATE
+            SET nume = EXCLUDED.nume, lat = EXCLUDED.lat, lng = EXCLUDED.lng,
+                adresa = EXCLUDED.adresa, strat = EXCLUDED.strat
+        `;
+        magazineSalvate += r.count;
+      }
+    }
+
     const nesigure = potriviri.filter((p) => !p.client || p.scor < 0.9).length;
     // CIFRA CARE CONTEAZĂ pentru manager: nu „câte pinuri am citit", ci
     // câți dintre CLIENȚII LUI au acum locul exact. Restul hărții sunt
@@ -209,6 +247,7 @@ export async function POST(
       totalDinRegistru: dinRegistru.length,
       nesigure,
       clientiCuLoc,
+      magazineSalvate,
       faraLocPeHarta: raport.faraLocPeHarta,
       inafara: raport.inafara,
     });

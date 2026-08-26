@@ -299,6 +299,34 @@ export async function ensureSchema(): Promise<void> {
     -- putea da înapoi fără să ștergi și munca agenților.
     ALTER TABLE geo_firme ADD COLUMN IF NOT EXISTS sursa TEXT NOT NULL DEFAULT '';
 
+    -- MAGAZINELE DIN HARTA VECHE care nu s-au potrivit cu nicio firmă din
+    -- registru. Sunt magazine ADEVĂRATE, cu locul pus de mână, dar fără
+    -- CUI — deci n-au ce căuta în registrul comun, unde ar apărea la toate
+    -- agențiile. Stau aici, ale firmei care le-a adus, și se văd doar pe
+    -- harta agenților ei.
+    CREATE TABLE IF NOT EXISTS magazin_harta (
+      id TEXT PRIMARY KEY,
+      org_id TEXT NOT NULL,
+      nume TEXT NOT NULL,
+      adresa TEXT NOT NULL DEFAULT '',
+      localitate TEXT NOT NULL DEFAULT '',
+      judet TEXT NOT NULL DEFAULT '',
+      lat DOUBLE PRECISION NOT NULL,
+      lng DOUBLE PRECISION NOT NULL,
+      strat TEXT NOT NULL DEFAULT '',
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+    -- CE A VĂZUT AGENTUL CU OCHII LUI. Harta veche poate fi de acum trei
+    -- ani: unele magazine s-au închis, altele s-au mutat. Agentul care
+    -- trece pe-acolo confirmă sau taie — și de-atunci nu mai pierde nimeni
+    -- drumul degeaba.
+    ALTER TABLE magazin_harta ADD COLUMN IF NOT EXISTS stare TEXT NOT NULL DEFAULT '';
+    ALTER TABLE magazin_harta ADD COLUMN IF NOT EXISTS confirmat_de TEXT NOT NULL DEFAULT '';
+    ALTER TABLE magazin_harta ADD COLUMN IF NOT EXISTS confirmat_la TIMESTAMPTZ;
+    CREATE INDEX IF NOT EXISTS magazin_harta_org ON magazin_harta(org_id);
+    CREATE INDEX IF NOT EXISTS magazin_harta_loc
+      ON magazin_harta(org_id, localitate);
+
     CREATE TABLE IF NOT EXISTS geo_localitati (
       judet TEXT NOT NULL,
       localitate TEXT NOT NULL,

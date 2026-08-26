@@ -80,6 +80,7 @@ async function pregateste() {
 
 async function curata() {
   const cuis = [0, 1, 2].map(cui);
+  await sql`DELETE FROM magazin_harta WHERE org_id IN (${orgA}, ${orgB})`.catch(() => {});
   await sql`DELETE FROM geo_firme WHERE cui = ANY(${cuis})`.catch(() => {});
   await sql`DELETE FROM prospects WHERE cui = ANY(${cuis})`;
   await sql`DELETE FROM org_agents WHERE org_id IN (${orgA}, ${orgB})`;
@@ -160,6 +161,135 @@ async function main() {
       "ce n-a găsit e numărat, nu ghicit",
       (r.d.nesigure ?? 0) >= 1,
       `nesigure=${r.d.nesigure}`,
+    );
+
+    sectiune("Magazinele fără pereche NU se aruncă");
+    // 1756 din harta reală n-au pereche în registru — dar sunt magazine
+    // adevărate, cu locul pus de mână. Sunt puncte de prospectare.
+    const salvate = await sql<Array<{ nume: string; org_id: string; lat: number }>>`
+      SELECT nume, org_id, lat FROM magazin_harta WHERE org_id = ${orgA}`;
+    check(
+      "magazinul necunoscut e păstrat ca punct de prospectare",
+      salvate.some((m) => m.nume.includes("CEVA NECUNOSCUT")),
+      salvate.map((m) => m.nume).join(","),
+    );
+    check("…cu coordonatele lui", salvate.some((m) => Math.abs(m.lat - 47.84) < 0.001));
+    check(
+      "…și e al firmei ăsteia, nu al alteia",
+      salvate.every((m) => m.org_id === orgA),
+    );
+    const laVecini = await sql`SELECT 1 FROM magazin_harta WHERE org_id = ${orgB}`;
+    check("firma vecină n-a primit nimic", laVecini.length === 0, `${laVecini.length}`);
+
+    // Reimportul aceleiași hărți nu dublează magazinele.
+    const inainteReimport = (
+      await sql<[{ n: string }]>`SELECT COUNT(*)::text AS n FROM magazin_harta WHERE org_id = ${orgA}`
+    )[0].n;
+    await cere(orgA, { kml: KML });
+    const dupaReimport = (
+      await sql<[{ n: string }]>`SELECT COUNT(*)::text AS n FROM magazin_harta WHERE org_id = ${orgA}`
+    )[0].n;
+    check(
+      "reimportul aceleiași hărți NU dublează magazinele",
+      inainteReimport === dupaReimport,
+      `${inainteReimport} → ${dupaReimport}`,
+    );
+
+    sectiune("Agentul le vede pe ale firmei lui, și numai pe alea");
+    const { signToken } = await import("../src/lib/signed-token");
+    const expT = Math.floor(Date.now() / 1000) + 3600;
+    const tokA = await signToken(
+      { agentId: `aga-${RUN}`, agentName: numeA, exp: expT },
+      process.env.TOKEN_SECRET ?? "test-secret-0123456789",
+    );
+    const tokB = await signToken(
+      { agentId: `agb-${RUN}`, agentName: numeB, exp: expT },
+      process.env.TOKEN_SECRET ?? "test-secret-0123456789",
+    );
+    const vedeA = await (
+      await fetch(`${BASE}/api/prospects/magazine-harta?token=${tokA}`)
+    ).json();
+    const vedeB = await (
+      await fetch(`${BASE}/api/prospects/magazine-harta?token=${tokB}`)
+    ).json();
+    check(
+      "agentul firmei A vede magazinele aduse de firma lui",
+      ((vedeA.magazine ?? []) as Array<{ nume: string }>).some((m) =>
+        m.nume.includes("CEVA NECUNOSCUT"),
+      ),
+    );
+    check(
+      "agentul firmei B NU le vede",
+      ((vedeB.magazine ?? []) as unknown[]).length === 0,
+      `${((vedeB.magazine ?? []) as unknown[]).length}`,
+    );
+    const faraToken = await fetch(`${BASE}/api/prospects/magazine-harta`);
+    check("fără link valid → 401", faraToken.status === 401, `status ${faraToken.status}`);
+
+    sectiune("Agentul confirmă ce a văzut cu ochii lui");
+    // Harta veche poate fi de acum trei ani: unele magazine s-au închis,
+    // altele s-au mutat. Agentul care trece pe-acolo spune ce e.
+    const magId = (
+      await sql<Array<{ id: string }>>`
+        SELECT id FROM magazin_harta WHERE org_id = ${orgA} LIMIT 1`
+    )[0]?.id;
+    const spune = async (tok: string, id: string, stare: string, lat?: number, lng?: number) => {
+      const r = await fetch(`${BASE}/api/prospects/magazine-harta`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token: tok, id, stare, lat, lng }),
+      });
+      return { s: r.status, d: (await r.json()) as { error?: string } };
+    };
+
+    const conf = await spune(tokA, magId, "exista", 47.8500, 26.6500);
+    check("agentul poate confirma că magazinul există", conf.s === 200, `status ${conf.s} ${conf.d.error ?? ""}`);
+    const dupaConf = (
+      await sql<Array<{ stare: string; confirmat_de: string; lat: number }>>`
+        SELECT stare, confirmat_de, lat FROM magazin_harta WHERE id = ${magId}`
+    )[0];
+    check("…se scrie ce a găsit", dupaConf?.stare === "exista", dupaConf?.stare);
+    check("…și cine a confirmat", dupaConf?.confirmat_de === numeA, dupaConf?.confirmat_de);
+    check(
+      "…iar pinul se mută pe locul adevărat (era chiar acolo)",
+      Math.abs((dupaConf?.lat ?? 0) - 47.85) < 0.0001,
+      `${dupaConf?.lat}`,
+    );
+
+    const alStrain = await spune(tokB, magId, "inchis");
+    check(
+      "agentul altei firme NU poate atinge magazinul nostru",
+      alStrain.s === 403,
+      `status ${alStrain.s}`,
+    );
+    const neatins = (
+      await sql<Array<{ stare: string }>>`SELECT stare FROM magazin_harta WHERE id = ${magId}`
+    )[0];
+    check("…și starea a rămas cum a pus-o al nostru", neatins?.stare === "exista", neatins?.stare);
+
+    const gresit = await spune(tokA, magId, "habar-n-am");
+    check("o stare inventată e refuzată", gresit.s === 400, `status ${gresit.s}`);
+    const faraId = await spune(tokA, "", "exista");
+    check("fără magazin ales → refuz clar", faraId.s === 400, `status ${faraId.s}`);
+
+    sectiune("Ce a găsit închis nu mai apare pe hartă");
+    const inainteTaiere = ((await (await fetch(
+      `${BASE}/api/prospects/magazine-harta?token=${tokA}`,
+    )).json()).magazine as unknown[]).length;
+    await spune(tokA, magId, "inchis");
+    const dupaTaiere = ((await (await fetch(
+      `${BASE}/api/prospects/magazine-harta?token=${tokA}`,
+    )).json()).magazine as unknown[]).length;
+    check(
+      "magazinul tăiat dispare de pe hartă",
+      dupaTaiere === inainteTaiere - 1,
+      `${inainteTaiere} → ${dupaTaiere}`,
+    );
+    check(
+      "…dar rămâne în bază, cu cine l-a tăiat",
+      (
+        await sql`SELECT 1 FROM magazin_harta WHERE id = ${magId} AND stare = 'inchis'`
+      ).length === 1,
     );
 
     sectiune("Rămâne scris cine a făcut-o");
