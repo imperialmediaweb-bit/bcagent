@@ -50,11 +50,28 @@ type DB = NonNullable<ReturnType<typeof getDB>>;
  * în care firma chiar are clienți. Nu tot registrul țării — altfel
  * „Roma" ar nimeri în Italia, nu în Botoșani.
  */
+/**
+ * LISTA E ACEEAȘI PENTRU CÂTEVA MINUTE.
+ *
+ * Căutarea de sate cheamă lista la FIECARE literă tastată, iar lista
+ * înseamnă două interogări care aduc până la 40.000 de rânduri. Pe
+ * telefon, în mașină, cu semnal prost, asta e piatră de moară — și
+ * degeaba: satele din județ nu se schimbă cât scrie omul trei litere.
+ *
+ * O ținem minte cinci minute. Dacă apare un client într-un sat nou, intră
+ * la următoarea reîmprospătare — nimeni nu pierde nimic.
+ */
+const CACHE = new Map<string, { la: number; lista: string[] }>();
+const TINE_MINTE_MS = 5 * 60_000;
+
 export async function localitatiCunoscute(
   db: DB,
   numeAgenti: string[],
 ): Promise<string[]> {
   if (numeAgenti.length === 0) return [];
+  const cheieCache = [...numeAgenti].sort().join("|");
+  const tinut = CACHE.get(cheieCache);
+  if (tinut && Date.now() - tinut.la < TINE_MINTE_MS) return tinut.lista;
   // DOUĂ IZVOARE, nu unul.
   // Înainte luam doar satele unde avem deja o firmă în registru. Dar
   // Tarnița, Palma, Poieni-Solca sunt sate ADEVĂRATE în care pur și
@@ -86,6 +103,12 @@ export async function localitatiCunoscute(
     if (k === "" || vazut.has(k)) continue;
     vazut.add(k);
     toate.push(r.localitate);
+  }
+  CACHE.set(cheieCache, { la: Date.now(), lista: toate });
+  // Nu ținem minte pentru toată platforma: câteva firme, atât.
+  if (CACHE.size > 50) {
+    const celMaiVechi = [...CACHE.entries()].sort((a, b) => a[1].la - b[1].la)[0];
+    if (celMaiVechi) CACHE.delete(celMaiVechi[0]);
   }
   return toate;
 }

@@ -136,6 +136,16 @@ export async function POST(req: Request) {
         cui,
         sold,
       }));
+      // IZOLARE: soldul e CÂT DATOREAZĂ UN CLIENT — cea mai comercială
+      // informație din toată aplicația. Registrul de firme e comun, deci
+      // în fișierul unei agenții poate nimeri CUI-ul unui client de-al
+      // alteia. Fără paza asta, i-l suprascriam — iar patronul celălalt
+      // vedea pe ecran o datorie care nu e a lui, pe un client adevărat.
+      // Citirea era deja mascată; scrierea nu era. Acum scriem DOAR pe
+      // clienții agenților noștri.
+      const agentiiNostri = (await listOrgAgents(auth.session.orgId)).map(
+        (a) => a.name,
+      );
       const res = await db`
         UPDATE prospects p
         SET sold_cents = u.sold, sold_updated_at = NOW()
@@ -143,6 +153,9 @@ export async function POST(req: Request) {
           payload as unknown as Parameters<typeof db.json>[0],
         )}) AS u(cui TEXT, sold BIGINT)
         WHERE p.cui = u.cui
+          AND p.assigned_agent = ANY(${
+            agentiiNostri.length ? agentiiNostri : [""]
+          })
       `;
       updated = res.count;
       await audit(auth.session.email, "balances.import", auth.session.orgId, {

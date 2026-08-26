@@ -155,11 +155,18 @@ export async function GET(req: Request) {
           const c = r.adresa ? await geocodeAdresa(q) : null;
           if (c) {
             await db`
-              INSERT INTO geo_firme (cui, lat, lng, aprox, failed)
-              VALUES (${r.cui}, ${c.lat}, ${c.lng}, FALSE, FALSE)
+              INSERT INTO geo_firme (cui, lat, lng, aprox, failed, sursa)
+              VALUES (${r.cui}, ${c.lat}, ${c.lng}, FALSE, FALSE, 'geocod')
+              -- CE A PUS AGENTUL PE TEREN NU SE ATINGE.
+              -- Aici ajungem doar pentru firme fără poziție, dar între
+              -- momentul în care am citit lista și acum agentul poate
+              -- apăsa „Sunt aici" — iar poziția lui, de la fața locului,
+              -- bate orice adresă ghicită de pe hartă.
               ON CONFLICT (cui) DO UPDATE SET
                 lat = EXCLUDED.lat, lng = EXCLUDED.lng,
-                aprox = FALSE, failed = FALSE, updated_at = NOW()
+                aprox = FALSE, failed = FALSE, sursa = 'geocod',
+                updated_at = NOW()
+              WHERE geo_firme.sursa NOT IN ('deget', 'gps')
             `;
             r.lat = c.lat;
             r.lng = c.lng;
@@ -168,9 +175,12 @@ export async function GET(req: Request) {
           } else {
             // Adresa nu s-a găsit — marcăm, ca să nu tot încercăm.
             await db`
-              INSERT INTO geo_firme (cui, lat, lng, aprox, failed)
-              VALUES (${r.cui}, NULL, NULL, FALSE, TRUE)
+              INSERT INTO geo_firme (cui, lat, lng, aprox, failed, sursa)
+              VALUES (${r.cui}, NULL, NULL, FALSE, TRUE, 'geocod')
+              -- Nici măcar „n-am găsit adresa" nu se scrie peste un pin
+              -- pus de om: el ȘTIE unde e, noi doar n-am nimerit adresa.
               ON CONFLICT (cui) DO UPDATE SET failed = TRUE, updated_at = NOW()
+              WHERE geo_firme.sursa NOT IN ('deget', 'gps')
             `;
             r.failed = true;
           }
