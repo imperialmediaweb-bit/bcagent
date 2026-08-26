@@ -1064,7 +1064,7 @@ function HartaCard({ orgId }: { orgId: string }) {
         let puse = 0;
         let noi = 0;
         let deLa = 0;
-        for (let tura = 0; tura < 8; tura++) {
+        for (let tura = 0; tura < 20; tura++) {
           const r = await api<{ osm: OSMRezultat }>(
             `/api/platform/orgs/${orgId}/harta`,
             { method: "POST", body: JSON.stringify({ osm: true, osmDeLa: deLa }) },

@@ -121,6 +121,26 @@ function telefonCurat(t: string): string {
 }
 
 /**
+ * OVERPASS SE PLÂNGE CU 200 OK.
+ *
+ * Când întrebarea durează prea mult sau serverul e plin, NU dă eroare de
+ * rețea: răspunde frumos, cu lista goală și un rând `remark` în care scrie
+ * ce a pățit. Dacă nu-l citim, un județ ocupat arată exact ca un județ
+ * fără magazine — și omul crede că la Botoșani nu există nicio alimentară.
+ *
+ * Întoarce explicația, sau "" dacă totul a fost în regulă.
+ */
+export function remarcaOverpass(json: unknown): string {
+  const o = json as { remark?: unknown; elements?: unknown } | null;
+  const r = typeof o?.remark === "string" ? o.remark.trim() : "";
+  if (r === "") return "";
+  // „runtime error: Query timed out" / „Query run out of memory"
+  if (/timed?\s*out|timeout/i.test(r)) return "serverul n-a apucat sa raspunda la timp";
+  if (/memory/i.test(r)) return "intrebarea a fost prea mare pentru server";
+  return r.slice(0, 120);
+}
+
+/**
  * Răspunsul Overpass → lista de magazine. Ce n-are nume sau poziție se
  * sare: un punct fără nume n-ajută pe nimeni pe hartă.
  */

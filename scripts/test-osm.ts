@@ -14,7 +14,11 @@
  *   · potrivirea cu firmele merge la fel ca la harta lui Bogdan.
  */
 
-import { citesteOverpass, intrebareJudet } from "../src/modules/prospects/overpass";
+import {
+  citesteOverpass,
+  intrebareJudet,
+  remarcaOverpass,
+} from "../src/modules/prospects/overpass";
 import { potriveștePuncte } from "../src/modules/prospects/potrivire";
 
 let treceri = 0;
@@ -150,6 +154,49 @@ egal(
   }).length,
   0,
 );
+
+console.log("\n── OVERPASS SE PLÂNGE CU 200 OK ──");
+// Pățania din producție: Suceava a mâncat tot timpul, iar Botoșani și Iași
+// au primit câteva secunde. Overpass n-a dat eroare de rețea — a răspuns
+// frumos, cu lista goală și un rând `remark`. Pe ecran a ieșit
+// „BT: 0 magazine citite", adică minciună: Botoșani are alimentare.
+{
+  egal(
+    "timeout server = cădere, nu județ gol",
+    remarcaOverpass({ version: 0.6, remark: "runtime error: Query timed out", elements: [] }),
+    "serverul n-a apucat sa raspunda la timp",
+  );
+  egal(
+    "memorie depășită = cădere",
+    remarcaOverpass({ remark: "runtime error: Query run out of memory", elements: [] }),
+    "intrebarea a fost prea mare pentru server",
+  );
+  ok(
+    "orice altă plângere ajunge la om",
+    remarcaOverpass({ remark: "something else entirely" }) === "something else entirely",
+  );
+  egal("răspuns bun n-are plângere", remarcaOverpass({ elements: [{ type: "node" }] }), "");
+  egal("fără remark", remarcaOverpass({ elements: [] }), "");
+  egal("remark gol", remarcaOverpass({ remark: "   ", elements: [] }), "");
+  egal("null nu crapă", remarcaOverpass(null), "");
+  egal("remark care nu e text", remarcaOverpass({ remark: 42 }), "");
+  ok(
+    "plângerea nu se lungește la nesfârșit pe ecran",
+    remarcaOverpass({ remark: "x".repeat(500) }).length <= 120,
+  );
+  // Lista goală și plângerea merg împreună: citirea dă 0, dar plângerea
+  // spune DE CE — fără ea, cele două arată la fel.
+  egal(
+    "un răspuns cu plângere n-are magazine de citit",
+    citesteOverpass({ remark: "runtime error: Query timed out", elements: [] }).length,
+    0,
+  );
+  ok(
+    "și se poate deosebi de un județ chiar gol",
+    remarcaOverpass({ remark: "runtime error: Query timed out", elements: [] }) !== "" &&
+      remarcaOverpass({ elements: [] }) === "",
+  );
+}
 
 console.log("\n── TELEFONUL ──");
 {

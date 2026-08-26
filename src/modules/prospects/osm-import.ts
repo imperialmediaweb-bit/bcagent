@@ -1,5 +1,10 @@
 import { getDB } from "@/lib/db";
-import { citesteOverpass, intrebareJudet, SERVERE_OVERPASS } from "./overpass";
+import {
+  citesteOverpass,
+  intrebareJudet,
+  remarcaOverpass,
+  SERVERE_OVERPASS,
+} from "./overpass";
 import { cheieMagazin, neted, potriveștePuncte } from "./potrivire";
 
 /**
@@ -38,13 +43,24 @@ export interface RezultatOSM {
   urmator: number | null;
 }
 
-/** O întrebare la Overpass, cu server de rezervă dacă primul e ocupat. */
+/**
+ * O întrebare la Overpass, cu server de rezervă dacă primul e ocupat.
+ *
+ * `panaLa` e ceasul, nu un timeout pe cerere: trei servere × 25 s ar
+ * însemna 75 s, iar serverul nostru are voie 60. Cât a mai rămas, atât
+ * primește următorul server încercat.
+ *
+ * Un `remark` de la Overpass e tot o cădere — aruncăm, ca să se încerce
+ * următorul server, nu ca să raportăm „județul n-are magazine".
+ */
 async function intreabaOverpass(
   judet: string,
-  timeoutMs: number,
+  panaLa: number,
 ): Promise<unknown> {
   let ultimaEroare: unknown = null;
   for (const server of SERVERE_OVERPASS) {
+    const ramas = panaLa - Date.now();
+    if (ramas < 5_000) break;
     try {
       const r = await fetch(server, {
         method: "POST",
@@ -53,10 +69,13 @@ async function intreabaOverpass(
           "User-Agent": "bcagent-saas/1.0 (CRM distributie; contact via repo)",
         },
         body: `data=${encodeURIComponent(intrebareJudet(judet))}`,
-        signal: AbortSignal.timeout(timeoutMs),
+        signal: AbortSignal.timeout(ramas),
       });
       if (!r.ok) throw new Error(`Overpass ${r.status}`);
-      return await r.json();
+      const json = await r.json();
+      const remarca = remarcaOverpass(json);
+      if (remarca !== "") throw new Error(remarca);
+      return json;
     } catch (e) {
       ultimaEroare = e;
     }
@@ -143,28 +162,39 @@ export async function aduMagazineOSM(
   `;
   const stiute = new Set(acum.map((m) => cheieApropiat(m.nume, m.lat, m.lng)));
 
-  let i = start;
-  for (; i < judete.length; i++) {
-    const ramas = bugetMs - (Date.now() - pornit);
-    // Cel puțin un județ pe cerere, altfel pagina ar suna în gol la infinit.
-    if (i > start && ramas < 9_000) break;
-
+  // UN SINGUR JUDEȚ PE CERERE. Prima oară le-am făcut pe toate într-o
+  // cerere: Suceava a mâncat tot timpul (658 de magazine), iar Botoșani și
+  // Iași au apucat câteva secunde — destul cât Overpass să răspundă „am
+  // depășit timpul", adică zero. Așa fiecare județ primește ceasul întreg,
+  // iar pagina cheamă mai departe singură.
+  {
+    const i = start;
     const judet = judete[i];
     let magazine: ReturnType<typeof citesteOverpass> = [];
+    let aCazut = false;
     try {
       magazine = citesteOverpass(
-        await intreabaOverpass(judet, Math.max(9_000, Math.min(25_000, ramas))),
+        await intreabaOverpass(judet, pornit + bugetMs),
       );
     } catch (e) {
+      aCazut = true;
       rezultat.peJudet.push({
         judet,
         magazine: 0,
         eroare: e instanceof Error ? e.message.slice(0, 80) : "nu raspunde",
       });
-      continue;
+    }
+    if (aCazut) {
+      // Județul ăsta n-a ieșit — trecem mai departe, dar rămâne scris ce
+      // a pățit, ca omul să știe că poate apăsa iar pentru el.
+      rezultat.urmator = i + 1 < judete.length ? i + 1 : null;
+      return rezultat;
     }
     rezultat.peJudet.push({ judet, magazine: magazine.length });
-    if (magazine.length === 0) continue;
+    if (magazine.length === 0) {
+      rezultat.urmator = i + 1 < judete.length ? i + 1 : null;
+      return rezultat;
+    }
 
     const potriviri = potriveștePuncte(
       magazine.map((m) => ({
@@ -242,8 +272,8 @@ export async function aduMagazineOSM(
       `;
       rezultat.magazineNoi += r.count;
     }
-  }
 
-  rezultat.urmator = i < judete.length ? i : null;
+    rezultat.urmator = i + 1 < judete.length ? i + 1 : null;
+  }
   return rezultat;
 }

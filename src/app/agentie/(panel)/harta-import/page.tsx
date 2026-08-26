@@ -110,7 +110,7 @@ export default function HartaImportPage() {
       };
       let deLa = 0;
       // Plasă de siguranță: nu sunăm la nesfârșit dacă serverul n-avansează.
-      for (let tura = 0; tura < 8; tura++) {
+      for (let tura = 0; tura < 20; tura++) {
         setPas(
           total.totalJudete > 0
             ? `Caut magazine pe OpenStreetMap (județul ${deLa + 1} din ${total.totalJudete})…`
