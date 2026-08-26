@@ -76,6 +76,7 @@ import ImportClients from "./ImportClients";
 import { TargetPanel, ExpensesPanel } from "./AgentExtras";
 import CoachPanel from "./CoachPanel";
 import CautareClient from "./CautareClient";
+import ZonePanel from "./ZonePanel";
 import DayPanel from "./DayPanel";
 import VanPanel from "./VanPanel";
 import ReportIssue from "@/app/ReportIssue";
@@ -793,6 +794,9 @@ export default function Dashboard({
               „Am fost" și „Comandă" — fără să-l mai cauți prin sate. */}
           <CautareClient token={token} onVisitSaved={() => setRefreshTeren((n) => n + 1)} />
           <DayPanel token={token} refreshKey={refreshTeren} />
+          {/* Zonele pe zile: agentul le știe cel mai bine, deci și le scrie
+              singur. Din ele iese ruta zilei, chiar deasupra. */}
+          <ZonePanel token={token} onSalvat={() => setRefreshTeren((n) => n + 1)} />
           <VanPanel token={token} />
           <Hero
             agentName={agentName}

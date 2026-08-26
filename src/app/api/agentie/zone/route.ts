@@ -1,6 +1,11 @@
 import { ensureSchema, getDB, isDBEnabled } from "@/lib/db";
 import { listOrgAgents, requireOrgUser } from "@/modules/platform";
-import { ZILE, neted, parseZone, potriveste } from "@/modules/zone/parse";
+import { ZILE } from "@/modules/zone/parse";
+import {
+  citesteZone,
+  localitatiCunoscute,
+  salveazaZone,
+} from "@/modules/zone/aplica";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -21,24 +26,6 @@ interface ZonaRand {
   zi: string;
 }
 
-/** Localitățile REALE ale firmei: din clienți + din județele lor. */
-async function localitatiCunoscute(
-  db: NonNullable<ReturnType<typeof getDB>>,
-  nume: string[],
-): Promise<string[]> {
-  if (nume.length === 0) return [];
-  const rows = await db<Array<{ localitate: string }>>`
-    SELECT DISTINCT localitate FROM prospects
-    WHERE localitate <> ''
-      AND judet IN (
-        SELECT DISTINCT judet FROM prospects
-        WHERE assigned_agent = ANY(${nume}) AND judet <> ''
-      )
-    LIMIT 5000
-  `;
-  return rows.map((r) => r.localitate);
-}
-
 export async function GET() {
   if (!isDBEnabled()) return Response.json({ enabled: false }, { status: 503 });
   const auth = await requireOrgUser();
@@ -51,7 +38,7 @@ export async function GET() {
     const rows = await db<ZonaRand[]>`
       SELECT agent_name, localitate, zi FROM agent_zone
       WHERE org_id = ${auth.session.orgId}
-      ORDER BY agent_name, zi, localitate
+      ORDER BY agent_name, zi, pozitie, localitate
     `;
     return Response.json({
       zile: ZILE,
@@ -92,32 +79,11 @@ export async function POST(req: Request) {
       return Response.json({ error: "Agentul nu e al firmei tale" }, { status: 403 });
     }
 
-    const citite = parseZone(text);
     const cunoscute = await localitatiCunoscute(
       db,
       agents.map((a) => a.name),
     );
-    const gasite: Array<{ zi: string; localitate: string; scris: string }> = [];
-    const negasite: Array<{ scris: string; sugestii: string[] }> = [];
-    const vazute = new Set<string>();
-    const adauga = (zi: string, oficial: string, scris: string) => {
-      const cheie = `${zi}|${neted(oficial)}`;
-      if (vazute.has(cheie)) return;
-      vazute.add(cheie);
-      gasite.push({ zi, localitate: oficial, scris });
-    };
-    for (const c of citite) {
-      const p = potriveste(c.localitate, cunoscute);
-      if (p.oficial) {
-        adauga(c.zi, p.oficial, c.localitate);
-      } else if (p.parti && p.parti.length >= 2) {
-        // Virgula uitată: „Sendriceni Dorohoi" = două sate. Le punem pe
-        // amândouă, ca al doilea să nu se piardă din zona agentului.
-        for (const parte of p.parti) adauga(c.zi, parte, c.localitate);
-      } else {
-        negasite.push({ scris: c.localitate, sugestii: p.sugestii });
-      }
-    }
+    const { gasite, negasite } = citesteZone(text, cunoscute);
 
     // „Verifică doar": arătăm ce am înțeles ÎNAINTE să salvăm, ca omul
     // să vadă negru pe alb și să corecteze, nu să salveze pe încredere.
@@ -125,24 +91,7 @@ export async function POST(req: Request) {
       return Response.json({ ok: true, verificare: true, gasite, negasite });
     }
 
-    await db.begin(async (tx) => {
-      await tx`
-        DELETE FROM agent_zone
-        WHERE org_id = ${auth.session.orgId} AND agent_name = ${agent}
-      `;
-      if (gasite.length > 0) {
-        const payload = gasite.map((g) => ({
-          org_id: auth.session.orgId,
-          agent_name: agent,
-          localitate: g.localitate,
-          zi: g.zi,
-        }));
-        await tx`
-          INSERT INTO agent_zone ${tx(payload, "org_id", "agent_name", "localitate", "zi")}
-          ON CONFLICT (org_id, agent_name, localitate, zi) DO NOTHING
-        `;
-      }
-    });
+    await salveazaZone(db, auth.session.orgId, agent, gasite);
 
     return Response.json({ ok: true, salvate: gasite.length, gasite, negasite });
   } catch (e) {

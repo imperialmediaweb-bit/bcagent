@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import {
   CalendarClock,
   ClipboardList,
+  MapPinned,
   Navigation,
   Route as RouteIcon,
   ShoppingCart,
@@ -58,6 +59,17 @@ export default function DayPanel({
     pct: number | null;
     elapsed: number;
   } | null>(null);
+  // ZONA DE AZI, pusă de manager din panoul firmei. Dacă agentul n-are
+  // rută salvată pe ziua asta, i-o facem noi dintr-un buton — asta era
+  // veriga lipsă între „zonele agenților" ale lui Bogdan și traseul de
+  // pe telefon.
+  const [zona, setZona] = useState<{
+    localitati: string[];
+    stops: Stop[];
+    alteFirme: number;
+  } | null>(null);
+  const [facZona, setFacZona] = useState(false);
+  const [eroareZona, setEroareZona] = useState<string | null>(null);
 
   useEffect(() => {
     const q = (p: string) => `${p}token=${encodeURIComponent(token)}`;
@@ -114,6 +126,26 @@ export default function DayPanel({
         },
       )
       .catch(() => {});
+    fetch(`/api/routes/zona?${q("")}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then(
+        (
+          d: {
+            localitati?: string[];
+            stops?: Stop[];
+            alteFirme?: number;
+          } | null,
+        ) => {
+          if (d?.localitati?.length) {
+            setZona({
+              localitati: d.localitati,
+              stops: d.stops ?? [],
+              alteFirme: d.alteFirme ?? 0,
+            });
+          }
+        },
+      )
+      .catch(() => {});
     fetch(`/api/targets?${q("")}`)
       .then((r) => (r.ok ? r.json() : null))
       .then(
@@ -135,9 +167,47 @@ export default function DayPanel({
     };
   }, [token, refreshKey]);
 
+  /**
+   * „Fă-mi ruta de azi": ia clienții din satele pe care mi le-a dat șeful
+   * pe ziua asta și-i salvează ca rută a zilei. De aici încolo merge tot
+   * ce era deja: etapele de 10 opriri, „continuă de unde ai rămas",
+   * bifatul pe măsură ce vizitezi.
+   */
+  async function faRutaDinZona() {
+    if (!zona || zona.stops.length === 0) return;
+    setFacZona(true);
+    setEroareZona(null);
+    try {
+      const res = await fetch("/api/routes", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          token,
+          name: `Zona de ${TODAY_KEY}`,
+          day: TODAY_KEY,
+          stops: zona.stops,
+        }),
+      });
+      if (!res.ok) {
+        const d = (await res.json().catch(() => ({}))) as { error?: string };
+        setEroareZona(d.error ?? "N-am putut salva ruta. Încearcă din nou.");
+        return;
+      }
+      setRoute({ name: `Zona de ${TODAY_KEY}`, stops: zona.stops });
+    } catch {
+      setEroareZona("Fără semnal — încearcă din nou când prinzi rețea.");
+    } finally {
+      setFacZona(false);
+    }
+  }
+
   // Fără DB / fără nimic de arătat → nu ocupăm ecranul degeaba.
   const anything =
-    visitsToday !== null || due !== null || route !== null || target !== null;
+    visitsToday !== null ||
+    due !== null ||
+    route !== null ||
+    target !== null ||
+    zona !== null;
   if (!anything) return null;
 
   // Ruta de azi: doar ce a rămas, în etape de 10 (limita Google Maps).
@@ -230,6 +300,52 @@ export default function DayPanel({
             </p>
           </a>
         </div>
+
+        {/* ZONA DE AZI — ce mi-a dat șeful pe ziua asta. Apare cât timp
+            n-am încă ruta făcută; după ce apăs butonul, locul ei îl ia
+            traseul de mai jos. */}
+        {zona && !route && (
+          <div className="mt-3 rounded-xl border border-indigo-200 bg-white p-3">
+            <p className="flex items-center gap-1.5 text-xs font-medium text-slate-500">
+              <MapPinned className="h-3.5 w-3.5" /> Zona ta de azi
+            </p>
+            <p className="mt-1 break-words text-sm font-semibold leading-snug text-slate-900">
+              {zona.localitati.join(" · ")}
+            </p>
+            {zona.stops.length > 0 ? (
+              <>
+                <button
+                  type="button"
+                  onClick={faRutaDinZona}
+                  disabled={facZona}
+                  className="mt-2 inline-flex min-h-11 items-center gap-1.5 rounded-lg bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-700 disabled:opacity-60"
+                >
+                  <RouteIcon className="h-4 w-4" />
+                  {facZona
+                    ? "Fac ruta…"
+                    : `Fă-mi ruta de azi (${zona.stops.length} clienți)`}
+                </button>
+                {zona.alteFirme > 0 && (
+                  <p className="mt-1.5 break-words text-xs leading-snug text-slate-500">
+                    Mai sunt {zona.alteFirme} firme nevizitate în satele de azi —
+                    le vezi pe hartă, dacă termini devreme.
+                  </p>
+                )}
+              </>
+            ) : (
+              <p className="mt-1.5 break-words text-xs leading-snug text-slate-500">
+                N-ai încă niciun client în satele astea. Deschide harta și
+                bate la firmele de acolo — pe măsură ce devin clienți, intră
+                singure în ruta zilei.
+              </p>
+            )}
+            {eroareZona && (
+              <p className="mt-1.5 break-words text-xs font-medium leading-snug text-rose-600">
+                {eroareZona}
+              </p>
+            )}
+          </div>
+        )}
 
         {route && route.stops.length > 0 && (
           <div className="mt-3 flex flex-wrap items-center gap-2">
