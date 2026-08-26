@@ -44,8 +44,6 @@ export async function POST(
     anuleaza?: boolean;
     /** A doua jumătate a aceluiași buton: magazinele din OpenStreetMap. */
     osm?: boolean;
-    /** De la al câtelea județ reluăm (cursorul din răspunsul trecut). */
-    osmDeLa?: number;
   };
   try {
     body = await req.json();
@@ -81,14 +79,27 @@ export async function POST(
     // Aceeași unealtă ca în panoul firmei, chemată din același buton.
     // Rămâne scris în jurnal cine a apăsat și pentru cine.
     if (body.osm === true) {
-      const { aduMagazineOSM } = await import("@/modules/prospects/osm-import");
-      const r = await aduMagazineOSM(db, orgId, agenti, Number(body.osmDeLa ?? 0));
-      await audit(auth.session.email, "harta.osm", orgId, {
-        locuriPuse: r.locuriPuse,
-        magazineNoi: r.magazineNoi,
-        judete: r.peJudet.map((j) => j.judet).join(","),
+      const { planificaOSM, ramaseOSM, starePlanOSM, unJudetOSM } = await import(
+        "@/modules/prospects/osm-import"
+      );
+      await planificaOSM(db, orgId);
+      const facut = await unJudetOSM(db, orgId, agenti);
+      if (facut) {
+        await audit(auth.session.email, "harta.osm", orgId, {
+          judet: facut.judet,
+          locuriPuse: facut.locuriPuse,
+          magazineNoi: facut.magazineNoi,
+          eroare: facut.eroare ?? "",
+        });
+      }
+      return Response.json({
+        ok: true,
+        osm: {
+          facut,
+          ramase: await ramaseOSM(db, orgId),
+          plan: await starePlanOSM(db, orgId),
+        },
       });
-      return Response.json({ ok: true, osm: r });
     }
 
     // ── aducem harta ──

@@ -40,14 +40,27 @@ interface Automat {
   sarite?: { faraLocPeHarta: number; inafara: number; liniiSiZone: number };
   nepotrivite: Rand[];
 }
-/** Ce a adus OpenStreetMap — a doua jumătate a aceleiași apăsări. */
-interface OSM {
-  peJudet: Array<{ judet: string; magazine: number; eroare?: string }>;
-  locuriPuse: number;
-  magazineNoi: number;
-  deja: number;
-  totalJudete: number;
-  urmator: number | null;
+/** O treabă din coada OpenStreetMap: un județ. */
+interface Treaba {
+  judet: string;
+  stare: string;
+  motiv: string;
+  magazine: number;
+  locuri: number;
+  noi: number;
+  eroare: string;
+}
+interface RaspunsOSM {
+  facut: {
+    judet: string;
+    magazine: number;
+    locuriPuse: number;
+    magazineNoi: number;
+    deja: number;
+    eroare?: string;
+  } | null;
+  ramase: number;
+  plan: Treaba[];
 }
 interface Verificare {
   totalPuncte: number;
@@ -71,7 +84,7 @@ export default function HartaImportPage() {
   const [alese, setAlese] = useState<Record<string, string>>({});
 
   const [gata, setGata] = useState<Automat | null>(null);
-  const [osm, setOsm] = useState<OSM | null>(null);
+  const [osm, setOsm] = useState<RaspunsOSM | null>(null);
   /** Ce face acum, cu vorbele lui: „citesc harta", „caut în Suceava"… */
   const [pas, setPas] = useState("");
 
@@ -102,32 +115,23 @@ export default function HartaImportPage() {
         setGata(d);
       }
 
-      // 2) Magazinele de pe OpenStreetMap, județ cu județ. Dacă pică, nu
-      // stricăm ce a ieșit din hartă — doar spunem ce n-a mers.
-      const total: OSM = {
-        peJudet: [], locuriPuse: 0, magazineNoi: 0, deja: 0,
-        totalJudete: 0, urmator: null,
-      };
-      let deLa = 0;
-      // Plasă de siguranță: nu sunăm la nesfârșit dacă serverul n-avansează.
+      // 2) Magazinele de pe OpenStreetMap, câte un județ pe cerere. Un
+      // județ întreg se ia în zeci de secunde de la un serviciu public;
+      // fiecare primește ceasul lui, altfel primul îl mănâncă pe restul.
+      // Cine n-apucă acum se ia noaptea, de cron, din aceeași coadă.
+      setPas("Caut magazine pe OpenStreetMap…");
       for (let tura = 0; tura < 20; tura++) {
-        setPas(
-          total.totalJudete > 0
-            ? `Caut magazine pe OpenStreetMap (județul ${deLa + 1} din ${total.totalJudete})…`
-            : "Caut magazine pe OpenStreetMap…",
-        );
-        const r = await api<{ osm: OSM }>("/api/agentie/harta-import", {
+        const r = await api<{ osm: RaspunsOSM }>("/api/agentie/harta-import", {
           method: "POST",
-          body: JSON.stringify({ osm: true, osmDeLa: deLa }),
+          body: JSON.stringify({ osm: true }),
         });
-        total.peJudet.push(...r.osm.peJudet);
-        total.locuriPuse += r.osm.locuriPuse;
-        total.magazineNoi += r.osm.magazineNoi;
-        total.deja += r.osm.deja;
-        total.totalJudete = r.osm.totalJudete;
-        setOsm({ ...total });
-        if (r.osm.urmator === null || r.osm.urmator <= deLa) break;
-        deLa = r.osm.urmator;
+        setOsm(r.osm);
+        if (!r.osm.facut || r.osm.ramase === 0) break;
+        setPas(
+          `Am terminat ${r.osm.facut.judet}. Mai caut în ${r.osm.ramase} ${
+            r.osm.ramase === 1 ? "județ" : "județe"
+          }…`,
+        );
       }
     } catch (e) {
       setEroare(e instanceof Error ? e.message : String(e));
@@ -378,49 +382,71 @@ export default function HartaImportPage() {
       {osm && (
         <Card>
           <p className="break-words text-sm leading-snug text-slate-800">
-            🗺️ Am căutat și pe <b>OpenStreetMap</b> — magazinele puse acolo de
-            oameni care au trecut pe drum.
+            🗺️ Caut și pe <b>OpenStreetMap</b> — magazinele puse acolo de
+            oameni care au trecut pe drum. Merg județ cu județ: întâi unde ai
+            clienți, apoi vecinii din Moldova.
           </p>
-          {osm.magazineNoi > 0 && (
-            <p className="mt-1 break-words rounded-lg bg-cyan-50 p-3 text-sm leading-snug text-cyan-900">
-              🔵 <b>{osm.magazineNoi}</b> magazine noi de prospectat, cu locul
-              exact. Agenții le văd pe hartă la butonul „Magazine de
-              prospectat", albastre. Când ajung acolo, spun dacă magazinul mai
-              există.
+          {(() => {
+            const gata = osm.plan.filter((t) => t.stare === "gata");
+            const noi = gata.reduce((s, t) => s + t.noi, 0);
+            const locuri = gata.reduce((s, t) => s + t.locuri, 0);
+            return (
+              <>
+                {noi > 0 && (
+                  <p className="mt-2 break-words rounded-lg bg-cyan-50 p-3 text-sm leading-snug text-cyan-900">
+                    🔵 <b>{noi}</b> magazine de prospectat, cu locul exact.
+                    Agenții le văd pe hartă la „Magazine de prospectat". Când
+                    ajung acolo, spun dacă magazinul mai există.
+                  </p>
+                )}
+                {locuri > 0 && (
+                  <p className="mt-1 break-words text-sm font-medium leading-snug text-emerald-800">
+                    Și <b>{locuri}</b> firme din listele tale au primit locul
+                    exact de acolo.
+                  </p>
+                )}
+              </>
+            );
+          })()}
+          {osm.ramase > 0 && (
+            <p className="mt-2 break-words rounded-lg bg-amber-50 p-3 text-xs leading-snug text-amber-900">
+              Mai sunt <b>{osm.ramase}</b>{" "}
+              {osm.ramase === 1 ? "județ" : "județe"} de căutat. Nu trebuie să
+              stai după ele: se aduc singure peste noapte. Sau apeși din nou,
+              oricând — continuă de unde a rămas, nu ia totul de la capăt.
             </p>
           )}
-          {osm.locuriPuse > 0 && (
-            <p className="mt-1 break-words text-sm font-medium leading-snug text-emerald-800">
-              Și <b>{osm.locuriPuse}</b> firme din listele tale au primit locul
-              exact de acolo.
-            </p>
-          )}
-          {osm.magazineNoi === 0 && osm.locuriPuse === 0 && (
-            <p className="mt-1 break-words text-sm leading-snug text-slate-600">
-              N-a ieșit nimic nou de acolo
-              {osm.deja > 0 ? ` — cele ${osm.deja} găsite le aveai deja pe hartă.` : "."}
-            </p>
-          )}
-          <details className="mt-2">
-            <summary className="cursor-pointer text-xs font-medium text-slate-600">
-              Pe județe
-            </summary>
-            <ul className="mt-2 space-y-1">
-              {osm.peJudet.map((j) => (
-                <li key={j.judet} className="break-words text-xs leading-snug text-slate-600">
-                  <b>{j.judet}</b>:{" "}
-                  {j.eroare
-                    ? `n-a mers acum (${j.eroare}) — mai apasă o dată peste câteva minute`
-                    : `${j.magazine} magazine citite`}
-                </li>
-              ))}
-            </ul>
-            {osm.deja > 0 && (
-              <p className="mt-2 break-words text-xs leading-snug text-slate-500">
-                {osm.deja} le aveai deja pe hartă — nu le-am pus a doua oară.
-              </p>
-            )}
-          </details>
+          <ul className="mt-3 space-y-1">
+            {osm.plan.map((t) => (
+              <li
+                key={t.judet}
+                className="flex flex-wrap items-baseline gap-x-2 break-words text-xs leading-snug"
+              >
+                <b className="text-slate-800">{t.judet}</b>
+                {t.motiv === "clienti" ? (
+                  <span className="text-slate-500">ai clienți aici</span>
+                ) : (
+                  <span className="text-slate-400">vecin</span>
+                )}
+                {t.stare === "gata" && (
+                  <span className="text-emerald-700">
+                    ✓ {t.magazine} citite
+                    {t.noi > 0 && ` · ${t.noi} noi de prospectat`}
+                    {t.locuri > 0 && ` · ${t.locuri} firme cu loc`}
+                  </span>
+                )}
+                {t.stare === "picat" && (
+                  <span className="text-amber-700">
+                    n-a mers ({t.eroare || "serverul e ocupat"}) — se mai
+                    încearcă singur
+                  </span>
+                )}
+                {t.stare === "de_facut" && (
+                  <span className="text-slate-400">la rând</span>
+                )}
+              </li>
+            ))}
+          </ul>
         </Card>
       )}
 

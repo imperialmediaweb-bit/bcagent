@@ -83,8 +83,6 @@ export async function POST(req: Request) {
      * o cheamă singură, după hartă.
      */
     osm?: boolean;
-    /** De la al câtelea județ reluăm (cursorul din răspunsul trecut). */
-    osmDeLa?: number;
   };
   try {
     body = await req.json();
@@ -122,15 +120,23 @@ export async function POST(req: Request) {
     // Alea le-au pus pe OSM oameni care au trecut pe-acolo.
     if (body.osm === true) {
       const { listOrgAgents } = await import("@/modules/platform");
-      const { aduMagazineOSM } = await import("@/modules/prospects/osm-import");
-      const numeAg = (await listOrgAgents(auth.session.orgId)).map((a) => a.name);
-      const r = await aduMagazineOSM(
-        db,
-        auth.session.orgId,
-        numeAg,
-        Number(body.osmDeLa ?? 0),
+      const { planificaOSM, ramaseOSM, starePlanOSM, unJudetOSM } = await import(
+        "@/modules/prospects/osm-import"
       );
-      return Response.json({ ok: true, osm: r });
+      const orgId = auth.session.orgId;
+      const numeAg = (await listOrgAgents(orgId)).map((a) => a.name);
+      // Coada se pune la punct la fiecare apăsare: dacă firma a primit
+      // clienți într-un județ nou, intră și el în listă de la sine.
+      await planificaOSM(db, orgId);
+      const facut = await unJudetOSM(db, orgId, numeAg);
+      return Response.json({
+        ok: true,
+        osm: {
+          facut,
+          ramase: await ramaseOSM(db, orgId),
+          plan: await starePlanOSM(db, orgId),
+        },
+      });
     }
 
     // ── treapta 2: scriem ce a confirmat omul ──

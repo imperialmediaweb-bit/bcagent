@@ -31,6 +31,25 @@ interface AgentRow {
   clients: number;
 }
 
+/** Ce a lăsat un agent în urmă pe teren. */
+interface TerenRand {
+  agent: string;
+  pinuri: number;
+  confirmate: number;
+  taiate: number;
+  zone: number;
+  zile: string[];
+  vizite: number;
+  comenzi: number;
+  ultima: string | null;
+}
+interface TerenTotal {
+  clienti: number;
+  cuLoc: number;
+  dinTeren: number;
+  magazine: number;
+}
+
 function todayISO(): string {
   return new Date().toISOString().slice(0, 10);
 }
@@ -220,6 +239,8 @@ export default function AgentiPage() {
         </Card>
       )}
 
+      <MuncaDeTeren />
+
       {agents.length >= 2 && <Transfer agents={agents} onDone={load} />}
 
       <NewAgentModal
@@ -239,6 +260,130 @@ export default function AgentiPage() {
       />
       <EvalModal agent={evalFor} onClose={() => setEvalFor(null)} />
     </div>
+  );
+}
+
+/**
+ * CE AU FĂCUT AGENȚII PE TEREN.
+ *
+ * Vizitele se vedeau deja, în pagina lor. Munca de hartă — nu: cine a pus
+ * locul exact la un magazin, cine a confirmat că prăvălia din harta veche
+ * mai există, cine a tăiat una închisă, cine și-a scris zonele pe zile.
+ * Se făcea, dar nu se vedea nicăieri: nici patronul n-avea ce arăta, nici
+ * omul care a bătut satul n-avea cu ce se lăuda.
+ *
+ * Nu e încă un meniu: stă aici, în „Agenți", unde se uită oricum.
+ */
+function MuncaDeTeren() {
+  const [randuri, setRanduri] = useState<TerenRand[]>([]);
+  const [total, setTotal] = useState<TerenTotal | null>(null);
+  const [gata, setGata] = useState(false);
+
+  useEffect(() => {
+    let viu = true;
+    api<{ agenti: TerenRand[]; total: TerenTotal | null }>("/api/agentie/teren")
+      .then((d) => {
+        if (!viu) return;
+        setRanduri(d.agenti);
+        setTotal(d.total);
+      })
+      .catch(() => {
+        /* dacă nu merge, pagina de agenți rămâne întreagă */
+      })
+      .finally(() => viu && setGata(true));
+    return () => {
+      viu = false;
+    };
+  }, []);
+
+  if (!gata) return null;
+  const auMuncit = randuri.filter(
+    (r) => r.pinuri + r.confirmate + r.taiate + r.zone > 0,
+  );
+
+  return (
+    <Card className="p-4">
+      <h2 className="text-sm font-semibold text-slate-800">
+        Munca de teren — ce au făcut agenții pe hartă
+      </h2>
+      {total && (
+        <p className="mt-1 break-words text-xs leading-snug text-slate-600">
+          Din <b>{total.clienti}</b> clienți, <b>{total.cuLoc}</b> au locul pe
+          hartă
+          {total.dinTeren > 0 && (
+            <>
+              {" "}
+              — dintre care <b className="text-emerald-700">{total.dinTeren}</b>{" "}
+              puse de agenți, la fața locului. Alea sunt cele mai bune: omul a
+              fost acolo.
+            </>
+          )}
+          {total.magazine > 0 && (
+            <> Plus {total.magazine} magazine de prospectat, pe hartă.</>
+          )}
+        </p>
+      )}
+
+      {auMuncit.length === 0 ? (
+        <p className="mt-3 break-words rounded-lg bg-slate-50 p-3 text-xs leading-snug text-slate-600">
+          Încă n-a pus nimeni nimic pe hartă din teren. Când un agent apasă
+          „Sunt aici" la un magazin, sau confirmă unul de prospectat, apare
+          aici, pe numele lui.
+        </p>
+      ) : (
+        <ul className="mt-3 divide-y divide-slate-100">
+          {auMuncit.map((r) => (
+            <li key={r.agent} className="py-2">
+              <p className="break-words text-sm font-semibold leading-snug text-slate-900">
+                {r.agent}
+              </p>
+              <p className="mt-0.5 flex flex-wrap gap-x-3 gap-y-1 break-words text-xs leading-snug text-slate-600">
+                {r.pinuri > 0 && (
+                  <span className="text-emerald-700">
+                    📍 <b>{r.pinuri}</b> locuri puse la fața locului
+                  </span>
+                )}
+                {r.confirmate > 0 && (
+                  <span className="text-violet-700">
+                    ✅ <b>{r.confirmate}</b> magazine confirmate
+                  </span>
+                )}
+                {r.taiate > 0 && (
+                  <span className="text-rose-700">
+                    ✕ <b>{r.taiate}</b> găsite închise
+                  </span>
+                )}
+                {r.zone > 0 && (
+                  <span>
+                    🗺️ <b>{r.zone}</b> sate în zonele lui
+                    {r.zile.length > 0 && `, pe ${r.zile.length} zile`}
+                  </span>
+                )}
+                {r.vizite > 0 && (
+                  <span>
+                    📋 <b>{r.vizite}</b> vizite
+                  </span>
+                )}
+                {r.comenzi > 0 && (
+                  <span>
+                    🛒 <b>{r.comenzi}</b> comenzi
+                  </span>
+                )}
+              </p>
+              {r.ultima && (
+                <p className="mt-0.5 break-words text-xs leading-snug text-slate-400">
+                  ultima urmă: {new Date(r.ultima).toLocaleString("ro-RO")}
+                </p>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+      <p className="mt-2 break-words text-xs leading-snug text-slate-500">
+        Un loc pus de agent bate orice import: el a fost acolo. De-aia nu se
+        atinge nimeni de ele, nici măcar „Adu locațiile".
+      </p>
+    </Card>
   );
 }
 

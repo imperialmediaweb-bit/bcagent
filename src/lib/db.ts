@@ -298,6 +298,11 @@ export async function ensureSchema(): Promise<void> {
     -- adus dintr-o hartă. Fără asta, un import făcut din greșeală nu se
     -- putea da înapoi fără să ștergi și munca agenților.
     ALTER TABLE geo_firme ADD COLUMN IF NOT EXISTS sursa TEXT NOT NULL DEFAULT '';
+    -- CINE A PUS PINUL. Fără nume, munca de teren a agenților nu se vedea
+    -- nicăieri: patronul nu avea ce arăta, iar omul care a bătut satul nu
+    -- avea cu ce se lăuda. Se completează de-acum înainte; ce e mai vechi
+    -- rămâne fără nume, nu se inventează.
+    ALTER TABLE geo_firme ADD COLUMN IF NOT EXISTS pus_de TEXT NOT NULL DEFAULT '';
 
     -- MAGAZINELE DIN HARTA VECHE care nu s-au potrivit cu nicio firmă din
     -- registru. Sunt magazine ADEVĂRATE, cu locul pus de mână, dar fără
@@ -326,6 +331,35 @@ export async function ensureSchema(): Promise<void> {
     CREATE INDEX IF NOT EXISTS magazin_harta_org ON magazin_harta(org_id);
     CREATE INDEX IF NOT EXISTS magazin_harta_loc
       ON magazin_harta(org_id, localitate);
+
+    -- COADA DE LUCRU PENTRU OPENSTREETMAP.
+    -- Un județ întreg de magazine se ia în zeci de secunde de la un
+    -- serviciu public, gratuit și adesea ocupat. Fără coadă, prima
+    -- încercare mânca tot timpul cererii, iar ce rămânea la coadă
+    -- (Botoșani, Iași) primea „am depășit timpul" și arăta pe ecran ca
+    -- „județul n-are magazine" — minciună.
+    -- Cu coada: fiecare județ e o treabă cu starea ei. O ia ori omul,
+    -- când apasă butonul, ori cronul, noaptea, când nu așteaptă nimeni.
+    -- Amândoi iau din același loc, deci nu se calcă și nu se dublează.
+    CREATE TABLE IF NOT EXISTS osm_sweep (
+      org_id TEXT NOT NULL,
+      judet TEXT NOT NULL,
+      -- de_facut | gata | picat
+      stare TEXT NOT NULL DEFAULT 'de_facut',
+      -- de ce e în listă: 'clienti' (are clienți acolo) sau 'vecin'
+      motiv TEXT NOT NULL DEFAULT 'vecin',
+      -- cu cât e mai mic, cu atât se ia mai devreme
+      rang INT NOT NULL DEFAULT 100,
+      magazine INT NOT NULL DEFAULT 0,
+      locuri INT NOT NULL DEFAULT 0,
+      noi INT NOT NULL DEFAULT 0,
+      incercari INT NOT NULL DEFAULT 0,
+      eroare TEXT NOT NULL DEFAULT '',
+      facut_la TIMESTAMPTZ,
+      PRIMARY KEY (org_id, judet)
+    );
+    CREATE INDEX IF NOT EXISTS osm_sweep_coada
+      ON osm_sweep(org_id, stare, rang);
 
     CREATE TABLE IF NOT EXISTS geo_localitati (
       judet TEXT NOT NULL,

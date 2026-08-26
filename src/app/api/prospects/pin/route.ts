@@ -111,16 +111,22 @@ export async function POST(req: Request) {
     }
 
     const scris = await db`
-      INSERT INTO geo_firme (cui, lat, lng, aprox, failed, sursa)
-      SELECT p.cui, ${lat}, ${lng}, FALSE, FALSE, ${sursa}
+      INSERT INTO geo_firme (cui, lat, lng, aprox, failed, sursa, pus_de)
+      SELECT p.cui, ${lat}, ${lng}, FALSE, FALSE, ${sursa}, ${payload.agentName}
       FROM prospects p
       WHERE p.cui = ${cui}
         AND (COALESCE(p.assigned_agent, '') = ''
              OR p.assigned_agent = ${payload.agentName}
              OR p.assigned_agent = ANY(${aiMei}))
       ON CONFLICT (cui) DO UPDATE
+        -- SURSA TREBUIE scrisă și la suprascriere. Fără ea, o firmă care
+        -- avea deja locul adus dintr-o hartă (sursa „import") rămânea
+        -- marcată „import" chiar după ce agentul punea pinul cu degetul —
+        -- iar următorul import i-l ștergea peste, pentru că paza „nu te
+        -- atinge de ce a pus omul pe teren" se uită fix la sursă.
         SET lat = EXCLUDED.lat, lng = EXCLUDED.lng,
-            aprox = FALSE, failed = FALSE, updated_at = NOW()
+            aprox = FALSE, failed = FALSE, sursa = EXCLUDED.sursa,
+            pus_de = EXCLUDED.pus_de, updated_at = NOW()
     `;
     if (scris.count === 0) {
       return Response.json(

@@ -1002,12 +1002,15 @@ function AiUsageCard({
  * adminul platformei, pentru firma asta.
  */
 interface OSMRezultat {
-  peJudet: Array<{ judet: string; magazine: number; eroare?: string }>;
-  locuriPuse: number;
-  magazineNoi: number;
-  deja: number;
-  totalJudete: number;
-  urmator: number | null;
+  facut: {
+    judet: string;
+    magazine: number;
+    locuriPuse: number;
+    magazineNoi: number;
+    eroare?: string;
+  } | null;
+  ramase: number;
+  plan: Array<{ judet: string; stare: string; noi: number; locuri: number }>;
 }
 
 function HartaCard({ orgId }: { orgId: string }) {
@@ -1061,23 +1064,21 @@ function HartaCard({ orgId }: { orgId: string }) {
       // OpenStreetMap. Vin în cereri separate doar pentru că serviciul lor
       // e lent, județ cu județ — nu ca să mai apese cineva un buton.
       if (!anuleaza) {
-        let puse = 0;
-        let noi = 0;
-        let deLa = 0;
         for (let tura = 0; tura < 20; tura++) {
           const r = await api<{ osm: OSMRezultat }>(
             `/api/platform/orgs/${orgId}/harta`,
-            { method: "POST", body: JSON.stringify({ osm: true, osmDeLa: deLa }) },
+            { method: "POST", body: JSON.stringify({ osm: true }) },
           );
-          puse += r.osm.locuriPuse;
-          noi += r.osm.magazineNoi;
+          const gata = r.osm.plan.filter((t) => t.stare === "gata");
+          const noi = gata.reduce((s, t) => s + t.noi, 0);
+          const puse = gata.reduce((s, t) => s + t.locuri, 0);
           setMsg(
             `${text} Din OpenStreetMap: ${noi} magazine de prospectat` +
               (puse ? `, plus ${puse} firme care au primit locul` : "") +
-              `. (${r.osm.peJudet.map((j) => `${j.judet}: ${j.eroare ? "n-a mers" : j.magazine}`).join(", ")})`,
+              `. Județe gata: ${gata.map((t) => t.judet).join(", ") || "—"}` +
+              (r.osm.ramase ? `; mai sunt ${r.osm.ramase} (le ia cronul noaptea).` : "."),
           );
-          if (r.osm.urmator === null || r.osm.urmator <= deLa) break;
-          deLa = r.osm.urmator;
+          if (!r.osm.facut || r.osm.ramase === 0) break;
         }
       }
     } catch (e) {
