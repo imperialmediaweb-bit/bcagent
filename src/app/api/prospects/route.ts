@@ -30,6 +30,12 @@ interface ProspectRow {
   caen_desc: string;
   tva: boolean | null;
   activ: boolean | null;
+  /** Firma are locul ei exact pe hartă, pus de om sau învățat de la GPS. */
+  pin_exact: boolean | null;
+  /** Agentul are voie să-i mute locul (izolarea între agenții). */
+  pot_pin: boolean | null;
+  pin_lat: number | null;
+  pin_lng: number | null;
   status: string;
   note: string;
   assigned_agent: string;
@@ -206,6 +212,17 @@ export async function GET(req: Request) {
     const rows = await db<ProspectRow[]>`
       SELECT cui, denumire, adresa, localitate, judet, caen, caen_desc,
              tva, activ,
+             -- Firma are LOCUL EI pe hartă (pus de agent sau învățat de la
+             -- GPS)? Fără asta, „șterge locul pus" apărea și la firmele
+             -- care stau, de fapt, în centrul satului.
+             EXISTS (SELECT 1 FROM geo_firme g WHERE g.cui = prospects.cui) AS pin_exact,
+             -- Am voie să-i mut locul? Aceeași regulă ca la scriere: firmele
+             -- mele, ale colegilor din firma mea, sau nealocate. Fără asta,
+             -- agentul apăsa butonul și primea un refuz în plin teren.
+             (${!masked} OR COALESCE(assigned_agent,'') = ''
+              OR assigned_agent = ANY(${mineArr})) AS pot_pin,
+             (SELECT g.lat FROM geo_firme g WHERE g.cui = prospects.cui) AS pin_lat,
+             (SELECT g.lng FROM geo_firme g WHERE g.cui = prospects.cui) AS pin_lng,
              (CASE WHEN ${!masked} OR assigned_agent = '' OR assigned_agent = ANY(${mineArr})
                    THEN status ELSE 'nou' END) AS status,
              (CASE WHEN ${!masked} OR assigned_agent = '' OR assigned_agent = ANY(${mineArr})
@@ -266,6 +283,10 @@ export async function GET(req: Request) {
         caenDesc: r.caen_desc,
         tva: r.tva,
         activ: r.activ,
+        pinExact: r.pin_exact === true,
+        potPin: r.pot_pin === true,
+        pinLat: r.pin_lat,
+        pinLng: r.pin_lng,
         status: r.status,
         note: r.note,
         assignedAgent: r.assigned_agent,

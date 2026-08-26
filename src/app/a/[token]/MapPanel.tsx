@@ -63,6 +63,12 @@ export interface Firm {
   assignedAgent?: string;
   telefon: string;
   soldCents: number | null;
+  /** Firma are locul ei exact pe hartă (pus de agent sau învățat la vizită)? */
+  pinExact?: boolean;
+  pinLat?: number | null;
+  pinLng?: number | null;
+  /** Am voie să-i mut locul? La firmele altei agenții — nu. */
+  potPin?: boolean;
 }
 
 interface Stop {
@@ -1453,8 +1459,13 @@ function LocalityFirms({
   const [briefFor, setBriefFor] = useState<Firm | null>(null);
   // Firma căreia îi punem locul exact pe hartă (pin tras cu degetul).
   const [pinFor, setPinFor] = useState<Firm | null>(null);
-  // Pinurile puse acum, ca rândul să arate „📍 loc exact" fără reîncărcare.
-  const [pinuriNoi, setPinuriNoi] = useState<Record<string, boolean>>({});
+  // Pinurile puse ACUM, cu tot cu coordonate. Nu doar „da/nu": fără
+  // coordonate, redeschizând fereastra imediat după salvare, harta pornea
+  // tot din centrul satului și butonul de ștergere lipsea, deși pinul era
+  // deja scris în baza de date.
+  const [pinuriNoi, setPinuriNoi] = useState<
+    Record<string, { lat: number; lng: number } | null>
+  >({});
   // Firma pentru care tocmai cerem poziția telefonului („Sunt aici").
   const [ceruta, setCeruta] = useState<string | null>(null);
 
@@ -1493,7 +1504,7 @@ function LocalityFirms({
             showToast(d.error ?? "N-am putut salva locul.");
             return;
           }
-          setPinuriNoi((p) => ({ ...p, [f.cui]: true }));
+          setPinuriNoi((p) => ({ ...p, [f.cui]: { lat: latitude, lng: longitude } }));
           showToast(`Loc salvat (±${Math.round(accuracy)} m) — navigația te duce fix aici.`);
         } catch {
           showToast("Fără semnal — încearcă din nou când prinzi rețea.");
@@ -1770,26 +1781,36 @@ function LocalityFirms({
                   </button>
                   {/* LOCUL EXACT: registrul dă sediul social, geocodarea dă
                       centrul satului. Agentul trage pinul pe magazin o
-                      singură dată și navigația îl duce la ușă de-atunci. */}
-                  <button
-                    type="button"
-                    onClick={() => setPinFor(f)}
-                    className="inline-flex items-center gap-1 rounded-md bg-rose-50 px-2 py-1 text-xs font-medium text-rose-700 hover:bg-rose-100"
-                    title="Pune locul exact al magazinului pe hartă"
-                  >
-                    📍 {pinuriNoi[f.cui] ? "Loc pus" : "Pune locul"}
-                  </button>
-                  {/* Cel mai scurt drum: agentul e CHIAR în fața magazinului
-                      și apasă o dată. Un pin exact, fără hartă, fără tras. */}
-                  <button
-                    type="button"
-                    onClick={() => suntAici(f)}
-                    disabled={ceruta === f.cui}
-                    className="inline-flex items-center gap-1 rounded-md bg-rose-600 px-2 py-1 text-xs font-semibold text-white hover:bg-rose-700 disabled:opacity-60"
-                    title="Salvează locul magazinului din poziția telefonului"
-                  >
-                    🎯 {ceruta === f.cui ? "Te caut…" : "Sunt aici"}
-                  </button>
+                      singură dată și navigația îl duce la ușă de-atunci.
+                      Butoanele apar DOAR unde chiar are voie — altfel
+                      apăsa și primea un refuz sec, în plin teren. */}
+                  {f.potPin !== false && (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => setPinFor(f)}
+                        className="inline-flex items-center gap-1 rounded-md bg-rose-50 px-2 py-1 text-xs font-medium text-rose-700 hover:bg-rose-100"
+                        title="Pune locul exact al magazinului pe hartă"
+                      >
+                        📍{" "}
+                        {(f.cui in pinuriNoi ? pinuriNoi[f.cui] !== null : f.pinExact)
+                          ? "Loc pus"
+                          : "Pune locul"}
+                      </button>
+                      {/* Cel mai scurt drum: agentul e CHIAR în fața
+                          magazinului și apasă o dată. Un pin exact, fără
+                          hartă, fără tras cu degetul. */}
+                      <button
+                        type="button"
+                        onClick={() => suntAici(f)}
+                        disabled={ceruta === f.cui}
+                        className="inline-flex items-center gap-1 rounded-md bg-rose-600 px-2 py-1 text-xs font-semibold text-white hover:bg-rose-700 disabled:opacity-60"
+                        title="Salvează locul magazinului din poziția telefonului"
+                      >
+                        🎯 {ceruta === f.cui ? "Te caut…" : "Sunt aici"}
+                      </button>
+                    </>
+                  )}
                 </div>
                 {visitFor?.cui === f.cui && (
                   <VisitButtons
@@ -1814,12 +1835,36 @@ function LocalityFirms({
         token={token}
         firma={
           pinFor
-            ? { ...pinFor, lat: centru?.lat ?? null, lng: centru?.lng ?? null }
+            ? {
+                cui: pinFor.cui,
+                denumire: pinFor.denumire,
+                adresa: pinFor.adresa,
+                localitate: pinFor.localitate,
+                // Are loc pus? Deschidem harta FIX pe el, ca agentul să-l
+                // corecteze, nu să-l caute. N-are? Pornim din centrul satului.
+                lat:
+                  pinuriNoi[pinFor.cui]?.lat ??
+                  (pinFor.cui in pinuriNoi ? null : pinFor.pinLat) ??
+                  centru?.lat ??
+                  null,
+                lng:
+                  pinuriNoi[pinFor.cui]?.lng ??
+                  (pinFor.cui in pinuriNoi ? null : pinFor.pinLng) ??
+                  centru?.lng ??
+                  null,
+                arePinPropriu:
+                  pinFor.cui in pinuriNoi
+                    ? pinuriNoi[pinFor.cui] !== null
+                    : pinFor.pinExact === true,
+              }
             : null
         }
         onClose={() => setPinFor(null)}
-        onSalvat={(cui, lat) => {
-          setPinuriNoi((p) => ({ ...p, [cui]: lat !== null }));
+        onSalvat={(cui, lat, lng) => {
+          setPinuriNoi((p) => ({
+            ...p,
+            [cui]: lat !== null && lng !== null ? { lat, lng } : null,
+          }));
           showToast(
             lat !== null
               ? "Locul magazinului e salvat — de acum navigația te duce fix acolo."

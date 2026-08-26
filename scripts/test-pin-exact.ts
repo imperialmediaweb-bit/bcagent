@@ -274,6 +274,43 @@ async function main() {
     });
     check("corp stricat → 400, nu 500", corpRau.status === 400, `status ${corpRau.status}`);
 
+    sectiune("Aplicația ȘTIE care firmă are loc pus și care nu");
+    // Fără asta, butonul „șterge locul pus" apărea la orice firmă dintr-un
+    // sat geocodat și promitea că șterge ceva ce nu exista.
+    await pin(tokEu, { cui: cMeu, lat: USA_MAGAZIN[0], lng: USA_MAGAZIN[1], sursa: "deget" });
+    const lista = await fetch(
+      `${BASE}/api/prospects?token=${tokEu}&judet=BT&localitate=${encodeURIComponent(SAT)}&aiMei=1&limit=50`,
+    );
+    const dLista = (await lista.json()) as {
+      prospects?: Array<{
+        cui: string;
+        pinExact?: boolean;
+        pinLat?: number | null;
+        pinLng?: number | null;
+      }>;
+    };
+    const cuPin = (dLista.prospects ?? []).find((f) => f.cui === cMeu);
+    const faraPin = (dLista.prospects ?? []).find((f) => f.cui === cui(3));
+    check("firma cu loc pus e marcată așa", cuPin?.pinExact === true, `pinExact=${cuPin?.pinExact}`);
+    check(
+      "…și îi vin coordonatele ei, ca harta să se deschidă FIX pe magazin",
+      Math.abs((cuPin?.pinLat ?? 0) - USA_MAGAZIN[0]) < 0.0001,
+      `${cuPin?.pinLat}`,
+    );
+    check("firma FĂRĂ loc pus nu e marcată", faraPin?.pinExact === false, `pinExact=${faraPin?.pinExact}`);
+    check("…și n-are coordonate proprii", faraPin?.pinLat == null, `${faraPin?.pinLat}`);
+    await pin(tokEu, { cui: cMeu, sterge: true });
+    const dupaStergere = await fetch(
+      `${BASE}/api/prospects?token=${tokEu}&judet=BT&localitate=${encodeURIComponent(SAT)}&aiMei=1&limit=50`,
+    );
+    const dDupa = (await dupaStergere.json()) as {
+      prospects?: Array<{ cui: string; pinExact?: boolean }>;
+    };
+    check(
+      "după ștergere, firma nu mai e marcată cu loc pus",
+      (dDupa.prospects ?? []).find((f) => f.cui === cMeu)?.pinExact === false,
+    );
+
     sectiune("Pinul pus se folosește mai departe (rută, navigare)");
     await pin(tokEu, {
       cui: cMeu,

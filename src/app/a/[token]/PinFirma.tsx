@@ -26,6 +26,8 @@ export interface FirmaPin {
   localitate?: string;
   lat?: number | null;
   lng?: number | null;
+  /** Firma are DEJA un loc pus de om — doar atunci se poate șterge ceva. */
+  arePinPropriu?: boolean;
 }
 
 /** Centrul județelor în care lucrăm, dacă n-avem absolut nimic. */
@@ -52,13 +54,21 @@ export default function PinFirma({
   const [eroare, setEroare] = useState<string | null>(null);
   const [caut, setCaut] = useState(false);
 
+  // Părintele construiește obiectul `firma` la fiecare randare, deci
+  // depinderea de EL ar distruge și ar reface harta din te miri ce (un
+  // toast, un buton apăsat) — chiar sub degetul care trage pinul. Ne legăm
+  // de valori simple, care nu se schimbă degeaba.
+  const cui = firma?.cui ?? "";
+  const latStart = firma?.lat ?? null;
+  const lngStart = firma?.lng ?? null;
+
   useEffect(() => {
-    if (!firma || !cutie.current) return;
+    if (!cui || !cutie.current) return;
     let viu = true;
-    const start: [number, number] =
-      firma.lat != null && firma.lng != null
-        ? [firma.lat, firma.lng]
-        : CENTRU_IMPLICIT;
+    const stiuSatul = latStart != null && lngStart != null;
+    const start: [number, number] = stiuSatul
+      ? [latStart, lngStart]
+      : CENTRU_IMPLICIT;
 
     (async () => {
       const L = (await import("leaflet")).default;
@@ -66,7 +76,7 @@ export default function PinFirma({
       const m = L.map(cutie.current, {
         center: start,
         // Zoom mare: la nivelul ăsta se văd casele, deci se poate nimeri ușa.
-        zoom: firma.lat != null ? 18 : 13,
+        zoom: stiuSatul ? 17 : 12,
         zoomControl: true,
       });
       L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
@@ -95,6 +105,12 @@ export default function PinFirma({
       harta.current = m;
       pin.current = p;
       setPozitie(start);
+      if (!stiuSatul) {
+        setMesaj(null);
+        setEroare(
+          "Nu știu încă unde e satul ăsta pe hartă. Caută magazinul cu degetul (trage harta) și pune pinul pe el.",
+        );
+      }
       // Chenarul are dimensiune abia după ce fereastra s-a deschis.
       setTimeout(() => m.invalidateSize(), 200);
     })();
@@ -108,7 +124,7 @@ export default function PinFirma({
       setMesaj(null);
       setEroare(null);
     };
-  }, [firma]);
+  }, [cui, latStart, lngStart]);
 
   if (!firma) return null;
 
@@ -199,7 +215,10 @@ export default function PinFirma({
     }
   }
 
-  const arePin = firma.lat != null && firma.lng != null;
+  // ATENȚIE: nu „are coordonate de pornire" (alea pot fi centrul satului),
+  // ci „are un loc pus de om" — altfel butonul de ștergere apărea la orice
+  // firmă dintr-un sat geocodat și promitea ceva ce n-avea ce șterge.
+  const arePin = firma.arePinPropriu === true;
 
   return (
     <div className="fixed inset-0 z-[1000] flex items-end justify-center bg-black/50 sm:items-center">
