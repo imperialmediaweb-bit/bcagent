@@ -85,6 +85,8 @@ export async function salveazaZone(
   orgId: string,
   agentName: string,
   gasite: ZonaGasita[],
+  /** Cine a scris-o: agentul însuși sau managerul. Se vede în panou. */
+  pusDe: string,
 ): Promise<void> {
   await db.begin(async (tx) => {
     await tx`
@@ -100,11 +102,12 @@ export async function salveazaZone(
       localitate: g.localitate,
       zi: g.zi,
       pozitie: i,
+      pus_de: pusDe.slice(0, 120),
     }));
     await tx`
-      INSERT INTO agent_zone ${tx(payload, "org_id", "agent_name", "localitate", "zi", "pozitie")}
+      INSERT INTO agent_zone ${tx(payload, "org_id", "agent_name", "localitate", "zi", "pozitie", "pus_de")}
       ON CONFLICT (org_id, agent_name, localitate, zi)
-        DO UPDATE SET pozitie = EXCLUDED.pozitie
+        DO UPDATE SET pozitie = EXCLUDED.pozitie, pus_de = EXCLUDED.pus_de
     `;
   });
 }

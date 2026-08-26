@@ -25,6 +25,19 @@ const ZILE_FRUMOS: Record<string, string> = {
 };
 const ORDINE = ["luni", "marti", "miercuri", "joi", "vineri", "sambata", "duminica", ""];
 
+/** „azi 07:50" / „ieri 18:20" / „24.08, 09:15" — pe scurt, ca pe telefon. */
+function cand(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  const azi = new Date();
+  azi.setHours(0, 0, 0, 0);
+  const ieri = new Date(azi.getTime() - 86_400_000);
+  const ora = d.toLocaleTimeString("ro-RO", { hour: "2-digit", minute: "2-digit" });
+  if (d >= azi) return `azi ${ora}`;
+  if (d >= ieri) return `ieri ${ora}`;
+  return `${d.toLocaleDateString("ro-RO", { day: "2-digit", month: "2-digit" })}, ${ora}`;
+}
+
 interface Gasit {
   zi: string;
   localitate: string;
@@ -48,6 +61,7 @@ export default function ZonePanel({
   const [gasite, setGasite] = useState<Gasit[] | null>(null);
   const [negasite, setNegasite] = useState<Negasit[]>([]);
   const [acum, setAcum] = useState<Array<{ zi: string; localitate: string }>>([]);
+  const [ultima, setUltima] = useState<{ pusDe: string; cand: string } | null>(null);
   const [ocupat, setOcupat] = useState(false);
   const [mesaj, setMesaj] = useState<string | null>(null);
   const [eroare, setEroare] = useState<string | null>(null);
@@ -56,8 +70,12 @@ export default function ZonePanel({
     try {
       const r = await fetch(`/api/routes/zona?token=${encodeURIComponent(token)}`);
       if (!r.ok) return;
-      const d = (await r.json()) as { toate?: Array<{ zi: string; localitate: string }> };
+      const d = (await r.json()) as {
+        toate?: Array<{ zi: string; localitate: string }>;
+        ultima?: { pusDe: string; cand: string } | null;
+      };
       setAcum(d.toate ?? []);
+      setUltima(d.ultima ?? null);
     } catch {
       // fără semnal — reîncercăm la următoarea deschidere
     }
@@ -139,7 +157,16 @@ export default function ZonePanel({
         <div className="mt-4 space-y-4">
           {amZone && (
             <div className="rounded-xl bg-slate-50 p-3">
-              <p className="text-xs font-medium text-slate-500">Ce ai acum</p>
+              <p className="break-words text-xs font-medium leading-snug text-slate-500">
+                Ce ai acum
+                {ultima?.pusDe && (
+                  <>
+                    {" — pusă de "}
+                    <span className="font-semibold text-slate-700">{ultima.pusDe}</span>
+                    {ultima.cand && `, ${cand(ultima.cand)}`}
+                  </>
+                )}
+              </p>
               <ul className="mt-1.5 space-y-1">
                 {peZile(acum).map((g) => (
                   <li key={g.zi} className="break-words text-sm leading-snug">

@@ -103,7 +103,13 @@ export async function POST(req: Request) {
     if (body.verificaDoar) {
       return Response.json({ ok: true, verificare: true, gasite, negasite });
     }
-    await salveazaZone(db, cine.orgId, cine.payload.agentName, gasite);
+    await salveazaZone(
+      db,
+      cine.orgId,
+      cine.payload.agentName,
+      gasite,
+      cine.payload.agentName,
+    );
     return Response.json({ ok: true, salvate: gasite.length, gasite, negasite });
   } catch (e) {
     console.error("[zona agent POST]", e);
@@ -143,16 +149,24 @@ export async function GET(req: Request) {
 
     // TOATĂ săptămâna: agentul își vede zonele ca să le poată corecta,
     // nu doar ziua de azi.
-    const toate = await db<Array<{ zi: string; localitate: string }>>`
-      SELECT zi, localitate FROM agent_zone
+    const toate = await db<
+      Array<{ zi: string; localitate: string; pus_de: string; updated_at: Date }>
+    >`
+      SELECT zi, localitate, pus_de, updated_at FROM agent_zone
       WHERE org_id = ${orgId} AND agent_name = ${payload.agentName}
       ORDER BY pozitie ASC, localitate ASC
     `;
+    // Cine a scris-o ultima dată — ca agentul să vadă dacă i-a schimbat-o
+    // managerul peste noapte, nu s-o descopere pe drum.
+    const ultima = toate.reduce<{ pusDe: string; cand: string } | null>((acc, r) => {
+      const t = r.updated_at?.toISOString() ?? "";
+      return !acc || t > acc.cand ? { pusDe: r.pus_de, cand: t } : acc;
+    }, null);
     // Satele zilei, în ordinea în care au fost scrise (aia e ordinea
     // drumului, nu alfabetul).
     const localitati = toate.filter((z) => z.zi === zi).map((z) => z.localitate);
     if (localitati.length === 0) {
-      return Response.json({ zi, localitati: [], stops: [], alteFirme: 0, toate });
+      return Response.json({ zi, localitati: [], stops: [], alteFirme: 0, toate, ultima });
     }
 
     // CLIENȚII MEI din satele de azi. Potrivim și pe adresă: registrul MF
@@ -205,6 +219,7 @@ export async function GET(req: Request) {
       zi,
       localitati,
       toate,
+      ultima,
       alteFirme: parseInt(alte.n, 10),
       stops: rows.map((r) => ({
         cui: r.cui,

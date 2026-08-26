@@ -358,6 +358,32 @@ async function main() {
       `${(zonaColeg?.zone ?? []).length} rânduri`);
     check("…pe ziua corectă", (zonaColeg?.zone ?? []).every((z) => z.zi === AZI));
 
+    sectiune("Cine a pus zona ultima dată (ca să nu vă suprascrieți orbește)");
+    // Agentul tocmai și-a scris-o singur.
+    const dupaAgent = await zona(tokColeg);
+    const uAgent = (dupaAgent.d as { ultima?: { pusDe: string; cand: string } | null }).ultima;
+    check("după ce își scrie agentul, scrie numele LUI", uAgent?.pusDe === numeColeg, `pusDe=${uAgent?.pusDe}`);
+    check("…și când a pus-o", !!uAgent?.cand && !Number.isNaN(Date.parse(uAgent.cand)), uAgent?.cand);
+
+    // Acum o suprascrie managerul din panoul firmei.
+    await fetch(`${BASE}/api/agentie/zone`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", cookie: ck },
+      body: JSON.stringify({ agent: numeColeg, text: `${AZI} - ${S1}` }),
+    });
+    const dupaSef = await zona(tokColeg);
+    const uSef = (dupaSef.d as { ultima?: { pusDe: string; cand: string } | null }).ultima;
+    check("după ce o schimbă șeful, agentul vede că el a pus-o", uSef?.pusDe === "Bogdan", `pusDe=${uSef?.pusDe}`);
+    check("…și zona chiar e cea a șefului", (dupaSef.d.localitati ?? []).join("") === S1,
+      (dupaSef.d.localitati ?? []).join(","));
+    const sefVede = await fetch(`${BASE}/api/agentie/zone`, { headers: { cookie: ck } });
+    const dSefVede = (await sefVede.json()) as {
+      agenti?: Array<{ nume: string; ultima?: { pusDe: string } | null }>;
+    };
+    check("și în panoul firmei scrie cine a pus-o",
+      (dSefVede.agenti ?? []).find((a) => a.nume === numeColeg)?.ultima?.pusDe === "Bogdan",
+      JSON.stringify((dSefVede.agenti ?? []).find((a) => a.nume === numeColeg)?.ultima));
+
     sectiune("Managerul schimbă zona, agentul o vede schimbată");
     const text2 = `${AZI} - ${S2}`;
     await fetch(`${BASE}/api/agentie/zone`, {

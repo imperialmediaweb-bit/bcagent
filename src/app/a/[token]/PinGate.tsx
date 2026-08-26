@@ -56,7 +56,7 @@ export default function PinGate({
 
   return (
     <main
-      className="flex min-h-screen items-center justify-center px-4 py-12"
+      className="flex min-h-screen items-center justify-center overflow-x-hidden px-3 py-12 sm:px-4"
       style={{
         background: "#f5efe4",
         backgroundImage: "radial-gradient(#16141208 1.1px, transparent 1.1px)",
@@ -66,11 +66,13 @@ export default function PinGate({
     >
       <div className="w-full max-w-sm">
         <div className="mb-8 flex items-center justify-center gap-2.5">
-          <Logo />
+          {/* Iconiță mai mică pe telefon: cu fontul de sistem mărit, sigla
+              întreagă nu încăpea pe 320px. */}
+          <Logo iconSize={36} textClassName="text-xl sm:text-2xl" />
         </div>
 
         <div
-          className="rounded-2xl border-2 border-[#161412] bg-white p-7"
+          className="rounded-2xl border-2 border-[#161412] bg-white p-5 sm:p-7"
           style={{ boxShadow: "6px 6px 0 #161412" }}
         >
           <h1 className="flex items-center gap-2 text-lg font-extrabold text-[#161412]">

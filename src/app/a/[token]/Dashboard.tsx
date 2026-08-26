@@ -1467,7 +1467,8 @@ function Topbar({
           <button
             type="button"
             onClick={onOpenMobileNav}
-            className="rounded-md p-1.5 text-slate-600 hover:bg-slate-100 lg:hidden"
+            // Zonă de deget: 32px se ratează în mașină, cu telefonul în mână.
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-md text-slate-600 hover:bg-slate-100 lg:hidden"
             aria-label="Deschide meniul"
           >
             <Menu className="h-5 w-5" />

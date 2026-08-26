@@ -218,6 +218,10 @@ export async function ensureSchema(): Promise<void> {
     -- Ordinea satelor e ORDINEA DRUMULUI, nu alfabetul: omul le scrie
     -- cum le străbate. Fără ea, ruta zilei trimitea agentul în zigzag.
     ALTER TABLE agent_zone ADD COLUMN IF NOT EXISTS pozitie INT NOT NULL DEFAULT 0;
+    -- Cine a scris-o ultima dată: agentul de pe teren sau managerul din
+    -- panou. Salvarea ÎNLOCUIEȘTE tot, deci fără numele ăsta doi oameni
+    -- se suprascriau fără să afle vreodată.
+    ALTER TABLE agent_zone ADD COLUMN IF NOT EXISTS pus_de TEXT NOT NULL DEFAULT '';
     CREATE INDEX IF NOT EXISTS agent_zone_org ON agent_zone(org_id, agent_name);
     -- Comenzile luate din teren: agentul le bate pe telefon la client,
     -- depozitul le vede instant, contabila le exportă pentru SAGA.

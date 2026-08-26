@@ -69,9 +69,17 @@ export default function Logo({
   variant?: "color" | "dark";
 }) {
   return (
-    <span className="inline-flex items-center gap-3">
-      <LogoIcon size={iconSize} variant={variant} />
-      <LogoWordmark className={textClassName} variant={variant} />
+    // Pe telefon mic cu fontul mărit de sistem, sigla ajungea la 355px pe
+    // un ecran de 320 și ieșea pe amândouă părțile. Acum se micșorează în
+    // loc să iasă: iconița se strânge, iar textul are voie să se rupă.
+    <span className="inline-flex max-w-full shrink items-center gap-2 sm:gap-3">
+      <span className="shrink-0" style={{ maxWidth: iconSize }}>
+        <LogoIcon size={iconSize} variant={variant} />
+      </span>
+      <LogoWordmark
+        className={`min-w-0 break-words ${textClassName}`}
+        variant={variant}
+      />
     </span>
   );
 }

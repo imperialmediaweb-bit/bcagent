@@ -24,6 +24,8 @@ interface ZonaRand {
   agent_name: string;
   localitate: string;
   zi: string;
+  pus_de: string;
+  updated_at: Date;
 }
 
 export async function GET() {
@@ -36,18 +38,25 @@ export async function GET() {
     await ensureSchema();
     const agents = await listOrgAgents(auth.session.orgId);
     const rows = await db<ZonaRand[]>`
-      SELECT agent_name, localitate, zi FROM agent_zone
+      SELECT agent_name, localitate, zi, pus_de, updated_at FROM agent_zone
       WHERE org_id = ${auth.session.orgId}
       ORDER BY agent_name, zi, pozitie, localitate
     `;
     return Response.json({
       zile: ZILE,
-      agenti: agents.map((a) => ({
-        nume: a.name,
-        zone: rows
-          .filter((r) => r.agent_name === a.name)
-          .map((r) => ({ localitate: r.localitate, zi: r.zi })),
-      })),
+      agenti: agents.map((a) => {
+        const ale = rows.filter((r) => r.agent_name === a.name);
+        // Cine a scris-o ultima dată: agentul de pe teren sau managerul.
+        const ultima = ale.reduce<{ pusDe: string; cand: string } | null>((acc, r) => {
+          const t = r.updated_at?.toISOString() ?? "";
+          return !acc || t > acc.cand ? { pusDe: r.pus_de, cand: t } : acc;
+        }, null);
+        return {
+          nume: a.name,
+          ultima,
+          zone: ale.map((r) => ({ localitate: r.localitate, zi: r.zi })),
+        };
+      }),
     });
   } catch (e) {
     console.error("[zone GET]", e);
@@ -91,7 +100,13 @@ export async function POST(req: Request) {
       return Response.json({ ok: true, verificare: true, gasite, negasite });
     }
 
-    await salveazaZone(db, auth.session.orgId, agent, gasite);
+    await salveazaZone(
+      db,
+      auth.session.orgId,
+      agent,
+      gasite,
+      auth.session.name || auth.session.email || "managerul firmei",
+    );
 
     return Response.json({ ok: true, salvate: gasite.length, gasite, negasite });
   } catch (e) {

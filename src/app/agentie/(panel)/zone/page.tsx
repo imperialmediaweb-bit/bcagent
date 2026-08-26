@@ -20,6 +20,8 @@ interface ZonaLinie {
 interface AgentZone {
   nume: string;
   zone: ZonaLinie[];
+  /** Cine i-a scris zona ultima dată — agentul sau managerul. */
+  ultima?: { pusDe: string; cand: string } | null;
 }
 interface Verificare {
   gasite: Array<{ zi: string; localitate: string; scris: string }>;
@@ -38,6 +40,19 @@ const ETICHETA_ZI: Record<string, string> = {
   duminica: "Duminică",
 };
 const ORDINE = ["luni", "marti", "miercuri", "joi", "vineri", "sambata", "duminica", ""];
+
+/** „azi 07:50" / „ieri 18:20" / „24.08, 09:15" — scurt, ca într-un chat. */
+function cand(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  const azi = new Date();
+  azi.setHours(0, 0, 0, 0);
+  const ieri = new Date(azi.getTime() - 86_400_000);
+  const ora = d.toLocaleTimeString("ro-RO", { hour: "2-digit", minute: "2-digit" });
+  if (d >= azi) return `azi ${ora}`;
+  if (d >= ieri) return `ieri ${ora}`;
+  return `${d.toLocaleDateString("ro-RO", { day: "2-digit", month: "2-digit" })}, ${ora}`;
+}
 
 export default function ZonePage() {
   const [agenti, setAgenti] = useState<AgentZone[]>([]);
@@ -83,7 +98,9 @@ export default function ZonePage() {
     }
   }
 
-  const zonaAlesului = agenti.find((a) => a.nume === ales)?.zone ?? [];
+  const alesul = agenti.find((a) => a.nume === ales);
+  const zonaAlesului = alesul?.zone ?? [];
+  const ultima = alesul?.ultima ?? null;
   const peZi = ORDINE.map((zi) => ({
     zi,
     localitati: zonaAlesului.filter((z) => z.zi === zi).map((z) => z.localitate),
@@ -121,6 +138,17 @@ export default function ZonePage() {
             </option>
           ))}
         </select>
+
+        {/* CINE A SCRIS-O ULTIMA DATĂ: salvarea înlocuiește tot, deci fără
+            rândul ăsta managerul și agentul se suprascriau fără să afle. */}
+        {ultima?.pusDe && (
+          <p className="mt-3 rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-600">
+            Zona lui a fost pusă ultima dată de{" "}
+            <span className="font-semibold text-slate-800">{ultima.pusDe}</span>
+            {ultima.cand && `, ${cand(ultima.cand)}`}. Dacă salvezi acum, o
+            înlocuiești pe a lui.
+          </p>
+        )}
 
         <label className="mt-4 block text-xs font-medium text-slate-500">
           Zona lui, pe zile (lipește textul din WhatsApp)

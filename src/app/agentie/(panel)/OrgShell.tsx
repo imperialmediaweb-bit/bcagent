@@ -104,15 +104,17 @@ export default function OrgShell({
 
   return (
     <div className="paperbg min-h-screen">
-      <header className="sticky top-0 z-30 flex items-center justify-between border-b border-slate-800 bg-slate-900 px-4 py-3 lg:hidden">
-        <div className="flex items-center gap-2">
-          <Logo iconSize={26} textClassName="text-sm" variant="dark" />
-          <span className="rounded-full bg-[#ffd23f] px-1.5 py-0.5 text-[9px] font-black uppercase tracking-wider text-[#161412]">beta</span>
+      {/* Pe 320px cu fontul mărit, sigla + „beta" împingeau butonul de meniu
+          afară din ecran. Sigla se strânge, butonul rămâne întreg. */}
+      <header className="sticky top-0 z-30 flex items-center justify-between gap-2 overflow-hidden border-b border-slate-800 bg-slate-900 px-3 py-2 sm:px-4 sm:py-3 lg:hidden">
+        <div className="flex min-w-0 items-center gap-2">
+          <Logo iconSize={24} textClassName="text-sm" variant="dark" />
+          <span className="hidden shrink-0 rounded-full bg-[#ffd23f] px-1.5 py-0.5 text-[9px] font-black uppercase tracking-wider text-[#161412] sm:inline">beta</span>
         </div>
         <button
           type="button"
           onClick={() => setOpen((v) => !v)}
-          className="rounded-lg p-2 text-slate-300 hover:bg-white/10"
+          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-slate-300 hover:bg-white/10"
           aria-label="Meniu"
         >
           {open ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
