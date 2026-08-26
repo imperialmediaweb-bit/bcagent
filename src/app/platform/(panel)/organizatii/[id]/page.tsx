@@ -198,6 +198,7 @@ export default function OrgDetailPage() {
             limit={org.agentLimit}
             onChanged={load}
           />
+          <HartaCard orgId={id} />
         </div>
 
         <div className="space-y-4">
@@ -987,6 +988,105 @@ function AiUsageCard({
             ))}
           </ul>
         </>
+      )}
+    </Card>
+  );
+}
+
+/**
+ * ADU LOCAȚIILE DIN HARTA FIRMEI, de la locul potrivit.
+ *
+ * Alternativa era să intri în contul personal al clientului: i-ar sări
+ * alerta de „dispozitiv nou", i-ar apărea în jurnal ca făcut de EL, iar
+ * dacă iese ceva strâmb nu s-ar mai ști cine a apăsat. Aici rămâne scris:
+ * adminul platformei, pentru firma asta.
+ */
+function HartaCard({ orgId }: { orgId: string }) {
+  const [link, setLink] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<string | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+
+  async function ruleaza(anuleaza: boolean) {
+    if (anuleaza && !confirm("Șterg locurile aduse din hartă. Cele puse de agenți din teren rămân. Continui?")) {
+      return;
+    }
+    setBusy(true);
+    setErr(null);
+    setMsg(null);
+    try {
+      const d = await api<{
+        scrise?: number;
+        sterse?: number;
+        totalPuncte?: number;
+        nesigure?: number;
+        faraLocPeHarta?: number;
+      }>(`/api/platform/orgs/${orgId}/harta`, {
+        method: "POST",
+        body: JSON.stringify(anuleaza ? { anuleaza: true } : { link }),
+      });
+      setMsg(
+        anuleaza
+          ? `Am șters ${d.sterse ?? 0} locuri aduse din hartă. Ce au pus agenții a rămas.`
+          : `Am pus locul la ${d.scrise ?? 0} magazine, din ${d.totalPuncte ?? 0} câte are harta.` +
+            (d.nesigure ? ` ${d.nesigure} n-au fost sigure — le pun agenții din teren.` : "") +
+            (d.faraLocPeHarta
+              ? ` ${d.faraLocPeHarta} firme erau în hartă fără coordonate.`
+              : ""),
+      );
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Card>
+      <h2 className="text-sm font-semibold text-slate-800">
+        Adu locațiile din harta lor
+      </h2>
+      <p className="mt-1 break-words text-xs leading-snug text-slate-500">
+        Dacă firma are o hartă Google My Maps cu magazinele puse de mână, le
+        aducem aici. De atunci agenții navighează pe coordonate exacte.
+      </p>
+      <input
+        value={link}
+        onChange={(e) => setLink(e.target.value)}
+        placeholder="https://www.google.com/maps/d/viewer?mid=..."
+        className="mt-2 block w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-indigo-400 focus:outline-none"
+      />
+      <div className="mt-2 flex flex-wrap gap-2">
+        <button
+          type="button"
+          onClick={() => ruleaza(false)}
+          disabled={busy || !link.trim()}
+          className="min-h-11 rounded-lg bg-emerald-600 px-3 py-2 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-50"
+        >
+          {busy ? "Lucrez..." : "Adu locațiile"}
+        </button>
+        <button
+          type="button"
+          onClick={() => ruleaza(true)}
+          disabled={busy}
+          className="min-h-11 rounded-lg border border-slate-200 px-3 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50 disabled:opacity-50"
+        >
+          Anulează ce am adus
+        </button>
+      </div>
+      <p className="mt-2 break-words text-xs leading-snug text-slate-500">
+        Se scriu doar potrivirile sigure. Ce au pus agenții din teren nu se
+        atinge, iar tot ce aduce importul se poate șterge cu „Anulează".
+      </p>
+      {msg && (
+        <p className="mt-2 break-words text-xs font-medium leading-snug text-emerald-700">
+          ✓ {msg}
+        </p>
+      )}
+      {err && (
+        <p className="mt-2 break-words text-xs font-medium leading-snug text-rose-600">
+          {err}
+        </p>
       )}
     </Card>
   );
