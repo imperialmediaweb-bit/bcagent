@@ -46,20 +46,25 @@ export async function GET() {
         COUNT(*) FILTER (WHERE status = 'client'
           AND updated_at >= NOW() - INTERVAL '30 days')::text AS noi30
       FROM prospects
-      WHERE ${alAgentiei(db, auth.session.orgId, agentNames)}
+      -- ȘI cei nedistribuiți: pagina „Clienți" îi arată, deci cifra de pe
+      -- tablou trebuie să-i numere. Altfel tabloul zice 214 și lista 220,
+      -- iar omul nu știe pe care s-o creadă.
+      WHERE ${alAgentiei(db, auth.session.orgId, [...agentNames, ""])}
     `;
 
-    const [dueCount] = await db<[{ n: string }]>`
-      SELECT COUNT(*)::text AS n FROM (
-        SELECT p.cui FROM prospects p
-        LEFT JOIN visits v ON v.cui = p.cui
-        WHERE p.status = 'client'
-          AND ${alAgentiei(db, auth.session.orgId, agentNames)}
-        GROUP BY p.cui
-        HAVING MAX(v.visited_at) IS NULL
-            OR MAX(v.visited_at) < NOW() - INTERVAL '7 days'
-      ) t
-    `;
+    // ACEEAȘI SOCOTEALĂ CA PE TELEFONUL AGENTULUI.
+    // Era scrisă de două ori, în două locuri: agentul vedea 23 de opriri,
+    // patronul vedea 9, și amândoi aveau dreptate. Acum e una singură, iar
+    // o oprire e un MAGAZIN, nu o firmă.
+    const { opririScadente } = await import("@/modules/crm/opriri");
+    const dueOpriri = await opririScadente(
+      db,
+      auth.session.orgId,
+      // Și clienții nedistribuiți: apar în lista de „Clienți", deci
+      // trebuie să apară și în cifră.
+      [...agentNames, ""],
+      100000,
+    );
 
     // Rezultatele vizitelor pe ultimele 30 de zile (funnel de teren).
     const resultRows = await db<Array<{ result: string; n: string }>>`
@@ -116,7 +121,7 @@ export async function GET() {
         contactati: parseInt(clientStats.contactati, 10),
         noi30: parseInt(clientStats.noi30, 10),
       },
-      due: parseInt(dueCount.n, 10),
+      due: dueOpriri.length,
       results30: Object.fromEntries(
         resultRows.map((r) => [r.result, parseInt(r.n, 10)]),
       ),

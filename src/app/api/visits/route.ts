@@ -71,133 +71,17 @@ export async function GET(req: Request) {
     // rămâneau nevizitate. Firmele fără magazine cunoscute rămân o
     // singură oprire, ca până acum.
     if (due) {
-      const clienti = await db<
-        Array<{
-          cui: string;
-          denumire: string;
-          adresa: string;
-          localitate: string;
-          judet: string;
-          telefon: string;
-          last_visit: Date | null;
-        }>
-      >`
-        SELECT p.cui, p.denumire, COALESCE(p.adresa,'') AS adresa,
-               COALESCE(p.localitate,'') AS localitate, COALESCE(p.judet,'') AS judet,
-               COALESCE(p.telefon,'') AS telefon,
-               MAX(v.visited_at) AS last_visit
-        FROM prospects p
-        -- Doar vizitele scrise pe FIRMĂ, nu pe un magazin anume: altfel o
-        -- vizită la un magazin ar stinge din nou firma întreagă.
-        LEFT JOIN visits v ON v.cui = p.cui AND COALESCE(v.magazin_id,'') = ''
-        WHERE p.status = 'client'
-          AND (p.assigned_agent = ${payload.agentName} OR p.assigned_agent = '')
-        GROUP BY p.cui, p.denumire, p.adresa, p.localitate, p.judet, p.telefon
-      `;
-
-      // Magazinele clienților ăstora, fiecare cu ultima vizită a LUI.
       const { orgIdForAgent } = await import("@/lib/org-scope");
       const orgId = await orgIdForAgent(payload.agentId);
-      const cuiuri = clienti.map((c) => c.cui);
-      interface MagazinScadent {
-        id: string;
-        cui: string;
-        nume: string;
-        adresa: string;
-        localitate: string;
-        judet: string;
-        telefon: string;
-        lat: number;
-        lng: number;
-        last_visit: Date | null;
-      }
-      const magazine: MagazinScadent[] =
-        orgId && cuiuri.length > 0
-          ? await db<MagazinScadent[]>`
-              SELECT m.id, m.cui, m.nume, COALESCE(m.adresa,'') AS adresa,
-                     COALESCE(m.localitate,'') AS localitate,
-                     COALESCE(m.judet,'') AS judet,
-                     COALESCE(m.telefon,'') AS telefon, m.lat, m.lng,
-                     MAX(v.visited_at) AS last_visit
-              FROM magazin_harta m
-              LEFT JOIN visits v ON v.magazin_id = m.id
-              WHERE m.org_id = ${orgId}
-                AND m.cui = ANY(${cuiuri})
-                -- Magazinul tăiat de un coleg pe teren nu mai e o oprire.
-                AND m.stare <> 'inchis'
-                -- Standurile lui (SIS) nu-s opriri de vânzare.
-                AND m.fel <> 'sis'
-              GROUP BY m.id, m.cui, m.nume, m.adresa, m.localitate, m.judet,
-                       m.telefon, m.lat, m.lng
-            `
-          : [];
-      const peFirma = new Map<string, MagazinScadent[]>();
-      for (const m of magazine) {
-        const l = peFirma.get(m.cui);
-        if (l) l.push(m);
-        else peFirma.set(m.cui, [m]);
-      }
-
-      interface Oprire {
-        cui: string;
-        magazinId: string;
-        denumire: string;
-        adresa: string;
-        localitate: string;
-        judet: string;
-        telefon: string;
-        lat: number | null;
-        lng: number | null;
-        lastVisit: Date | null;
-      }
-      const opriri: Oprire[] = [];
-      for (const c of clienti) {
-        const ale = peFirma.get(c.cui);
-        if (ale && ale.length > 0) {
-          for (const m of ale) {
-            opriri.push({
-              cui: c.cui,
-              magazinId: m.id,
-              // Numele magazinului, ca agentul să știe LA CARE se duce:
-              // „OVI-TACOMAX · Cernești", nu de șase ori „OVI-TACOMAX".
-              denumire:
-                m.nume && m.nume !== c.denumire
-                  ? `${c.denumire} · ${m.nume}`
-                  : c.denumire,
-              adresa: m.adresa || c.adresa,
-              localitate: m.localitate || c.localitate,
-              judet: m.judet || c.judet,
-              telefon: m.telefon || c.telefon,
-              lat: m.lat,
-              lng: m.lng,
-              lastVisit: m.last_visit,
-            });
-          }
-        } else {
-          opriri.push({
-            cui: c.cui,
-            magazinId: "",
-            denumire: c.denumire,
-            adresa: c.adresa,
-            localitate: c.localitate,
-            judet: c.judet,
-            telefon: c.telefon,
-            lat: null,
-            lng: null,
-            lastVisit: c.last_visit,
-          });
-        }
-      }
-      const acumSapte = Date.now() - 7 * 24 * 3600 * 1000;
-      const scadente = opriri
-        .filter((o) => o.lastVisit === null || o.lastVisit.getTime() < acumSapte)
-        .sort((a, b) => {
-          const ta = a.lastVisit ? a.lastVisit.getTime() : -1;
-          const tb = b.lastVisit ? b.lastVisit.getTime() : -1;
-          return ta - tb;
-        })
-        .slice(0, limit);
-
+      const { opririScadente } = await import("@/modules/crm/opriri");
+      // Aceeași socoteală ca pe tabloul șefului — un singur loc, ca să nu
+      // vadă amândoi altceva și să aibă amândoi dreptate.
+      const scadente = await opririScadente(
+        db,
+        orgId,
+        [payload.agentName, ""],
+        limit,
+      );
       return Response.json({
         due: scadente.map((o) => ({
           cui: o.cui,

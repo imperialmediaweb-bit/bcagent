@@ -719,6 +719,79 @@ async function main() {
     );
   }
 
+  /* ═══════════════════════════════════════════════════════════════════
+     14. TELEFONUL ȘI TABLOUL ȘEFULUI SPUN ACELAȘI LUCRU.
+     Cel mai rău fel de a greși: două cifre diferite pentru același lucru,
+     și amândouă „corecte". Agentul vede 23 de opriri, patronul vede 9,
+     iar discuția dintre ei nu se mai poate încheia.
+     ═══════════════════════════════════════════════════════════════════ */
+  console.log("\n══ 14. Aceleași cifre pe telefon și la șef ══");
+  {
+    // Un client cu trei magazine (unul vizitat) + un client nedistribuit.
+    await db!`DELETE FROM visits WHERE agent_id LIKE 'test-log-%'`;
+    await db!`
+      INSERT INTO prospects (cui, denumire, judet, status, assigned_agent, assigned_org)
+      VALUES (${CUI_A}, 'OVI-TACOMAX SRL', 'BT', 'client', ${NUME_A2}, ${ORG_A})
+      ON CONFLICT (cui) DO UPDATE SET status = 'client',
+        assigned_agent = ${NUME_A2}, assigned_org = ${ORG_A},
+        activ = TRUE, inchis_teren = FALSE
+    `;
+    for (const [i, id] of MAG.entries()) {
+      await db!`
+        INSERT INTO magazin_harta (id, org_id, nume, lat, lng, cui, fel, stare)
+        VALUES (${id}, ${ORG_A}, ${`Magazinul ${i + 1}`},
+                ${47.9 + i * 0.01}, ${26.5 + i * 0.01}, ${CUI_A}, 'magazin', '')
+        ON CONFLICT (id) DO UPDATE SET org_id = ${ORG_A}, cui = ${CUI_A},
+          stare = '', fel = 'magazin'
+      `;
+    }
+    // Un client pe care nu l-a luat încă niciun agent.
+    await db!`
+      INSERT INTO prospects (cui, denumire, judet, status, assigned_agent, assigned_org)
+      VALUES (${CUI_B}, 'CLIENT NEDISTRIBUIT SRL', 'BT', 'client', '', '')
+      ON CONFLICT (cui) DO UPDATE SET status = 'client', assigned_agent = '',
+        assigned_org = '', activ = TRUE, inchis_teren = FALSE
+    `;
+
+    const peTelefon = await scadente(AG_A2);
+    const laSef = await tabloulSefului();
+    ok(
+      "telefonul numără magazine, nu firme (trei opriri pentru o firmă)",
+      peTelefon.filter((o) => o.cui === CUI_A).length === 3,
+      `pentru Ovi Tacomax: ${peTelefon.filter((o) => o.cui === CUI_A).length}`,
+    );
+    ok(
+      "și clientul nedistribuit e și el o oprire",
+      peTelefon.some((o) => o.cui === CUI_B),
+      JSON.stringify(peTelefon.map((o) => o.cui)),
+    );
+    ok(
+      "iar tabloul șefului spune EXACT aceeași cifră",
+      laSef.due === peTelefon.length,
+      `șef: ${laSef.due}, telefon: ${peTelefon.length}`,
+    );
+    ok(
+      "și numără și clientul nedistribuit la «clienți»",
+      laSef.clienti >= 2,
+      `clienți: ${laSef.clienti}`,
+    );
+
+    // O vizită la un magazin scade cifra cu UNU la amândoi, nu cu trei.
+    await vizitaLaMagazin(AG_A2, CUI_A, MAG[0]);
+    const telefon2 = await scadente(AG_A2);
+    const sef2 = await tabloulSefului();
+    ok(
+      "o vizită la un magazin scade cifra cu UNU pe telefon",
+      telefon2.length === peTelefon.length - 1,
+      `${peTelefon.length} → ${telefon2.length}`,
+    );
+    ok(
+      "și tot cu unu la șef — nu cu trei",
+      sef2.due === telefon2.length,
+      `șef: ${sef2.due}, telefon: ${telefon2.length}`,
+    );
+  }
+
   console.log("\n══ Curățenie ══");
   await curata();
   console.log("  · datele de test șterse");
@@ -955,6 +1028,32 @@ async function redeschide(cui: string): Promise<number> {
     body: JSON.stringify({ cui, redeschide: true }),
   });
   return res.status;
+}
+
+
+/** Vizita la un magazin anume, prin API-ul adevărat. */
+async function vizitaLaMagazin(agentId: string, cui: string, magazinId: string) {
+  const t = await tokenPentru(agentId);
+  const { POST } = await import("../src/app/api/visits/route");
+  await POST(
+    new Request("http://x/api/visits", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ token: t, cui, magazinId, result: "client", note: "" }),
+    }),
+  );
+}
+
+/** Cifrele de pe tabloul managerului, prin API-ul lui. */
+async function tabloulSefului(): Promise<{ due: number; clienti: number }> {
+  const res = await fetch(`${BASE}/api/agentie/overview`, {
+    headers: { cookie: await cookieFirmei() },
+  });
+  const d = (await res.json()) as {
+    due?: number;
+    clients?: { total?: number };
+  };
+  return { due: d.due ?? -1, clienti: d.clients?.total ?? -1 };
 }
 
 function numePentru(agentId: string): string {
