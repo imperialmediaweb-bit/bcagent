@@ -1390,7 +1390,7 @@ function Sidebar({
           <button
             type="button"
             onClick={onCloseMobile}
-            className="rounded-md p-1 text-slate-500 hover:bg-slate-100 lg:hidden"
+            className="inline-flex min-h-9 min-w-9 items-center justify-center rounded-md p-1 text-slate-500 hover:bg-slate-100 lg:hidden"
             aria-label="Închide meniul"
           >
             <X className="h-5 w-5" />

@@ -1438,7 +1438,7 @@ export default function MapPanel({
                     href={e.url}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1.5 rounded-md bg-indigo-600 px-3 py-1.5 text-xs font-medium text-white shadow-sm hover:bg-indigo-700"
+                    className="inline-flex min-h-9 items-center gap-1.5 rounded-md bg-indigo-600 px-3 py-2 text-xs font-medium text-white shadow-sm hover:bg-indigo-700"
                   >
                     <Navigation className="h-3.5 w-3.5" />
                     {all.length > 1
@@ -1449,7 +1449,7 @@ export default function MapPanel({
                 <button
                   type="button"
                   onClick={() => setShowSave(true)}
-                  className="inline-flex items-center gap-1.5 rounded-md border border-indigo-200 bg-white px-3 py-1.5 text-xs font-medium text-indigo-700 hover:bg-indigo-50"
+                  className="inline-flex min-h-9 items-center gap-1.5 rounded-md border border-indigo-200 bg-white px-3 py-2 text-xs font-medium text-indigo-700 hover:bg-indigo-50"
                 >
                   <Save className="h-3.5 w-3.5" />
                   Salvează
@@ -1460,7 +1460,7 @@ export default function MapPanel({
                     setBasket([]);
                     setActiveRouteId(null);
                   }}
-                  className="inline-flex items-center gap-1 rounded-md px-2 py-1.5 text-xs text-slate-500 hover:text-rose-600"
+                  className="inline-flex min-h-9 items-center gap-1 rounded-md px-2 py-2 text-xs text-slate-500 hover:text-rose-600"
                 >
                   <X className="h-3.5 w-3.5" />
                   Golește
@@ -1521,7 +1521,7 @@ export default function MapPanel({
                 setActiveRouteId(null);
                 showToast("Ruta săptămânii pregătită ✓");
               }}
-              className="inline-flex items-center gap-1.5 rounded-md bg-rose-600 px-3 py-1.5 text-xs font-medium text-white shadow-sm hover:bg-rose-700"
+              className="inline-flex min-h-9 items-center gap-1.5 rounded-md bg-rose-600 px-3 py-2 text-xs font-medium text-white shadow-sm hover:bg-rose-700"
             >
               <RouteIcon className="h-3.5 w-3.5" />
               Fă-mi ruta din ei
@@ -2003,7 +2003,7 @@ function LocalityFirms({
               <button
                 type="button"
                 onClick={() => onAddStops(aiMeiDeAdaugat)}
-                className="mt-1.5 rounded-lg bg-indigo-600 px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-indigo-700"
+                className="mt-1.5 min-h-9 rounded-lg bg-indigo-600 px-2.5 py-2 text-xs font-semibold text-white hover:bg-indigo-700"
               >
                 ➕ Clienții mei de aici în rută ({aiMeiDeAdaugat.length})
               </button>
