@@ -271,44 +271,28 @@ export async function POST(req: Request) {
       );
     }
 
-    // CU CINE POTRIVIM. Întâi clienții firmei — ei contează cel mai mult.
-    // Dar harta veche are magazine din tot județul, iar multe sunt firme
-    // din registru la care agenții încă n-au ajuns. Și alea merită locul
-    // lor: când agentul dă peste ele în prospectare, îl duce la ușă, nu în
-    // centrul satului. Unde stă un magazin e un FAPT, nu o informație
-    // comercială — la fel ca pinul pus din teren cu „Sunt aici".
-    const clienti = await db<ClientRand[]>`
-      SELECT p.cui, p.denumire, COALESCE(p.localitate, '') AS localitate
-      FROM prospects p
-      JOIN org_agents oa ON oa.name = p.assigned_agent
-      WHERE oa.org_id = ${auth.session.orgId}
-      LIMIT 20000
-    `;
-    // Doar în județele în care lucrează firma — nu potrivim cu toată țara.
-    const judete = (
-      await db<Array<{ judet: string }>>`
-        SELECT DISTINCT p.judet FROM prospects p
-        JOIN org_agents oa ON oa.name = p.assigned_agent
-        WHERE oa.org_id = ${auth.session.orgId} AND COALESCE(p.judet, '') <> ''
-      `
-    ).map((r) => r.judet);
-    // Firmele NEALOCATE care încă n-au loc pe hartă. Cele care au deja un
-    // pin nu se ating: acolo a fost cineva pe teren, iar ce a pus omul bate
-    // orice import.
-    const dinRegistru =
-      judete.length === 0
-        ? []
-        : await db<ClientRand[]>`
-            SELECT p.cui, p.denumire, COALESCE(p.localitate, '') AS localitate
-            FROM prospects p
-            WHERE p.judet = ANY(${judete})
-              AND COALESCE(p.assigned_agent, '') = ''
-              AND p.activ IS DISTINCT FROM FALSE
-              AND NOT EXISTS (SELECT 1 FROM geo_firme g WHERE g.cui = p.cui)
-            LIMIT 60000
-          `;
-    const deLegat = [...clienti, ...dinRegistru];
-    if (deLegat.length === 0) {
+    // CINE ESTE agentia, ca sa nu scriem pe firmele altcuiva.
+    const { listOrgAgents: listAg } = await import("@/modules/platform");
+    const numeleAgentilor = (await listAg(auth.session.orgId)).map((a) => a.name);
+    const { aplicaHarta } = await import("@/modules/prospects/harta-aplica");
+
+    // TOATĂ TREABA STĂ ÎNTR-UN SINGUR LOC (modules/prospects/harta-aplica).
+    // Înainte era copiată aici și în panoul adminului de platformă, iar de
+    // fiecare dată când reparam ceva reparam doar una din ele — de-aia
+    // panoul de admin n-a primit niciodată nici potrivirea pe CUI, nici
+    // adresa cu număr. Ruta întreabă cine ești și cheamă funcția, atât.
+    //
+    // „Vreau să văd întâi lista" cheamă exact aceeași funcție, dar cu
+    // `doarVezi`: nu scrie nimic. Așa ce vede omul e chiar ce se va
+    // întâmpla, nu o socoteală făcută altfel.
+    const r = await aplicaHarta(
+      db,
+      auth.session.orgId,
+      numeleAgentilor,
+      puncte,
+      body.verificaDoar === true,
+    );
+    if (r.totalClienti === 0 && r.totalDinRegistru === 0) {
       return Response.json(
         {
           error:
@@ -317,163 +301,34 @@ export async function POST(req: Request) {
         { status: 422 },
       );
     }
-
-    // Centrele satelor: cu ele, două firme cu același nume din sate
-    // diferite nu se mai confundă — decide distanța până la pin.
-    const centreRanduri = await db<
-      Array<{ localitate: string; lat: number; lng: number }>
-    >`
-      SELECT localitate, lat, lng FROM geo_localitati
-      WHERE lat IS NOT NULL AND lng IS NOT NULL
-      LIMIT 20000
-    `;
-    const { neted } = await import("@/modules/prospects/potrivire");
-    const centre = new Map(
-      centreRanduri.map((c) => [neted(c.localitate), { lat: c.lat, lng: c.lng }]),
+    const cuiuriClienti = new Set(
+      (
+        await db<Array<{ cui: string }>>`
+          SELECT p.cui FROM prospects p
+          JOIN org_agents oa ON oa.name = p.assigned_agent
+          WHERE oa.org_id = ${auth.session.orgId} LIMIT 20000
+        `
+      ).map((c) => c.cui),
     );
+    const gasite = r.potriviri.filter((p) => p.client !== null);
+    const nepotrivite = r.potriviri.filter((p) => p.client === null);
 
-    const cuiuriClienti = new Set(clienti.map((c) => c.cui));
-    const potriviri = potriveștePuncte(puncte, deLegat, 0.7, centre);
-    const gasite = potriviri.filter((p) => p.client !== null);
-    const nepotrivite = potriviri.filter((p) => p.client === null);
-
-    // ── „FĂ TOT SINGUR" ──
-    // Nimeni nu se uită la 2450 de rânduri. Scriem singuri potrivirile
-    // SIGURE (nume identic sau identic fără forma juridică — pe harta
-    // reală, zero greșeli din astea) și-i arătăm doar ce a rămas nesigur.
-    // Se poate da înapoi oricând, cu un buton: locurile aduse din hartă
-    // sunt marcate, cele puse de agenți nu se ating.
     if (body.automat === true) {
-      const { listOrgAgents } = await import("@/modules/platform");
-      const numeAg = (await listOrgAgents(auth.session.orgId)).map((a) => a.name);
-      const sigure = potriviri.filter((p) => p.client && p.scor >= 0.9);
-      let scrise = 0;
-
-      // ADRESA CU NUMĂR, din pin.
-      // Pinurile lui Bogdan au un tabel întreg: Cod Fiscal, Adresa („STR
-      // PRINCIPALA 183A"), Localitate, Județ. Adresa AIA are număr de
-      // casă — registrul Finanțelor n-are, iar fișierul de la BAT scrie
-      // „STR. PRINCIPALA" la toate cele 269. Fix asta îi trebuia lui
-      // Costin. O punem pe coloana de livrare, fără să atingem sediul.
-      const cuAdresa = sigure
-        .map((g) => ({
-          cui: g.client!.cui,
-          adresa: String((g.punct as { adresa?: string }).adresa ?? "").trim().slice(0, 300),
-          localitate: String((g.punct as { localitate?: string }).localitate ?? "").trim().slice(0, 120),
-        }))
-        .filter((r) => r.adresa !== "" || r.localitate !== "");
-      let adreseScrise = 0;
-      if (cuAdresa.length > 0) {
-        const r = await db`
-          UPDATE prospects p
-          SET adresa_livrare = CASE
-                WHEN u.adresa <> '' THEN u.adresa ELSE p.adresa_livrare
-              END,
-              localitate_livrare = CASE
-                WHEN u.localitate <> '' THEN u.localitate ELSE p.localitate_livrare
-              END,
-              updated_at = NOW()
-          FROM jsonb_to_recordset(${db.json(
-            cuAdresa as unknown as Parameters<typeof db.json>[0],
-          )}) AS u(cui TEXT, adresa TEXT, localitate TEXT)
-          WHERE p.cui = u.cui
-            AND (COALESCE(p.assigned_agent, '') = ''
-                 OR p.assigned_agent = ANY(${numeAg.length ? numeAg : [""]}))
-        `;
-        adreseScrise = r.count;
-      }
-
-      for (const g of sigure) {
-        const r = await db`
-          INSERT INTO geo_firme (cui, lat, lng, aprox, failed, sursa)
-          SELECT p.cui, ${g.punct.lat}, ${g.punct.lng}, FALSE, FALSE, 'import'
-          FROM prospects p
-          WHERE p.cui = ${g.client!.cui}
-            AND (COALESCE(p.assigned_agent, '') = ''
-                 OR p.assigned_agent = ANY(${numeAg.length ? numeAg : [""]}))
-            AND NOT EXISTS (
-              SELECT 1 FROM geo_firme gf
-              WHERE gf.cui = p.cui AND gf.sursa IN ('deget', 'gps')
-            )
-          ON CONFLICT (cui) DO UPDATE
-            SET lat = EXCLUDED.lat, lng = EXCLUDED.lng,
-                aprox = FALSE, failed = FALSE, sursa = 'import',
-                updated_at = NOW()
-        `;
-        if (r.count > 0) scrise++;
-      }
-      // MAGAZINELE FĂRĂ PERECHE nu se aruncă: sunt magazine ADEVĂRATE, cu
-      // locul pus de mână de cineva care a fost acolo — exact ce caută
-      // agentul când prospectează. Le ținem deoparte, ale firmei ăsteia,
-      // și apar pe harta agenților ei. Fără CUI n-au ce căuta în registrul
-      // comun, unde le-ar vedea toate agențiile.
-      const orfane = potriviri.filter((p) => !p.client);
-      let magazineSalvate = 0;
-      if (orfane.length > 0) {
-        const randuri = orfane.slice(0, 20000).map((p) => ({
-        // Identificator stabil, din NUME + coordonate. Doar din coordonate
-        // nu merge: pe harta reală mai multe magazine stau exact în același
-        // punct (puse la centrul satului), iar Postgres refuză două rânduri
-        // cu același id în aceeași scriere.
-        id: `${auth.session.orgId}:${cheieMagazin(p.punct.nume, p.punct.lat, p.punct.lng)}`,
-        org_id: auth.session.orgId,
-        nume: p.punct.nume.slice(0, 200),
-        adresa: (p.punct.descriere ?? "").slice(0, 300),
-        localitate: "",
-        judet: "",
-        lat: p.punct.lat,
-        lng: p.punct.lng,
-        strat: ((p.punct as { strat?: string }).strat ?? "").slice(0, 120),
-      }));
-      // Aceeași hartă poate avea două însemnări identice: le păstrăm o dată.
-      const unice = Array.from(new Map(randuri.map((r) => [r.id, r])).values());
-        for (let i = 0; i < unice.length; i += 500) {
-          const bucata = unice.slice(i, i + 500);
-          const r = await db`
-            INSERT INTO magazin_harta ${db(
-              bucata,
-              "id", "org_id", "nume", "adresa", "localitate", "judet",
-              "lat", "lng", "strat",
-            )}
-            ON CONFLICT (id) DO UPDATE
-              SET nume = EXCLUDED.nume, lat = EXCLUDED.lat, lng = EXCLUDED.lng,
-                  adresa = EXCLUDED.adresa, strat = EXCLUDED.strat
-          `;
-          magazineSalvate += r.count;
-        }
-      }
-      // Câți dintre CLIENȚII firmei au acum locul exact — cifra care
-      // contează pentru manager, nu „câte pinuri am citit".
-      const [acoperire] = await db<[{ cu_loc: string }]>`
-        SELECT COUNT(*)::text AS cu_loc
-        FROM prospects p
-        JOIN org_agents oa ON oa.name = p.assigned_agent
-        JOIN geo_firme g ON g.cui = p.cui
-        WHERE oa.org_id = ${auth.session.orgId}
-      `;
-      const deVazut = potriviri.filter((p) => !p.client || p.scor < 0.9);
-      // CÂTE PINURI AVEAU CUI SCRIS ÎN ELE. Cifra asta spune dacă harta e
-      // una „cu tabel" (atunci potrivirea e exactă) sau una cu nume goale
-      // (atunci ghicim după nume, ca înainte). Omul trebuie s-o vadă.
-      const cuCui = puncte.filter(
-        (p) => String((p as { cui?: string }).cui ?? "").replace(/\D/g, "") !== "",
-      ).length;
-      const cuNumar = puncte.filter((p) =>
-        /\d/.test(String((p as { adresa?: string }).adresa ?? "")),
-      ).length;
-
+      const deVazut = r.potriviri.filter((p) => !p.client || p.scor < 0.9);
       return Response.json({
         ok: true,
         automat: true,
-        scrise,
-        pinuriCuCui: cuCui,
-        adreseCuNumar: cuNumar,
-        adreseScrise,
-        clientiCuLoc: parseInt(acoperire.cu_loc, 10),
-        magazineSalvate,
+        scrise: r.scrise,
+        legate: r.legate,
+        neatinse: r.neatinse,
+        adreseScrise: r.adreseScrise,
+        pinuriCuCui: r.pinuriCuCui,
+        adreseCuNumar: r.adreseCuNumar,
+        clientiCuLoc: r.clientiCuLoc,
+        magazineSalvate: r.magazineSalvate,
         totalPuncte: puncte.length,
-        totalClienti: clienti.length,
-        totalDinRegistru: dinRegistru.length,
+        totalClienti: r.totalClienti,
+        totalDinRegistru: r.totalDinRegistru,
         sarite: {
           faraLocPeHarta: raport.faraLocPeHarta,
           inafara: raport.inafara,
@@ -488,8 +343,8 @@ export async function POST(req: Request) {
       ok: true,
       verificare: true,
       totalPuncte: puncte.length,
-      totalClienti: clienti.length,
-      totalDinRegistru: dinRegistru.length,
+      totalClienti: r.totalClienti,
+      totalDinRegistru: r.totalDinRegistru,
       // Ce n-a intrat și DE CE — ca omul să nu creadă că le-a luat pe toate
       // și să caute pe hartă magazine care n-au fost niciodată puse acolo.
       sarite: {

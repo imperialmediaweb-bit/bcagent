@@ -37,6 +37,11 @@ interface Automat {
   totalDinRegistru?: number;
   clientiCuLoc?: number;
   magazineSalvate?: number;
+  /** Câte pinuri aveau CUI scris în ele — cifra care spune dacă harta
+      e „cu tabel" (potrivire exactă) sau doar cu nume (ghicit). */
+  pinuriCuCui?: number;
+  adreseCuNumar?: number;
+  adreseScrise?: number;
   sarite?: { faraLocPeHarta: number; inafara: number; liniiSiZone: number };
   nepotrivite: Rand[];
 }
@@ -338,6 +343,37 @@ export default function HartaImportPage() {
               exact pe hartă.
             </p>
           )}
+          {/* CE ERA ÎN PINURI. Fără rândul ăsta nu se poate ști de ce a
+              ieșit cât a ieșit — dacă harta are CUI-uri, potrivirea e
+              exactă; dacă nu, se ghicește după nume, ca înainte. */}
+          <p className="mt-2 break-words rounded-lg bg-slate-50 p-3 text-xs leading-snug text-slate-700">
+            Ce era scris în pinuri:{" "}
+            {gata.pinuriCuCui === undefined ? (
+              <span className="text-slate-500">(harta veche, fără tabel)</span>
+            ) : gata.pinuriCuCui > 0 ? (
+              <>
+                <b className="text-emerald-700">{gata.pinuriCuCui}</b> pinuri au
+                CUI-ul scris în ele — pe alea nu le-am ghicit după nume, le-am
+                legat exact.
+              </>
+            ) : (
+              <>
+                <b>niciun pin n-are CUI</b>. Harta asta are doar nume pe pinuri,
+                deci potrivirea se face după nume, cum se poate.
+              </>
+            )}
+            {(gata.adreseCuNumar ?? 0) > 0 && (
+              <>
+                {" "}
+                Și <b className="text-emerald-700">{gata.adreseCuNumar}</b> pinuri
+                aveau adresa cu număr de casă
+                {(gata.adreseScrise ?? 0) > 0 && (
+                  <> — am pus-o la {gata.adreseScrise} firme, de acolo navighează agenții</>
+                )}
+                .
+              </>
+            )}
+          </p>
           <p className="mt-1 break-words text-xs leading-snug text-slate-500">
             Agenții le văd la următoarea deschidere a hărții. „Navighează" îi
             duce acum la ușă, nu în centrul satului.
