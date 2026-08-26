@@ -25,6 +25,7 @@ import {
   countyName,
 } from "@/modules/prospects";
 import OrderModal from "./OrderModal";
+import PinFirma from "./PinFirma";
 import MicButton from "./MicButton";
 import { navAddress, planRoute } from "@/lib/route-nav";
 
@@ -1059,6 +1060,9 @@ export default function MapPanel({
                 token={token}
                 judet={judet}
                 localitate={selectedLoc}
+                centru={
+                  localities.find((l) => l.localitate === selectedLoc) ?? null
+                }
                 caenParam={caenParam}
                 inBasket={inBasket}
                 agentName={agentName}
@@ -1416,6 +1420,7 @@ function LocalityFirms({
   token,
   judet,
   localitate,
+  centru,
   caenParam,
   inBasket,
   agentName,
@@ -1428,6 +1433,9 @@ function LocalityFirms({
   token: string;
   judet: string;
   localitate: string;
+  /** Centrul satului: fereastra de „pune locul" pornește de acolo, nu din
+   *  mijlocul județului — altfel agentul caută satul cu degetul. */
+  centru: { lat: number | null; lng: number | null } | null;
   caenParam: string;
   inBasket: Set<string>;
   agentName: string;
@@ -1443,6 +1451,63 @@ function LocalityFirms({
   const [visitFor, setVisitFor] = useState<Firm | null>(null);
   const [orderFor, setOrderFor] = useState<Firm | null>(null);
   const [briefFor, setBriefFor] = useState<Firm | null>(null);
+  // Firma căreia îi punem locul exact pe hartă (pin tras cu degetul).
+  const [pinFor, setPinFor] = useState<Firm | null>(null);
+  // Pinurile puse acum, ca rândul să arate „📍 loc exact" fără reîncărcare.
+  const [pinuriNoi, setPinuriNoi] = useState<Record<string, boolean>>({});
+  // Firma pentru care tocmai cerem poziția telefonului („Sunt aici").
+  const [ceruta, setCeruta] = useState<string | null>(null);
+
+  /**
+   * „SUNT AICI" — cel mai scurt drum către un pin exact: agentul e în fața
+   * magazinului, apasă o dată, gata. Fără hartă, fără tras cu degetul.
+   * Dacă telefonul nu știe destul de bine unde e, îi spunem pe românește
+   * și-l trimitem la varianta cu degetul — nu salvăm o poziție proastă.
+   */
+  function suntAici(f: Firm) {
+    if (!navigator.geolocation) {
+      showToast(
+        "Telefonul nu-mi dă poziția. Apasă „Pune locul” și trage pinul cu degetul.",
+      );
+      return;
+    }
+    setCeruta(f.cui);
+    navigator.geolocation.getCurrentPosition(
+      async (poz) => {
+        const { latitude, longitude, accuracy } = poz.coords;
+        try {
+          const r = await fetch("/api/prospects/pin", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              token,
+              cui: f.cui,
+              lat: latitude,
+              lng: longitude,
+              sursa: "gps",
+              acc: accuracy,
+            }),
+          });
+          const d = (await r.json()) as { error?: string };
+          if (!r.ok) {
+            showToast(d.error ?? "N-am putut salva locul.");
+            return;
+          }
+          setPinuriNoi((p) => ({ ...p, [f.cui]: true }));
+          showToast(`Loc salvat (±${Math.round(accuracy)} m) — navigația te duce fix aici.`);
+        } catch {
+          showToast("Fără semnal — încearcă din nou când prinzi rețea.");
+        } finally {
+          setCeruta(null);
+        }
+      },
+      () => {
+        setCeruta(null);
+        showToast("Nu-mi dai voie la locație. Dă-i voie din setările telefonului.");
+      },
+      { enableHighAccuracy: true, timeout: 12_000, maximumAge: 0 },
+    );
+  }
 
   useEffect(() => {
     let cancelled = false;
@@ -1703,6 +1768,28 @@ function LocalityFirms({
                   >
                     📋 Fișă
                   </button>
+                  {/* LOCUL EXACT: registrul dă sediul social, geocodarea dă
+                      centrul satului. Agentul trage pinul pe magazin o
+                      singură dată și navigația îl duce la ușă de-atunci. */}
+                  <button
+                    type="button"
+                    onClick={() => setPinFor(f)}
+                    className="inline-flex items-center gap-1 rounded-md bg-rose-50 px-2 py-1 text-xs font-medium text-rose-700 hover:bg-rose-100"
+                    title="Pune locul exact al magazinului pe hartă"
+                  >
+                    📍 {pinuriNoi[f.cui] ? "Loc pus" : "Pune locul"}
+                  </button>
+                  {/* Cel mai scurt drum: agentul e CHIAR în fața magazinului
+                      și apasă o dată. Un pin exact, fără hartă, fără tras. */}
+                  <button
+                    type="button"
+                    onClick={() => suntAici(f)}
+                    disabled={ceruta === f.cui}
+                    className="inline-flex items-center gap-1 rounded-md bg-rose-600 px-2 py-1 text-xs font-semibold text-white hover:bg-rose-700 disabled:opacity-60"
+                    title="Salvează locul magazinului din poziția telefonului"
+                  >
+                    🎯 {ceruta === f.cui ? "Te caut…" : "Sunt aici"}
+                  </button>
                 </div>
                 {visitFor?.cui === f.cui && (
                   <VisitButtons
@@ -1723,6 +1810,23 @@ function LocalityFirms({
         onSent={showToast}
       />
       <BriefModal token={token} firm={briefFor} onClose={() => setBriefFor(null)} />
+      <PinFirma
+        token={token}
+        firma={
+          pinFor
+            ? { ...pinFor, lat: centru?.lat ?? null, lng: centru?.lng ?? null }
+            : null
+        }
+        onClose={() => setPinFor(null)}
+        onSalvat={(cui, lat) => {
+          setPinuriNoi((p) => ({ ...p, [cui]: lat !== null }));
+          showToast(
+            lat !== null
+              ? "Locul magazinului e salvat — de acum navigația te duce fix acolo."
+              : "Am șters locul pus. Firma revine în centrul satului.",
+          );
+        }}
+      />
     </div>
   );
 }
