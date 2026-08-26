@@ -2,6 +2,7 @@ import { verifyFieldToken } from "@/lib/agent-guard";
 import { ensureSchema, getDB, isDBEnabled } from "@/lib/db";
 import { clientIP, rateLimit } from "@/lib/rate-limit";
 import { countyName } from "@/modules/prospects";
+import { variantePentruGeocodare } from "@/modules/prospects/localitati";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -17,25 +18,12 @@ const GEOCODE_PER_REQUEST = 8;
 const NOMINATIM_DELAY_MS = 1100;
 const USER_AGENT = "bcagent-saas/1.0 (platforma distributie; contact via repo)";
 
-/** Prefixele administrative din datele MF strică geocodarea — le tăiem. */
-function cleanLocality(loc: string): string {
-  return loc
-    .replace(/^(MUN\.|MUNICIPIUL|ORS\.|OR\.|ORAS |ORAȘ |COM\.|COMUNA |SAT )\s*/i, "")
-    .replace(/\s+/g, " ")
-    .trim();
-}
-
-/**
- * Întoarce coordonate, `null` = Nominatim a răspuns dar nu a găsit locul
- * (se marchează failed, nu mai încercăm), sau ARUNCĂ la erori de rețea /
- * rate-limit (nu se marchează nimic — se reîncearcă la următoarea cerere).
- */
-async function geocode(
-  localitate: string,
-  judet: string,
+/** O singură întrebare pusă hărții. */
+async function intreabaHarta(
+  nume: string,
+  county: string,
 ): Promise<{ lat: number; lng: number } | null> {
-  const county = countyName(judet) || judet;
-  const q = `${cleanLocality(localitate)}, ${county}, Romania`;
+  const q = `${nume}, ${county}, Romania`;
   const url = `https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&countrycodes=ro&q=${encodeURIComponent(q)}`;
   const res = await fetch(url, {
     headers: { "User-Agent": USER_AGENT, "Accept-Language": "ro" },
@@ -48,6 +36,32 @@ async function geocode(
   const lng = parseFloat(data[0].lon);
   if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
   return { lat, lng };
+}
+
+/**
+ * Întoarce coordonate, `null` = harta chiar nu știe satul (am încercat
+ * TOATE variantele numelui), sau ARUNCĂ la erori de rețea / rate-limit
+ * (nu se marchează nimic — se reîncearcă la următoarea cerere).
+ *
+ * Registrul scrie „PĂLTINIȘ CENTRU", harta știe „Păltiniș" — cu o singură
+ * întrebare, satul rămânea fără poziție și dispărea de pe hartă cu tot cu
+ * clienții agentului. Acum întrebăm pe rând, de la exact la general.
+ */
+async function geocode(
+  localitate: string,
+  judet: string,
+): Promise<{ lat: number; lng: number } | null> {
+  const county = countyName(judet) || judet;
+  const variante = variantePentruGeocodare(localitate);
+  for (let i = 0; i < variante.length; i++) {
+    const gasit = await intreabaHarta(variante[i], county);
+    if (gasit) return gasit;
+    // Nominatim cere o secundă între întrebări; ultima n-are după ce aștepta.
+    if (i < variante.length - 1) {
+      await new Promise((r) => setTimeout(r, NOMINATIM_DELAY_MS));
+    }
+  }
+  return null;
 }
 
 interface LocalityRow {
@@ -132,6 +146,40 @@ export async function GET(req: Request) {
       LIMIT 300
     `;
 
+    // PLASA DE SIGURANȚĂ, ÎNAINTE DE A ÎNTREBA HARTA: dacă în satul ăsta
+    // agenții au pus deja pini pe magazine, satul are o poziție bună —
+    // chiar mai bună decât ce ne-ar da geocodarea. O folosim și pentru
+    // satele pe care harta nu le știe deloc („Păltiniș Centru"), ca să nu
+    // mai dispară de pe ecran cu tot cu clienții din ele.
+    const faraPozitie = rows.filter((r) => r.lat === null).map((r) => r.localitate);
+    if (faraPozitie.length > 0) {
+      const dinPini = await db<
+        Array<{ localitate: string; lat: number; lng: number }>
+      >`
+        SELECT p.localitate, AVG(g.lat)::float8 AS lat, AVG(g.lng)::float8 AS lng
+        FROM prospects p
+        JOIN geo_firme g ON g.cui = p.cui
+        WHERE p.judet = ${judet}
+          AND p.localitate = ANY(${faraPozitie})
+          AND g.aprox = FALSE
+        GROUP BY p.localitate
+      `;
+      for (const d of dinPini) {
+        const r = rows.find((x) => x.localitate === d.localitate);
+        if (!r) continue;
+        r.lat = d.lat;
+        r.lng = d.lng;
+        r.failed = false;
+        await db`
+          INSERT INTO geo_localitati (judet, localitate, lat, lng, failed)
+          VALUES (${judet}, ${d.localitate}, ${d.lat}, ${d.lng}, FALSE)
+          ON CONFLICT (judet, localitate) DO UPDATE SET
+            lat = EXCLUDED.lat, lng = EXCLUDED.lng,
+            failed = FALSE, updated_at = NOW()
+        `;
+      }
+    }
+
     // Geocodăm câteva localități lipsă (cele mai mari întâi).
     const missing = rows.filter((r) => r.lat === null && r.failed !== true);
     let geocoded = 0;
@@ -169,6 +217,16 @@ export async function GET(req: Request) {
     const pendingGeocode = rows.filter(
       (r) => r.lat === null && r.failed !== true,
     ).length;
+    // Satele pe care harta nu le știe DELOC: până acum dispăreau în tăcere,
+    // cu tot cu clienții agentului. Le spunem pe nume, ca agentul să le
+    // poată deschide din listă și să pună el locul magazinelor.
+    const faraLoc = rows
+      .filter((r) => r.lat === null && r.failed === true)
+      .map((r) => ({
+        localitate: r.localitate,
+        count: parseInt(r.count, 10),
+        clienti: parseInt(r.clienti, 10),
+      }));
 
     return Response.json({
       judet,
@@ -182,6 +240,7 @@ export async function GET(req: Request) {
       })),
       pendingGeocode,
       geocoded,
+      faraLoc,
     });
   } catch (e) {
     console.error("[prospects geo]", e);

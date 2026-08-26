@@ -70,3 +70,23 @@ body {
   font-size: 0.85em;
 }
 .prose-ai a { color: rgb(79 70 229); text-decoration: underline; }
+
+/* „EȘTI AICI" — eticheta agentului de pe hartă. Stă permanent lipită de
+   punctul lui albastru: pe telefon nu există hover, deci un tooltip
+   obișnuit nu s-ar vedea niciodată, iar punctul rămânea un cerculeț fără
+   nume printre bulele satelor. */
+.leaflet-tooltip.eu-sunt-aici {
+  background: #2563eb;
+  border: 2px solid #ffffff;
+  border-radius: 9999px;
+  box-shadow: 0 2px 8px rgb(0 0 0 / 0.35);
+  color: #ffffff;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  padding: 2px 8px;
+  white-space: nowrap;
+}
+.leaflet-tooltip.eu-sunt-aici::before {
+  border-top-color: #2563eb;
+}

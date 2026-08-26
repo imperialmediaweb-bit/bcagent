@@ -26,6 +26,102 @@ export interface NavStop {
 
 import { countyName, normalizeCounty } from "@/modules/prospects";
 
+/**
+ * ADRESA DIN REGISTRU, CURĂȚATĂ PENTRU GOOGLE.
+ *
+ * Finanțele scriu adresa în ordinea lor, cu prescurtări și cu județul în
+ * față: „JUD. BOTOȘANI, ORȘ. DARABANI, STR. CUCULUI, NR.6". Trimisă așa,
+ * Google nu leagă numărul de stradă, nu știe „ORȘ." și lasă pinul la
+ * întâmplare, la zeci de kilometri:
+ *
+ *   „exemplu la clientul Andronache, dacă dau navigare mă lasă rece"
+ *   (Costin Vlad, 26.08)
+ *
+ * Aici o rescriem cum o înțelege orice hartă: „Strada Cucului 6". Județul
+ * și localitatea le adaugă `navAddress`, o singură dată, la sfârșit —
+ * unde le așteaptă Google.
+ */
+/** „CUCULUI" → „Cucului". Cifrele și prescurtările scurte rămân cum sunt. */
+function caLumea(text: string): string {
+  return text
+    .split(" ")
+    .map((c) =>
+      /\d/.test(c) || c.length <= 2
+        ? c
+        : c.charAt(0).toUpperCase() + c.slice(1).toLowerCase(),
+    )
+    .join(" ");
+}
+
+export function adresaCurataPentruNavigatie(adresa: string): string {
+  const brut = String(adresa ?? "").replace(/\s+/g, " ").trim();
+  if (brut === "") return "";
+
+  let strada = "";
+  let numar = "";
+  const altele: string[] = [];
+
+  for (const bucataBruta of brut.split(",")) {
+    const b = bucataBruta.trim();
+    if (b === "") continue;
+    // Județul și localitatea se adaugă separat, în formă curată — aici
+    // ar veni de două ori și încurcă.
+    if (/^JUD\.?\s|^JUDETUL\s|^JUDEȚUL\s/i.test(b)) continue;
+    if (/^(MUN|ORS|ORȘ|OR|COM|SAT|LOC)\.?\s/i.test(b)) continue;
+    // Blocul, scara, etajul, apartamentul: Google nu le geocodează, dar
+    // ÎL ÎNCURCĂ. Clădirea se găsește din stradă + număr.
+    if (/^(BL|SC|ET|AP|CAM|BIROU|TR)\.?\s*\S*$/i.test(b)) continue;
+
+    const peStrada = b.match(
+      /^(STR|STRADA|B-?DUL|BD|BULEVARDUL|CALEA|ALEEA|ALEA|SOS|ȘOS|SOSEAUA|ȘOSEAUA|PIATA|PIAȚA|SPLAIUL|INTRAREA|DRUMUL)\.?\s+(.+)$/i,
+    );
+    if (peStrada) {
+      const tip = /^(B-?DUL|BD|BULEVARDUL)$/i.test(peStrada[1])
+        ? "Bulevardul"
+        : /^(SOS|ȘOS|SOSEAUA|ȘOSEAUA)$/i.test(peStrada[1])
+          ? "Șoseaua"
+          : /^(PIATA|PIAȚA)$/i.test(peStrada[1])
+            ? "Piața"
+            : /^(CALEA)$/i.test(peStrada[1])
+              ? "Calea"
+              : /^(ALEEA|ALEA)$/i.test(peStrada[1])
+                ? "Aleea"
+                : /^(INTRAREA)$/i.test(peStrada[1])
+                  ? "Intrarea"
+                  : /^(DRUMUL)$/i.test(peStrada[1])
+                    ? "Drumul"
+                    : /^(SPLAIUL)$/i.test(peStrada[1])
+                      ? "Splaiul"
+                      : "Strada";
+      // „STR. CUCULUI NR.6" — numărul poate sta chiar în bucata străzii.
+      const cuNumar = peStrada[2].match(/^(.*?)[\s,]*NR\.?\s*(.+)$/i);
+      if (cuNumar) {
+        strada = `${tip} ${caLumea(cuNumar[1].trim())}`;
+        numar = numar || cuNumar[2].trim().replace(/[.,;]+$/, "");
+      } else {
+        strada = `${tip} ${caLumea(peStrada[2].trim())}`;
+      }
+      continue;
+    }
+
+    const peNumar = b.match(/^(NR|NUMAR|NUMĂRUL)\.?\s*(.+)$/i);
+    if (peNumar) {
+      numar = numar || peNumar[2].trim().replace(/[.,;]+$/, "");
+      continue;
+    }
+    altele.push(b);
+  }
+
+  if (strada !== "") {
+    return numar !== "" ? `${strada} ${numar}` : strada;
+  }
+  // Adresă fără stradă recunoscută („Sat Coșna nr. 12"): păstrăm ce a mai
+  // rămas, dar tot lipim numărul, ca să nu rămână rătăcit.
+  const rest = caLumea(altele.join(", "));
+  if (rest !== "" && numar !== "") return `${rest} ${numar}`;
+  return rest || (numar !== "" ? `nr. ${numar}` : "");
+}
+
 /** Adresa completă, așa cum o înțelege Google Maps. Numele județului vine
  *  din lista COMPLETĂ (toate cele 42), nu dintr-o copie parțială — altfel
  *  agentul din Timiș/Constanța ar fi navigat greșit. Acceptăm și cod, și
@@ -37,10 +133,11 @@ export function navAddress(
   // Fără NUMĂR în adresă (satele din registru, des), Google ar duce în
   // centrul satului — atunci căutăm firma pe NUME + sat, ca să găsească
   // magazinul real.
-  const areNumar = /\d/.test(f.adresa || "");
+  const curata = adresaCurataPentruNavigatie(f.adresa || "");
+  const areNumar = /\d/.test(curata);
   return [
     !areNumar && f.denumire ? f.denumire : "",
-    f.adresa,
+    curata,
     f.localitate,
     judetNume,
     "Romania",

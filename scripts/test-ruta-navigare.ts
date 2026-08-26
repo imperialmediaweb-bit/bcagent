@@ -55,8 +55,13 @@ check(
   decodat,
 );
 check(
-  "clientul fără poziție pleacă cu adresa, FĂRĂ numele firmei",
-  decodat.includes("SAT HILISEU-CLOSCA") && !decodat.includes("MIHAI CEZICA"),
+  "clientul fără poziție pleacă cu satul lui, FĂRĂ numele firmei",
+  decodat.includes("HILISEU-CLOSCA") && !decodat.includes("MIHAI CEZICA"),
+  decodat,
+);
+check(
+  "…si satul nu se scrie de doua ori (adresa SAT X plus localitatea X)",
+  (decodat.match(/HILISEU-CLOSCA/g) ?? []).length === 1,
   decodat,
 );
 check("adresa are județul și țara (dezambiguizare sate omonime)", decodat.includes("Suceava") && decodat.includes("Romania"));
@@ -124,8 +129,15 @@ check(
   p25.etape.every((e) => e.url !== "" && e.stops.length > 0),
 );
 check(
+  // Verificăm pe IDENTITATE, nu pe textul adresei: altfel aserțiunea se
+  // rupe de fiecare dată când mai curățăm o formă de adresă din registru.
   "prima etapă chiar începe cu prima oprire navigabilă (nu sare 10)",
-  decodeURIComponent(p25.etape[0].url).includes("Str. 0 nr. 2"),
+  p25.etape[0].stops[0]?.cui === "40",
+  `începe cu ${p25.etape[0].stops[0]?.cui}`,
+);
+check(
+  "…iar în link chiar apare strada ei",
+  decodeURIComponent(p25.etape[0].url).includes("Strada 0 2"),
   decodeURIComponent(p25.etape[0].url).slice(0, 120),
 );
 

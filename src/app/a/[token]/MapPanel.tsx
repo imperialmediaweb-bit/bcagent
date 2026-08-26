@@ -212,6 +212,11 @@ export default function MapPanel({
   const [visitsToday, setVisitsToday] = useState(0);
   const [dueClients, setDueClients] = useState<DueClient[]>([]);
   const [toast, setToast] = useState<string | null>(null);
+  // Satele pe care OpenStreetMap nu le știe („Păltiniș Centru"). Până acum
+  // dispăreau în tăcere de pe hartă, cu tot cu clienții agentului din ele.
+  const [faraLoc, setFaraLoc] = useState<
+    Array<{ localitate: string; count: number; clienti: number }>
+  >([]);
   // CUI-urile bifate azi („Am fost") — o rută lungă se continuă a doua zi
   // exact de unde a rămas, fără opririle deja făcute.
   const [doneToday, setDoneToday] = useState<string[]>([]);
@@ -390,6 +395,8 @@ export default function MapPanel({
       return (await res.json()) as {
         localities: Locality[];
         pendingGeocode: number;
+        /** Satele pe care harta nu le știe — nu le ascundem, le spunem. */
+        faraLoc?: Array<{ localitate: string; count: number; clienti: number }>;
       };
     },
     [token, judet, caenParam],
@@ -466,6 +473,7 @@ export default function MapPanel({
         let data = await loadGeo(false);
         if (cancelled) return;
         setLocalities(data.localities);
+        setFaraLoc(data.faraLoc ?? []);
         setLoading(false);
         setGeocoding(data.pendingGeocode);
 
@@ -475,6 +483,7 @@ export default function MapPanel({
           data = await loadGeo(true);
           if (cancelled) return;
           setLocalities(data.localities);
+          setFaraLoc(data.faraLoc ?? []);
           setGeocoding(data.pendingGeocode);
           if (data.pendingGeocode >= prevPending) break;
           prevPending = data.pendingGeocode;
@@ -720,13 +729,22 @@ export default function MapPanel({
           weight: 1,
         }).addTo(layer);
         const eu = L.circleMarker([euSunt.lat, euSunt.lng], {
-          radius: 8,
+          radius: 11,
           color: "#ffffff",
           fillColor: "#2563eb",
           fillOpacity: 1,
-          weight: 3,
+          weight: 4,
         });
-        eu.bindTooltip("Ești aici", { direction: "top" });
+        // Eticheta stă PERMANENT lipită de punct. Înainte era tooltip pe
+        // hover — iar pe telefon nu există hover, deci punctul lui rămânea
+        // un cerculeț fără nume printre bulele satelor: „nu mă găsesc nici
+        // pe mine" (Costin Vlad, 26.08).
+        eu.bindTooltip("🙋 EȘTI AICI", {
+          direction: "top",
+          permanent: true,
+          className: "eu-sunt-aici",
+          offset: [0, -8],
+        });
         eu.addTo(layer);
         eu.bringToFront();
       }
@@ -1005,8 +1023,13 @@ export default function MapPanel({
                   // După desenare (redesenarea rulează imediat), ca să nu
                   // fie suprascris de încadrarea automată.
                   setTimeout(
-                    () => leafletRef.current?.map.setView([p.lat, p.lng], 14),
+                    () => leafletRef.current?.map.setView([p.lat, p.lng], 16),
                     60,
+                  );
+                  showToast(
+                    p.acc <= 60
+                      ? `Te-am găsit — ești punctul albastru „EȘTI AICI" (±${Math.round(p.acc)} m).`
+                      : `Te-am găsit, dar cam aproximativ (±${Math.round(p.acc)} m). Ieși din magazin și apasă din nou.`,
                   );
                 },
                 () => {
@@ -1360,6 +1383,39 @@ export default function MapPanel({
       )}
 
       {/* Pete albe */}
+      {faraLoc.length > 0 && (
+        <div className="card border-sky-200 bg-sky-50/60 p-4">
+          <h4 className="flex items-center gap-2 break-words text-sm font-semibold leading-snug text-slate-800">
+            🧭 Sate pe care harta nu le știe ({faraLoc.length})
+          </h4>
+          <p className="mt-1 break-words text-xs leading-snug text-slate-600">
+            OpenStreetMap n-are numele lor, deci n-au bulă. Firmele TALE de
+            acolo sunt aici — deschide satul, apoi pune locul fiecărui
+            magazin cu „📍 Pune locul". De atunci satul apare pe hartă.
+          </p>
+          <ul className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+            {faraLoc.map((l) => (
+              <li key={l.localitate}>
+                <button
+                  type="button"
+                  onClick={() => openLocality(l.localitate)}
+                  className="min-h-11 w-full rounded-lg border border-sky-200 bg-white px-3 py-2 text-left transition hover:bg-sky-50"
+                >
+                  <p className="flex items-center justify-between gap-1 break-words text-sm font-medium leading-snug text-slate-800">
+                    {l.localitate}
+                    <ChevronRight className="h-4 w-4 shrink-0 text-sky-500" />
+                  </p>
+                  <p className="break-words text-xs leading-snug text-slate-600">
+                    {fmt(l.count)} firme
+                    {l.clienti > 0 && ` · ${fmt(l.clienti)} clienți de-ai tăi`}
+                  </p>
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
       <div className="card p-4">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <h4 className="flex items-center gap-2 text-sm font-semibold text-slate-800">
@@ -1744,8 +1800,18 @@ function LocalityFirms({
                       {f.telefon}
                     </a>
                   )}
+                  {/* NAVIGAREA: dacă firma are locul ei pe hartă (pus de
+                      agent sau învățat la vizită), mergem pe COORDONATE —
+                      exact, fără ca Google să mai ghicească din adresă.
+                      Fără pin, trimitem adresa curățată de prescurtările
+                      Finanțelor („JUD. …, ORȘ. …, STR. …, NR.6"), care o
+                      duceau la zeci de kilometri. */}
                   <a
-                    href={gmapsDir(navAddress(f))}
+                    href={gmapsDir(
+                      f.pinLat != null && f.pinLng != null
+                        ? `${f.pinLat},${f.pinLng}`
+                        : navAddress(f),
+                    )}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="inline-flex items-center gap-1 rounded-md bg-slate-100 px-2 py-1 text-xs text-slate-700 hover:bg-slate-200"
