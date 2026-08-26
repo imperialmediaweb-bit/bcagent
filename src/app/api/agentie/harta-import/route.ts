@@ -348,6 +348,41 @@ export async function POST(req: Request) {
       const numeAg = (await listOrgAgents(auth.session.orgId)).map((a) => a.name);
       const sigure = potriviri.filter((p) => p.client && p.scor >= 0.9);
       let scrise = 0;
+
+      // ADRESA CU NUMĂR, din pin.
+      // Pinurile lui Bogdan au un tabel întreg: Cod Fiscal, Adresa („STR
+      // PRINCIPALA 183A"), Localitate, Județ. Adresa AIA are număr de
+      // casă — registrul Finanțelor n-are, iar fișierul de la BAT scrie
+      // „STR. PRINCIPALA" la toate cele 269. Fix asta îi trebuia lui
+      // Costin. O punem pe coloana de livrare, fără să atingem sediul.
+      const cuAdresa = sigure
+        .map((g) => ({
+          cui: g.client!.cui,
+          adresa: String((g.punct as { adresa?: string }).adresa ?? "").trim().slice(0, 300),
+          localitate: String((g.punct as { localitate?: string }).localitate ?? "").trim().slice(0, 120),
+        }))
+        .filter((r) => r.adresa !== "" || r.localitate !== "");
+      let adreseScrise = 0;
+      if (cuAdresa.length > 0) {
+        const r = await db`
+          UPDATE prospects p
+          SET adresa_livrare = CASE
+                WHEN u.adresa <> '' THEN u.adresa ELSE p.adresa_livrare
+              END,
+              localitate_livrare = CASE
+                WHEN u.localitate <> '' THEN u.localitate ELSE p.localitate_livrare
+              END,
+              updated_at = NOW()
+          FROM jsonb_to_recordset(${db.json(
+            cuAdresa as unknown as Parameters<typeof db.json>[0],
+          )}) AS u(cui TEXT, adresa TEXT, localitate TEXT)
+          WHERE p.cui = u.cui
+            AND (COALESCE(p.assigned_agent, '') = ''
+                 OR p.assigned_agent = ANY(${numeAg.length ? numeAg : [""]}))
+        `;
+        adreseScrise = r.count;
+      }
+
       for (const g of sigure) {
         const r = await db`
           INSERT INTO geo_firme (cui, lat, lng, aprox, failed, sursa)
@@ -417,10 +452,23 @@ export async function POST(req: Request) {
         WHERE oa.org_id = ${auth.session.orgId}
       `;
       const deVazut = potriviri.filter((p) => !p.client || p.scor < 0.9);
+      // CÂTE PINURI AVEAU CUI SCRIS ÎN ELE. Cifra asta spune dacă harta e
+      // una „cu tabel" (atunci potrivirea e exactă) sau una cu nume goale
+      // (atunci ghicim după nume, ca înainte). Omul trebuie s-o vadă.
+      const cuCui = puncte.filter(
+        (p) => String((p as { cui?: string }).cui ?? "").replace(/\D/g, "") !== "",
+      ).length;
+      const cuNumar = puncte.filter((p) =>
+        /\d/.test(String((p as { adresa?: string }).adresa ?? "")),
+      ).length;
+
       return Response.json({
         ok: true,
         automat: true,
         scrise,
+        pinuriCuCui: cuCui,
+        adreseCuNumar: cuNumar,
+        adreseScrise,
         clientiCuLoc: parseInt(acoperire.cu_loc, 10),
         magazineSalvate,
         totalPuncte: puncte.length,

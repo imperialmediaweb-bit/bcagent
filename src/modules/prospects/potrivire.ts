@@ -65,6 +65,15 @@ export interface PunctDePotrivit {
   descriere?: string;
   lat: number;
   lng: number;
+  /**
+   * CUI-ul scris chiar în pin, când harta îl are.
+   *
+   * Harta lui Bogdan îl are: fiecare pin are un tabel cu Nume Outlet,
+   * Nume Legal, Tip Outlet, COD FISCAL, Adresa cu număr. Noi potriveam
+   * după nume și ghiceam — când răspunsul era scris acolo. Cu CUI-ul nu
+   * se mai ghicește nimic: ori e firma aia, ori nu e nimeni.
+   */
+  cui?: string;
 }
 
 export interface Potrivire {
@@ -122,6 +131,12 @@ export function potriveștePuncte(
     cheie: cheie(c.denumire),
     loc: neted(c.localitate),
   }));
+  // CUI-ul e cheia adevărată. Numele se scrie în zece feluri; CUI-ul, nu.
+  const dupaCui = new Map<string, ClientDePotrivit>();
+  for (const c of clienti) {
+    const k = String(c.cui ?? "").replace(/\D/g, "");
+    if (k !== "" && !dupaCui.has(k)) dupaCui.set(k, c);
+  }
   // Un client nu poate primi DOUĂ pinuri: primul care-l prinde sigur îl ia.
   const luati = new Set<string>();
   const rezultat: Potrivire[] = [];
@@ -129,6 +144,23 @@ export function potriveștePuncte(
   // Două treceri: întâi potrivirile sigure (ca ele să-și rezerve clientul),
   // apoi restul. Altfel un pin slab putea fura clientul unuia exact.
   const calcul = puncte.map((p) => {
+    // ── CUI SCRIS ÎN PIN: nu mai ghicim ──
+    // Când harta spune „Cod Fiscal: 14758812", firma e aia și gata. Nu ne
+    // mai uităm la nume, la localitate sau la distanță: nimic nu bate un
+    // CUI. Dacă CUI-ul nu e în listele firmei, punctul rămâne de
+    // prospectat — dar nici atunci nu-l legăm de altcineva după nume,
+    // fiindcă ȘTIM a cui e și știm că nu e al nostru.
+    const cuiPin = String(p.cui ?? "").replace(/\D/g, "");
+    if (cuiPin !== "") {
+      const c = dupaCui.get(cuiPin);
+      return {
+        p,
+        scoruri: c
+          ? [{ q: { c, n: "", tari: [] as string[], cheie: "", loc: "" }, scor: 1, motiv: "CUI scris pe hartă" }]
+          : [],
+        prinCui: true,
+      };
+    }
     const nP = neted(p.nume);
     // ATENȚIE: NU băgăm toată descrierea la potrivire. În harta reală ea
     // conține șablon („Tip Outlet: Convenience"), identic la toate pinurile

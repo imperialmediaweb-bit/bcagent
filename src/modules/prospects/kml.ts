@@ -28,6 +28,95 @@ export interface PunctKML {
   strat: string;
   lat: number;
   lng: number;
+  /**
+   * CUI-ul, când pinul îl are scris.
+   *
+   * Harta lui Bogdan nu are doar nume pe pinuri: are un tabel întreg —
+   * Nume Outlet, Nume Legal, Tip Outlet, COD FISCAL, Adresa (cu număr!),
+   * Localitate, Județ. Noi potriveam după nume și ghiceam, când răspunsul
+   * era scris acolo. Cu CUI-ul, potrivirea e exactă: ori e firma aia, ori
+   * nu e nimeni.
+   */
+  cui: string;
+  /** Adresa din pin — asta ARE număr de casă, spre deosebire de registru. */
+  adresa: string;
+  localitate: string;
+  judet: string;
+  /** „Bar/Pub", „Convenience" — ce fel de loc e. */
+  fel: string;
+}
+
+/**
+ * CÂMPURILE DIN PIN.
+ *
+ * My Maps le poate pune în două feluri, după cum a fost făcută harta:
+ *   <ExtendedData><Data name="Cod Fiscal"><value>14758812</value></Data>
+ *   <ExtendedData><SchemaData><SimpleData name="Cod Fiscal">14758812</…>
+ * iar uneori le mai scrie și în descriere, ca tabel HTML.
+ *
+ * Le citim pe toate trei. Numele câmpurilor sunt scrise de om în My Maps,
+ * deci le comparăm fără diacritice și fără majuscule.
+ */
+function campuriPin(bucata: string): Map<string, string> {
+  const camp = new Map<string, string>();
+  const cheie = (s: string) =>
+    s.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, " ").trim();
+  const pune = (nume: string, val: string) => {
+    const k = cheie(textCurat(nume));
+    const v = textCurat(val);
+    if (k !== "" && v !== "" && !camp.has(k)) camp.set(k, v);
+  };
+
+  // <Data name="X"><value>Y</value></Data>
+  const reData = /<Data[^>]*name=["']([^"']+)["'][^>]*>([\s\S]*?)<\/Data>/gi;
+  let m: RegExpExecArray | null;
+  while ((m = reData.exec(bucata)) !== null) {
+    const val = m[2].match(/<value[^>]*>([\s\S]*?)<\/value>/i);
+    pune(m[1], val ? val[1] : m[2]);
+  }
+  // <SimpleData name="X">Y</SimpleData>
+  const reSimple = /<SimpleData[^>]*name=["']([^"']+)["'][^>]*>([\s\S]*?)<\/SimpleData>/gi;
+  while ((m = reSimple.exec(bucata)) !== null) pune(m[1], m[2]);
+
+  // Descrierea ca tabel/„Etichetă: valoare", cum o scrie My Maps.
+  const desc = bucata.match(/<description[^>]*>([\s\S]*?)<\/description>/i);
+  if (desc) {
+    const brut = desc[1]
+      .replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, "$1")
+      .replace(/<\/(td|tr|div|p|li|br)>/gi, "\n")
+      .replace(/<[^>]+>/g, " ");
+    const linii = brut
+      .split(/\n+/)
+      .map((l) => l.replace(/\s+/g, " ").trim())
+      .filter((l) => l !== "");
+    for (let i = 0; i < linii.length; i++) {
+      // „Cod Fiscal: 14758812" — etichetă și valoare pe același rând.
+      const peUnRand = linii[i].match(/^([^:]{2,40}):\s*(.+)$/);
+      if (peUnRand) {
+        pune(peUnRand[1], peUnRand[2]);
+        continue;
+      }
+      // Tabelul HTML le pune în celule diferite, deci pe rânduri diferite:
+      //   <td>Cod Fiscal:</td><td>14758812</td>
+      // Fără cazul ăsta, tocmai harta cu tabel — a lui Bogdan — n-ar da
+      // niciun câmp, deși le are pe toate.
+      const etichetaSingura = linii[i].match(/^([^:]{2,40}):$/);
+      if (etichetaSingura && i + 1 < linii.length && !/:$/.test(linii[i + 1])) {
+        pune(etichetaSingura[1], linii[i + 1]);
+        i++;
+      }
+    }
+  }
+  return camp;
+}
+
+/** Primul câmp găsit dintre denumirile date. */
+function primul(camp: Map<string, string>, nume: string[]): string {
+  for (const n of nume) {
+    const v = camp.get(n);
+    if (v !== undefined && v !== "") return v;
+  }
+  return "";
 }
 
 /** Scoate `<![CDATA[ ... ]]>` și dezescapează entitățile XML uzuale. */
@@ -147,7 +236,12 @@ export function citesteKML(kml: string): PunctKML[] {
     // nu-l luăm, ca să nu mutăm magazine peste mări și țări.
     if (lat < 43.3 || lat > 48.4 || lng < 20.1 || lng > 30.1) continue;
 
-    const nume = eticheta(bucata, "name");
+    const camp = campuriPin(bucata);
+    // Numele de pe firmă („Nume Outlet") e ce caută agentul cu ochii, nu
+    // denumirea din acte. Dacă lipsește, rămâne eticheta pinului.
+    const nume =
+      primul(camp, ["nume outlet", "denumire outlet", "nume punct de lucru"]) ||
+      eticheta(bucata, "name");
     if (nume === "") continue;
     out.push({
       nume,
@@ -155,6 +249,12 @@ export function citesteKML(kml: string): PunctKML[] {
       strat: stratPentru(m.index),
       lat,
       lng,
+      // Doar cifrele: în hartă apare și „RO14758812" sau „CUI 14758812".
+      cui: primul(camp, ["cod fiscal", "cui", "cif", "cod unic"]).replace(/\D/g, "").slice(0, 12),
+      adresa: primul(camp, ["adresa", "adresa punct de lucru", "adresa outlet"]).slice(0, 300),
+      localitate: primul(camp, ["localitate", "localitatea", "oras"]).slice(0, 120),
+      judet: primul(camp, ["judet", "judetul"]).slice(0, 60),
+      fel: primul(camp, ["tip outlet", "tip", "fel"]).slice(0, 60),
     });
   }
   return out;
