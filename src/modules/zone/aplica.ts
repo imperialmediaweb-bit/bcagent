@@ -107,6 +107,48 @@ function km(
 }
 
 /**
+ * CAUTĂ UN SAT ÎN LISTA LOR.
+ *
+ * Când omul scrie ceva ce nu recunoaștem („Țara Dornelor"), nu ghicim și
+ * nu-l punem să scrie patruzeci de nume: tastează două-trei litere și
+ * alege din satele LUI. Alegerea e a lui, datele sunt ale lui, noi nu
+ * inventăm nimic — iar el aproape că nu scrie.
+ *
+ * Căutăm oriunde în nume, nu doar la început: „dorn" scoate și „Vatra
+ * Dornei", și „Dorna Candrenilor".
+ */
+export async function cautaLocalitati(
+  db: DB,
+  numeAgenti: string[],
+  q: string,
+  cate = 25,
+): Promise<string[]> {
+  const cautat = neted(q);
+  if (cautat.length < 2 || numeAgenti.length === 0) return [];
+  const toate = await localitatiCunoscute(db, numeAgenti);
+  const incep: string[] = [];
+  const contin: string[] = [];
+  for (const l of toate) {
+    const n = neted(l);
+    if (n === cautat) incep.unshift(l);
+    else if (n.startsWith(cautat)) incep.push(l);
+    else if (n.includes(cautat)) contin.push(l);
+  }
+  // Fără dubluri de scriere: „SUCEAVA" și „Suceava" sunt același sat.
+  const vazut = new Set<string>();
+  const iesire: string[] = [];
+  for (const l of [...incep, ...contin]) {
+    const k = neted(l);
+    if (vazut.has(k)) continue;
+    vazut.add(k);
+    iesire.push(l);
+    if (iesire.length >= cate) break;
+  }
+  return iesire;
+}
+
+
+/**
  * Textul scris de om → ce am înțeles și ce n-am găsit.
  *
  * `centre` sunt locurile satelor pe hartă. Fără ele merge tot, doar că

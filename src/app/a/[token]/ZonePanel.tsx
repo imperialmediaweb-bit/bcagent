@@ -1,6 +1,18 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import CautaSat from "@/components/CautaSat";
+
+/** Zilele, ca să știm în care zi era rândul nerecunoscut. */
+const ZI_DIN: Record<string, string> = {
+  luni: "luni", lunea: "luni",
+  marti: "marti", marți: "marti", martea: "marti",
+  miercuri: "miercuri", miercurea: "miercuri",
+  joi: "joi", joia: "joi",
+  vineri: "vineri", vinerea: "vineri",
+  sambata: "sambata", sâmbătă: "sambata",
+  duminica: "duminica", duminică: "duminica",
+};
 import { Check, MapPinned, TriangleAlert } from "lucide-react";
 
 /**
@@ -46,6 +58,8 @@ interface Gasit {
 interface Negasit {
   scris: string;
   sugestii: string[];
+  /** E o zonă (un ținut), nu un sat scris greșit. */
+  zona?: boolean;
 }
 
 export default function ZonePanel({
@@ -61,10 +75,31 @@ export default function ZonePanel({
   const [gasite, setGasite] = useState<Gasit[] | null>(null);
   const [negasite, setNegasite] = useState<Negasit[]>([]);
   const [acum, setAcum] = useState<Array<{ zi: string; localitate: string }>>([]);
+  /**
+   * Satele alese de el din căutare, pentru ce n-am recunoscut din text.
+   * NU ghicim noi ce e „Țara Dornelor" — le alege el, din lista lui.
+   */
+  const [alese, setAlese] = useState<Array<{ zi: string; localitate: string }>>([]);
   const [ultima, setUltima] = useState<{ pusDe: string; cand: string } | null>(null);
   const [ocupat, setOcupat] = useState(false);
   const [mesaj, setMesaj] = useState<string | null>(null);
   const [eroare, setEroare] = useState<string | null>(null);
+
+  /**
+   * În ce zi era rândul pe care nu l-am recunoscut: ultima zi scrisă
+   * înaintea lui, în textul lui. Fără asta, satul ales ar intra fără zi
+   * și n-ar mai apărea în ruta zilei.
+   */
+  function ziPentru(scris: string): string {
+    let zi = "";
+    for (const l of text.split(/\r?\n/)) {
+      const cap = l.trim().match(/^[A-Za-zĂÂÎȘȚŞŢăâîșțşţ]+/);
+      const z = cap ? ZI_DIN[cap[0].toLowerCase()] : undefined;
+      if (z) zi = z;
+      if (l.toLowerCase().includes(scris.toLowerCase().slice(0, 12))) return zi;
+    }
+    return zi;
+  }
 
   const incarca = useCallback(async () => {
     try {
@@ -97,7 +132,7 @@ export default function ZonePanel({
       const r = await fetch("/api/routes/zona", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ token, text, verificaDoar }),
+        body: JSON.stringify({ token, text, verificaDoar, alese }),
       });
       const d = (await r.json()) as {
         gasite?: Gasit[];
@@ -115,6 +150,7 @@ export default function ZonePanel({
         setMesaj(`Gata — ți-am salvat ${d.salvate ?? 0} sate, pe zile.`);
         setText("");
         setGasite(null);
+        setAlese([]);
         await incarca();
         onSalvat?.();
       }
@@ -266,14 +302,56 @@ export default function ZonePanel({
                 {negasite.map((n, i) => (
                   <li key={i} className="break-words text-sm leading-snug text-amber-900">
                     „{n.scris}"
-                    {n.sugestii.length > 0 && (
-                      <span className="text-amber-700"> — ai vrut {n.sugestii.join(" / ")}?</span>
+                    {n.zona ? (
+                      <span className="text-amber-700">
+                        {" "}
+                        — asta e o zonă, nu un sat. Nu ghicesc ce sate sunt în
+                        ea; caută-le și alege-le tu, că tu le știi.
+                      </span>
+                    ) : (
+                      n.sugestii.length > 0 && (
+                        <span className="text-amber-700"> — ai vrut {n.sugestii.join(" / ")}?</span>
+                      )
                     )}
+                    <CautaSat
+                      adresa="/api/routes/zona"
+                      extra={{ token }}
+                      eticheta="caută satele și alege-le"
+                      onAlege={(loc) => {
+                        const zi = ziPentru(n.scris);
+                        setAlese((a) =>
+                          a.some((x) => x.zi === zi && x.localitate === loc)
+                            ? a
+                            : [...a, { zi, localitate: loc }],
+                        );
+                      }}
+                    />
                   </li>
                 ))}
               </ul>
+              {alese.length > 0 && (
+                <div className="mt-2 rounded-lg bg-emerald-50 p-2">
+                  <p className="text-xs font-semibold text-emerald-800">
+                    Alese de tine ({alese.length}) — intră când salvezi
+                  </p>
+                  <ul className="mt-1 flex flex-wrap gap-1">
+                    {alese.map((a, k) => (
+                      <li key={k}>
+                        <button
+                          type="button"
+                          onClick={() => setAlese((v) => v.filter((_, j) => j !== k))}
+                          className="min-h-9 rounded-full bg-white px-3 py-1.5 text-xs font-medium text-emerald-900"
+                        >
+                          {a.zi ? `${a.zi}: ` : ""}
+                          {a.localitate} ✕
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
               <p className="mt-2 break-words text-xs leading-snug text-amber-700">
-                Corectează-le în text și verifică din nou. Restul se salvează
+                Corectează-le în text, sau caută-le mai sus. Restul se salvează
                 oricum — nu pierzi ce am găsit.
               </p>
             </div>

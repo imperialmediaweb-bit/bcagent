@@ -65,7 +65,13 @@ export async function POST(req: Request) {
   const rl = rateLimit(`zona-scrie:${clientIP(req)}`, { max: 20, windowMs: 60_000 });
   if (!rl.ok) return Response.json({ error: "Prea multe cereri" }, { status: 429 });
 
-  let body: { token?: string; text?: string; verificaDoar?: boolean };
+  let body: {
+    token?: string;
+    text?: string;
+    verificaDoar?: boolean;
+    alese?: Array<{ zi?: string; localitate?: string }>;
+    cauta?: string;
+  };
   try {
     body = await req.json();
   } catch {
@@ -87,16 +93,38 @@ export async function POST(req: Request) {
   if (!db) return Response.json({ enabled: false }, { status: 503 });
   try {
     await ensureSchema();
-    const { citesteZone, localitatiCunoscute, salveazaZone } = await import(
-      "@/modules/zone/aplica"
-    );
+    const { cautaLocalitati, citesteZone, localitatiCunoscute, salveazaZone } =
+      await import("@/modules/zone/aplica");
+    const { neted: nivelat } = await import("@/modules/zone/parse");
     const { orgAgentNamesForAgent } = await import("@/lib/org-scope");
     const aiMei = await orgAgentNamesForAgent(cine.payload.agentId);
-    const cunoscute = await localitatiCunoscute(
-      db,
-      aiMei.length ? aiMei : [cine.payload.agentName],
-    );
+    const numeAg = aiMei.length ? aiMei : [cine.payload.agentName];
+
+    // CAUTĂ ÎN SATELE LUI. Pe telefon, în mașină, nimeni nu scrie
+    // patruzeci de nume: tastează două-trei litere și alege din lista lui.
+    if (typeof body.cauta === "string") {
+      return Response.json({
+        ok: true,
+        localitati: await cautaLocalitati(db, numeAg, body.cauta),
+      });
+    }
+
+    const cunoscute = await localitatiCunoscute(db, numeAg);
     const { gasite, negasite } = citesteZone(text, cunoscute);
+
+    // Ce a ales el din căutare intră lângă ce am înțeles din text. Se
+    // verifică și aici că satul e din lista LUI: ce vine de la un ecran
+    // poate veni și de altundeva.
+    const stiute = new Map(cunoscute.map((k) => [nivelat(k), k]));
+    for (const a of (body.alese ?? []).slice(0, 500)) {
+      const oficial = stiute.get(nivelat(String(a.localitate ?? "")));
+      if (!oficial) continue;
+      const zi = String(a.zi ?? "").trim();
+      if (gasite.some((g) => g.zi === zi && nivelat(g.localitate) === nivelat(oficial))) {
+        continue;
+      }
+      gasite.push({ zi, localitate: oficial, scris: oficial, cum: "ales de tine din listă" });
+    }
 
     // „Verifică doar": îi arătăm ce am înțeles ÎNAINTE să salvăm — pe
     // telefon, în mașină, nimeni nu vrea să descopere greșeala peste o zi.

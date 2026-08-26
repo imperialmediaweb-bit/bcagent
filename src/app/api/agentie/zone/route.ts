@@ -1,8 +1,9 @@
 import { ensureSchema, getDB, isDBEnabled } from "@/lib/db";
 import { listOrgAgents, requireOrgUser } from "@/modules/platform";
-import { ZILE } from "@/modules/zone/parse";
+import { ZILE, neted as nivelat } from "@/modules/zone/parse";
 import {
   citesteZone,
+  cautaLocalitati,
   localitatiCunoscute,
   salveazaZone,
 } from "@/modules/zone/aplica";
@@ -69,7 +70,19 @@ export async function POST(req: Request) {
   const auth = await requireOrgUser();
   if ("response" in auth) return auth.response;
 
-  let body: { agent?: string; text?: string; verificaDoar?: boolean };
+  let body: {
+    agent?: string;
+    text?: string;
+    verificaDoar?: boolean;
+    /**
+     * Satele pe care le-a ales omul din căutare, pentru ce n-am
+     * recunoscut din text („Țara Dornelor"). Alegerea e a lui: noi doar
+     * i-am arătat lista lui.
+     */
+    alese?: Array<{ zi?: string; localitate?: string }>;
+    /** Caută în satele lui: două-trei litere, alege din listă. */
+    cauta?: string;
+  };
   try {
     body = await req.json();
   } catch {
@@ -88,11 +101,34 @@ export async function POST(req: Request) {
       return Response.json({ error: "Agentul nu e al firmei tale" }, { status: 403 });
     }
 
-    const cunoscute = await localitatiCunoscute(
-      db,
-      agents.map((a) => a.name),
-    );
+    const numeAg = agents.map((a) => a.name);
+
+    // CAUTĂ ÎN SATELE LUI. Pentru ce n-am recunoscut din text („Țara
+    // Dornelor"), omul tastează două-trei litere și alege — nu ghicim noi
+    // și nu-l punem să scrie patruzeci de nume.
+    if (typeof body.cauta === "string") {
+      return Response.json({
+        ok: true,
+        localitati: await cautaLocalitati(db, numeAg, body.cauta),
+      });
+    }
+
+    const cunoscute = await localitatiCunoscute(db, numeAg);
     const { gasite, negasite } = citesteZone(text, cunoscute);
+
+    // Ce a ales omul din căutare intră lângă ce am înțeles din text.
+    // Verificăm și aici că satul e unul adevărat din lista LUI: ce vine
+    // de la un ecran poate veni și de altundeva.
+    const stiute = new Map(cunoscute.map((k) => [nivelat(k), k]));
+    for (const a of (body.alese ?? []).slice(0, 500)) {
+      const oficial = stiute.get(nivelat(String(a.localitate ?? "")));
+      if (!oficial) continue;
+      const zi = String(a.zi ?? "").trim();
+      if (gasite.some((g) => g.zi === zi && nivelat(g.localitate) === nivelat(oficial))) {
+        continue;
+      }
+      gasite.push({ zi, localitate: oficial, scris: oficial, cum: "ales de tine din listă" });
+    }
 
     // „Verifică doar": arătăm ce am înțeles ÎNAINTE să salvăm, ca omul
     // să vadă negru pe alb și să corecteze, nu să salveze pe încredere.

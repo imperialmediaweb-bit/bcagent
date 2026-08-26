@@ -1,6 +1,18 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import CautaSat from "@/components/CautaSat";
+
+/** Zilele, ca să știm în care zi era rândul nerecunoscut. */
+const ZI_DIN: Record<string, string> = {
+  luni: "luni", lunea: "luni",
+  marti: "marti", marți: "marti", martea: "marti",
+  miercuri: "miercuri", miercurea: "miercuri",
+  joi: "joi", joia: "joi",
+  vineri: "vineri", vinerea: "vineri",
+  sambata: "sambata", sâmbătă: "sambata", sambăta: "sambata",
+  duminica: "duminica", duminică: "duminica",
+};
 import { MapPinned } from "lucide-react";
 import { Alert, Button, Card, api } from "@/app/platform/ui";
 
@@ -25,7 +37,7 @@ interface AgentZone {
 }
 interface Verificare {
   gasite: Array<{ zi: string; localitate: string; scris: string }>;
-  negasite: Array<{ scris: string; sugestii: string[] }>;
+  negasite: Array<{ scris: string; sugestii: string[]; zona?: boolean }>;
   salvate?: number;
 }
 
@@ -77,6 +89,29 @@ export default function ZonePage() {
     void incarca();
   }, [incarca]);
 
+  /**
+   * Satele alese de om din căutare, pentru ce n-am recunoscut din text.
+   * NU ghicim noi ce e „Țara Dornelor" — el alege din lista lui.
+   */
+  const [alese, setAlese] = useState<Array<{ zi: string; localitate: string }>>([]);
+
+  /**
+   * În ce zi era rândul pe care nu l-am recunoscut. Îl căutăm în textul
+   * scris de om: ultima zi scrisă înaintea lui. Fără asta, satul ales ar
+   * intra fără zi și n-ar mai apărea în ruta zilei.
+   */
+  function ziPentru(_r: unknown, scris: string): string {
+    const linii = text.split(/\r?\n/);
+    let zi = "";
+    for (const l of linii) {
+      const cap = l.trim().match(/^[A-Za-zĂÂÎȘȚŞŢăâîșțşţ]+/);
+      const z = cap ? ZI_DIN[cap[0].toLowerCase().replace(/[^a-zăâîșțşţ]/g, "")] : undefined;
+      if (z) zi = z;
+      if (l.toLowerCase().includes(scris.toLowerCase().slice(0, 12))) return zi;
+    }
+    return zi;
+  }
+
   async function trimite(verificaDoar: boolean) {
     setLucreaza(true);
     setEroare(null);
@@ -84,7 +119,7 @@ export default function ZonePage() {
     try {
       const d = await api<Verificare>("/api/agentie/zone", {
         method: "POST",
-        json: { agent: ales, text, verificaDoar },
+        json: { agent: ales, text, verificaDoar, alese },
       });
       setRezultat(d);
       if (!verificaDoar) {
@@ -214,18 +249,60 @@ miercuri - Hudești, Alba, Nărănca, Darabani, Păltiniș`}
                 {rezultat.negasite.map((n, i) => (
                   <li key={i} className="break-words">
                     <strong>{n.scris}</strong>
-                    {n.sugestii.length > 0 && (
+                    {n.zona ? (
                       <span className="text-amber-800">
                         {" "}
-                        — ai vrut să zici: {n.sugestii.join(", ")}?
+                        — asta pare o <b>zonă</b>, nu un sat. Nu ghicesc ce
+                        sate sunt în ea: caută-le mai jos și alege-le tu.
                       </span>
+                    ) : (
+                      n.sugestii.length > 0 && (
+                        <span className="text-amber-800">
+                          {" "}
+                          — ai vrut să zici: {n.sugestii.join(", ")}?
+                        </span>
+                      )
                     )}
+                    <CautaSat
+                      onAlege={(loc) => {
+                        // Ziua e cea în care a scris rândul negăsit; dacă
+                        // n-avem cum s-o știm, intră fără zi (tot valabil).
+                        const zi = ziPentru(rezultat, n.scris);
+                        setAlese((a) =>
+                          a.some((x) => x.zi === zi && x.localitate === loc)
+                            ? a
+                            : [...a, { zi, localitate: loc }],
+                        );
+                      }}
+                    />
                   </li>
                 ))}
               </ul>
+              {alese.length > 0 && (
+                <div className="mt-2 rounded-lg bg-emerald-50 p-2">
+                  <p className="text-xs font-bold uppercase tracking-wide text-emerald-800">
+                    Alese de tine ({alese.length}) — intră la salvare
+                  </p>
+                  <ul className="mt-1 flex flex-wrap gap-1">
+                    {alese.map((a, k) => (
+                      <li key={k}>
+                        <button
+                          type="button"
+                          onClick={() => setAlese((v) => v.filter((_, j) => j !== k))}
+                          className="rounded-full bg-white px-2 py-1 text-xs font-medium text-emerald-900 hover:bg-rose-50 hover:text-rose-700"
+                          title="Scoate-l"
+                        >
+                          {a.zi ? `${a.zi}: ` : ""}
+                          {a.localitate} ✕
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
               <p className="mt-1 text-xs text-amber-800">
-                Scrie-le altfel în text și verifică din nou. Restul se salvează
-                oricum.
+                Scrie-le altfel în text, sau caută-le mai sus și alege-le.
+                Restul se salvează oricum.
               </p>
             </div>
           )}
