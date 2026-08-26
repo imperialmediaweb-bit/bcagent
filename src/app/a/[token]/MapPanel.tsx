@@ -394,14 +394,25 @@ export default function MapPanel({
         }
       };
       if (stare === "exista" && navigator.geolocation) {
+        // GPS-ul n-are voie să țină pe loc salvarea: agentul a apăsat,
+        // trebuie să se întâmple ceva. Îi dăm 3 secunde să răspundă; dacă
+        // nu, salvăm fără coordonate — confirmarea contează mai mult decât
+        // mutarea pinului.
+        let trimis = false;
+        const odata = (lat?: number, lng?: number) => {
+          if (trimis) return;
+          trimis = true;
+          void trimite(lat, lng);
+        };
+        setTimeout(() => odata(), 3000);
         navigator.geolocation.getCurrentPosition(
           (p) =>
-            trimite(
+            odata(
               p.coords.accuracy <= 250 ? p.coords.latitude : undefined,
               p.coords.accuracy <= 250 ? p.coords.longitude : undefined,
             ),
-          () => trimite(),
-          { enableHighAccuracy: true, timeout: 8000, maximumAge: 15_000 },
+          () => odata(),
+          { enableHighAccuracy: true, timeout: 3000, maximumAge: 15_000 },
         );
       } else {
         await trimite();
@@ -719,6 +730,60 @@ export default function MapPanel({
       // PINII CLIENȚILOR: fiecare client, un punct. Apeși pe punct și-i
       // vezi numele — așa se vede pe hartă cine e vecin cu cine, iar ruta
       // se face pe vecinătate, nu la nimereală.
+      // MAGAZINELE DIN HARTA VECHE: puncte mici, mov, cu numele lor. Nu-s
+      // firme din registru, deci nu intră în bule și n-au buton de vizită —
+      // sunt locuri de prospectat, cu drum gata știut.
+      if (aratMag && magHarta.length > 0) {
+        for (const m of magHarta) {
+          const punct = L.circleMarker([m.lat, m.lng], {
+            radius: 5,
+            color: "#ffffff",
+            fillColor: "#7c3aed",
+            fillOpacity: 0.95,
+            weight: 2,
+          });
+          punct.bindPopup(
+            `<div style="min-width:0">
+              <div style="font-weight:700;font-size:13px;overflow-wrap:anywhere">${escHtml(m.nume)}</div>
+              ${m.adresa ? `<div style="font-size:11px;color:#475569;margin-top:2px">${escHtml(m.adresa.slice(0, 120))}</div>` : ""}
+              <div style="font-size:11px;color:#7c3aed;margin-top:4px">${
+                m.confirmat
+                  ? "✅ confirmat de un coleg — magazinul există"
+                  : "magazin din harta veche — nimeni n-a trecut încă pe la el"
+              }</div>
+              <a href="${escHtml(gmapsDir(`${m.lat},${m.lng}`))}" target="_blank" rel="noopener" style="display:flex;align-items:center;justify-content:center;min-height:40px;margin-top:8px;font-size:13px;font-weight:700;color:#1d4ed8;text-decoration:none;background:#eff6ff;border-radius:8px">🧭 Navighează</a>
+              <div style="display:flex;gap:6px;margin-top:8px">
+                <button data-mag-ok="${escHtml(m.id)}" style="flex:1;min-height:40px;font-size:13px;font-weight:700;color:#fff;background:#059669;border:none;border-radius:8px;cursor:pointer">✅ Există</button>
+                <button data-mag-nu="${escHtml(m.id)}" style="flex:1;min-height:40px;font-size:13px;font-weight:700;color:#b91c1c;background:#fee2e2;border:none;border-radius:8px;cursor:pointer">✕ Nu mai e</button>
+              </div>
+            </div>`,
+            // Pe telefon mic, un balonaș de 300px iese din ecran. Îl legăm
+            // de lățimea ecranului, cu loc de margini.
+            { maxWidth: Math.max(180, Math.min(280, window.innerWidth - 70)) },
+          );
+          // Butoanele din balonaș prind viață abia când se deschide.
+          punct.on("popupopen", () => {
+            for (const [attr, stare] of [
+              ["data-mag-ok", "exista"],
+              ["data-mag-nu", "inchis"],
+            ] as const) {
+              const b = document.querySelector<HTMLButtonElement>(
+                `[${attr}="${CSS.escape(m.id)}"]`,
+              );
+              b?.addEventListener(
+                "click",
+                () => {
+                  void confirmaMagazin(m.id, stare);
+                  map.closePopup();
+                },
+                { once: true },
+              );
+            }
+          });
+          punct.addTo(layer);
+        }
+      }
+
       if (aratPins && pins.length > 0) {
         for (const p of pins) {
           const punct = L.circleMarker([p.lat, p.lng], {
@@ -846,57 +911,6 @@ export default function MapPanel({
         // „Programul meu” sau din scadenți). Cât timp răsfoiești firmele
         // unei localități și adaugi opriri, harta stă pe loc — altfel ar
         // sări de sub deget și n-ai mai nimeri bula următoare.
-      // MAGAZINELE DIN HARTA VECHE: puncte mici, mov, cu numele lor. Nu-s
-      // firme din registru, deci nu intră în bule și n-au buton de vizită —
-      // sunt locuri de prospectat, cu drum gata știut.
-      if (aratMag && magHarta.length > 0) {
-        for (const m of magHarta) {
-          const punct = L.circleMarker([m.lat, m.lng], {
-            radius: 5,
-            color: "#ffffff",
-            fillColor: "#7c3aed",
-            fillOpacity: 0.95,
-            weight: 2,
-          });
-          punct.bindPopup(
-            `<div style="min-width:180px">
-              <div style="font-weight:700;font-size:13px">${escHtml(m.nume)}</div>
-              ${m.adresa ? `<div style="font-size:11px;color:#475569;margin-top:2px">${escHtml(m.adresa.slice(0, 120))}</div>` : ""}
-              <div style="font-size:11px;color:#7c3aed;margin-top:4px">${
-                m.confirmat
-                  ? "✅ confirmat de un coleg — magazinul există"
-                  : "magazin din harta veche — nimeni n-a trecut încă pe la el"
-              }</div>
-              <a href="${escHtml(gmapsDir(`${m.lat},${m.lng}`))}" target="_blank" rel="noopener" style="display:inline-block;margin-top:6px;font-size:12px;font-weight:600;color:#1d4ed8;text-decoration:none">🧭 Navighează</a>
-              <div style="display:flex;gap:6px;margin-top:8px">
-                <button data-mag-ok="${escHtml(m.id)}" style="flex:1;font-size:12px;font-weight:700;color:#fff;background:#059669;border:none;border-radius:6px;padding:6px 8px;cursor:pointer">✅ Există</button>
-                <button data-mag-nu="${escHtml(m.id)}" style="flex:1;font-size:12px;font-weight:700;color:#b91c1c;background:#fee2e2;border:none;border-radius:6px;padding:6px 8px;cursor:pointer">✕ Nu mai e</button>
-              </div>
-            </div>`,
-          );
-          // Butoanele din balonaș prind viață abia când se deschide.
-          punct.on("popupopen", () => {
-            for (const [attr, stare] of [
-              ["data-mag-ok", "exista"],
-              ["data-mag-nu", "inchis"],
-            ] as const) {
-              const b = document.querySelector<HTMLButtonElement>(
-                `[${attr}="${CSS.escape(m.id)}"]`,
-              );
-              b?.addEventListener(
-                "click",
-                () => {
-                  void confirmaMagazin(m.id, stare);
-                  map.closePopup();
-                },
-                { once: true },
-              );
-            }
-          });
-          punct.addTo(layer);
-        }
-      }
-
       // EU, AICI — desenat ULTIMUL, ca să stea deasupra pinilor și a
       // numerelor de rută. NU intră în încadrarea hărții: altfel apăsarea
       // butonului ar depărta harta la nivel de județ în loc să mă apropie.
@@ -1179,7 +1193,7 @@ export default function MapPanel({
           <button
             type="button"
             onClick={() => setAratPins((v) => !v)}
-            className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold transition ${
+            className={`inline-flex min-h-9 items-center gap-1.5 rounded-full px-3 py-2 text-xs font-semibold transition ${
               aratPins
                 ? "bg-violet-600 text-white shadow-sm"
                 : "bg-violet-50 text-violet-700 hover:bg-violet-100"
@@ -1195,7 +1209,7 @@ export default function MapPanel({
               type="button"
               onClick={() => setDoarZona((v) => !v)}
               title={zonaAzi.localitati.join(", ")}
-              className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold transition ${
+              className={`inline-flex min-h-9 items-center gap-1.5 rounded-full px-3 py-2 text-xs font-semibold transition ${
                 doarZona
                   ? "bg-indigo-600 text-white shadow-sm"
                   : "bg-indigo-50 text-indigo-700 hover:bg-indigo-100"
@@ -1211,7 +1225,7 @@ export default function MapPanel({
             <button
               type="button"
               onClick={() => setAratMag((v) => !v)}
-              className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold transition ${
+              className={`inline-flex min-h-9 items-center gap-1.5 rounded-full px-3 py-2 text-xs font-semibold transition ${
                 aratMag
                   ? "bg-violet-700 text-white shadow-sm"
                   : "bg-violet-50 text-violet-700 hover:bg-violet-100"
@@ -1275,7 +1289,7 @@ export default function MapPanel({
                 { enableHighAccuracy: true, timeout: 8000, maximumAge: 15_000 },
               );
             }}
-            className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold transition ${
+            className={`inline-flex min-h-9 items-center gap-1.5 rounded-full px-3 py-2 text-xs font-semibold transition ${
               euSunt
                 ? "bg-blue-600 text-white shadow-sm"
                 : "bg-blue-50 text-blue-700 hover:bg-blue-100"
