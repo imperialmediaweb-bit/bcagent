@@ -50,6 +50,11 @@ const cui = (i: number) => `12${baza}${i}`;
 
 /** Harta firmei A: patru magazine, unul dintre ele al firmei B. */
 const KML = `<kml><Document>
+  <!-- DOUĂ magazine în EXACT același punct. Pe harta reală a lui Bogdan
+       sunt zeci așa (puse la centrul satului). Dacă identificatorul lor
+       vine doar din coordonate, importul crapă tot. -->
+  <Placemark><name>DOI LA FEL UNU ${SUS}</name><Point><coordinates>26.65,47.85,0</coordinates></Point></Placemark>
+  <Placemark><name>DOI LA FEL DOI ${SUS}</name><Point><coordinates>26.65,47.85,0</coordinates></Point></Placemark>
   <Placemark><name>ALFA ${SUS} SRL</name><Point><coordinates>26.61,47.81,0</coordinates></Point></Placemark>
   <Placemark><name>BETA ${SUS} SRL</name><Point><coordinates>26.62,47.82,0</coordinates></Point></Placemark>
   <Placemark><name>GAMA ${SUS} SRL</name><Point><coordinates>26.63,47.83,0</coordinates></Point></Placemark>
@@ -138,7 +143,12 @@ async function main() {
     sectiune("Importul propriu-zis");
     const r = await cere(orgA, { kml: KML });
     check("adminul platformei poate rula importul", r.s === 200, `status ${r.s} ${r.d.error ?? ""}`);
-    check("a citit toate cele 4 magazine din hartă", r.d.totalPuncte === 4, `${r.d.totalPuncte}`);
+    check("a citit toate cele 6 magazine din hartă", r.d.totalPuncte === 6, `${r.d.totalPuncte}`);
+    check(
+      "…inclusiv două aflate în EXACT același punct (nu crapă importul)",
+      r.s === 200 && !/Eroare/i.test(r.d.error ?? ""),
+      r.d.error,
+    );
     check("a scris locul unde numele se potrivește", (r.d.scrise ?? 0) >= 1, `scrise=${r.d.scrise}`);
     const pinBeta = await pin(cui(1));
     check("firma fără loc a primit unul", !!pinBeta);
@@ -180,6 +190,11 @@ async function main() {
     );
     const laVecini = await sql`SELECT 1 FROM magazin_harta WHERE org_id = ${orgB}`;
     check("firma vecină n-a primit nimic", laVecini.length === 0, `${laVecini.length}`);
+    check(
+      "cele două din același punct s-au păstrat AMÂNDOUĂ",
+      salvate.filter((m) => m.nume.includes("DOI LA FEL")).length === 2,
+      `${salvate.filter((m) => m.nume.includes("DOI LA FEL")).length}`,
+    );
 
     // Reimportul aceleiași hărți nu dublează magazinele.
     const inainteReimport = (

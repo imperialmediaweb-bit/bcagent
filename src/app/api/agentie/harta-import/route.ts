@@ -7,7 +7,7 @@ import {
   linkKML,
   midDinLink,
 } from "@/modules/prospects/kml";
-import { potriveștePuncte } from "@/modules/prospects/potrivire";
+import { cheieMagazin, potriveștePuncte } from "@/modules/prospects/potrivire";
 import type { Potrivire } from "@/modules/prospects/potrivire";
 
 export const runtime = "nodejs";
@@ -343,19 +343,24 @@ export async function POST(req: Request) {
       let magazineSalvate = 0;
       if (orfane.length > 0) {
         const randuri = orfane.slice(0, 20000).map((p) => ({
-          // Identificator stabil: același magazin reimportat nu se dublează.
-          id: `${auth.session.orgId}:${p.punct.lat.toFixed(5)},${p.punct.lng.toFixed(5)}`.slice(0, 120),
-          org_id: auth.session.orgId,
-          nume: p.punct.nume.slice(0, 200),
-          adresa: (p.punct.descriere ?? "").slice(0, 300),
-          localitate: "",
-          judet: "",
-          lat: p.punct.lat,
-          lng: p.punct.lng,
-          strat: ((p.punct as { strat?: string }).strat ?? "").slice(0, 120),
-        }));
-        for (let i = 0; i < randuri.length; i += 500) {
-          const bucata = randuri.slice(i, i + 500);
+        // Identificator stabil, din NUME + coordonate. Doar din coordonate
+        // nu merge: pe harta reală mai multe magazine stau exact în același
+        // punct (puse la centrul satului), iar Postgres refuză două rânduri
+        // cu același id în aceeași scriere.
+        id: `${auth.session.orgId}:${cheieMagazin(p.punct.nume, p.punct.lat, p.punct.lng)}`,
+        org_id: auth.session.orgId,
+        nume: p.punct.nume.slice(0, 200),
+        adresa: (p.punct.descriere ?? "").slice(0, 300),
+        localitate: "",
+        judet: "",
+        lat: p.punct.lat,
+        lng: p.punct.lng,
+        strat: ((p.punct as { strat?: string }).strat ?? "").slice(0, 120),
+      }));
+      // Aceeași hartă poate avea două însemnări identice: le păstrăm o dată.
+      const unice = Array.from(new Map(randuri.map((r) => [r.id, r])).values());
+        for (let i = 0; i < unice.length; i += 500) {
+          const bucata = unice.slice(i, i + 500);
           const r = await db`
             INSERT INTO magazin_harta ${db(
               bucata,
@@ -416,6 +421,12 @@ export async function POST(req: Request) {
     });
   } catch (e) {
     console.error("[harta-import]", e);
-    return Response.json({ error: "Eroare la importul hărții" }, { status: 500 });
+    // Mesajul REAL, nu „eroare". Altfel omul se uită la un dreptunghi roșu
+    // și n-are ce să-mi spună, iar eu n-am ce repara.
+    const detaliu = e instanceof Error ? e.message.slice(0, 200) : String(e).slice(0, 200);
+    return Response.json(
+      { error: `Eroare la importul hărții: ${detaliu}` },
+      { status: 500 },
+    );
   }
 }

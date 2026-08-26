@@ -272,3 +272,17 @@ export function potriveștePuncte(
   rezultat.sort((a, b) => (index.get(a.punct) ?? 0) - (index.get(b.punct) ?? 0));
   return rezultat;
 }
+
+/**
+ * Cheie stabilă pentru un magazin de pe hartă: nume + poziție.
+ *
+ * Doar din coordonate nu merge — pe harta reală mai multe magazine stau
+ * exact în același punct (puse la centrul satului), iar la reimport două
+ * rânduri cu același id în aceeași scriere fac Postgres să refuze tot.
+ * Numele intră netezit, ca aceeași însemnare reimportată să dea aceeași
+ * cheie chiar dacă i-au schimbat majusculele.
+ */
+export function cheieMagazin(nume: string, lat: number, lng: number): string {
+  const n = neted(nume).replace(/ /g, "-").slice(0, 60);
+  return `${n}@${lat.toFixed(5)},${lng.toFixed(5)}`.slice(0, 110);
+}
