@@ -224,15 +224,15 @@ async function main() {
       inS1.join(" → "),
     );
 
-    sectiune("Ce a închis agentul pe teren nu mai intră în rută");
+    sectiune("Ce a raportat agentul ca desființat nu mai intră în rută");
     await fetch(`${BASE}/api/visits`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ token: tokEu, cui: cui(3), denumire: "TREI", result: "inchis" }),
+      body: JSON.stringify({ token: tokEu, cui: cui(3), denumire: "TREI", result: "nu_mai_exista" }),
     });
     const dupaInchis = await zona(tokEu);
     check(
-      "clientul închis dispare din ruta zilei",
+      "clientul raportat ca desființat dispare din ruta zilei",
       !(dupaInchis.d.stops ?? []).some((s) => s.denumire.includes("CLIENT TREI")),
       (dupaInchis.d.stops ?? []).map((s) => s.denumire).join(","),
     );

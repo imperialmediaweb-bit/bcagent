@@ -227,7 +227,19 @@ async function main() {
         await ctx.close();
         continue;
       }
-      await bule.first().click({ force: true });
+      // DESCHIDEM SATUL NOSTRU PE NUME, nu „prima bulă de pe hartă".
+      // Județul e comun: o firmă rămasă de la altă suită (sau de la o
+      // rulare oprită la mijloc) punea o bulă înaintea noastră, testul
+      // deschidea satul altcuiva și cădea pe butoane care nici n-aveau
+      // ce căuta acolo. O probă n-are voie să atârne de vecini.
+      const butonulSatului = page
+        .locator("button", { hasText: SAT })
+        .first();
+      if ((await butonulSatului.count()) > 0) {
+        await butonulSatului.click({ force: true });
+      } else {
+        await bule.first().click({ force: true });
+      }
       await page.waitForTimeout(2500);
       const areFirmele = await page.evaluate(
         (s: string) => document.body.innerText.includes(s),

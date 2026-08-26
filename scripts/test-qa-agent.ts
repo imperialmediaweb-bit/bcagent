@@ -431,7 +431,7 @@ async function pinInvata() {
 /* ══════════ 6. „ÎNCHIS" PE TEREN, IZOLAT PE FIRMĂ (azi) ══════════ */
 
 async function inchis() {
-  sectiune("„Închis” pe teren curăță harta — dar doar la mine");
+  sectiune("„Nu mai există” pe teren curăță harta — dar doar la mine");
   const cMeu = cui(2);
   const r = await trimite("/api/visits", {
     token: tokEu, cui: cMeu, denumire: "BODEGA", result: "nu_mai_exista", note: "e zid",
@@ -444,7 +444,7 @@ async function inchis() {
 
   const cLiber = cui(5);
   const r2 = await trimite("/api/visits", {
-    token: tokEu, cui: cLiber, denumire: "PROSPECT LIBER", result: "inchis",
+    token: tokEu, cui: cLiber, denumire: "PROSPECT LIBER", result: "nu_mai_exista",
   });
   check("„Închis” pe un prospect nealocat se salvează", r2.s === 200);
   const [q] = await sql<Array<{ activ: boolean }>>`SELECT activ FROM prospects WHERE cui = ${cLiber}`;
