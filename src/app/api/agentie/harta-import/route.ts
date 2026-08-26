@@ -207,7 +207,12 @@ export async function POST(req: Request) {
       );
     }
 
-    // Clienții firmei — doar pe ei îi potrivim.
+    // CU CINE POTRIVIM. Întâi clienții firmei — ei contează cel mai mult.
+    // Dar harta veche are magazine din tot județul, iar multe sunt firme
+    // din registru la care agenții încă n-au ajuns. Și alea merită locul
+    // lor: când agentul dă peste ele în prospectare, îl duce la ușă, nu în
+    // centrul satului. Unde stă un magazin e un FAPT, nu o informație
+    // comercială — la fel ca pinul pus din teren cu „Sunt aici".
     const clienti = await db<ClientRand[]>`
       SELECT p.cui, p.denumire, COALESCE(p.localitate, '') AS localitate
       FROM prospects p
@@ -215,7 +220,31 @@ export async function POST(req: Request) {
       WHERE oa.org_id = ${auth.session.orgId}
       LIMIT 20000
     `;
-    if (clienti.length === 0) {
+    // Doar în județele în care lucrează firma — nu potrivim cu toată țara.
+    const judete = (
+      await db<Array<{ judet: string }>>`
+        SELECT DISTINCT p.judet FROM prospects p
+        JOIN org_agents oa ON oa.name = p.assigned_agent
+        WHERE oa.org_id = ${auth.session.orgId} AND COALESCE(p.judet, '') <> ''
+      `
+    ).map((r) => r.judet);
+    // Firmele NEALOCATE care încă n-au loc pe hartă. Cele care au deja un
+    // pin nu se ating: acolo a fost cineva pe teren, iar ce a pus omul bate
+    // orice import.
+    const dinRegistru =
+      judete.length === 0
+        ? []
+        : await db<ClientRand[]>`
+            SELECT p.cui, p.denumire, COALESCE(p.localitate, '') AS localitate
+            FROM prospects p
+            WHERE p.judet = ANY(${judete})
+              AND COALESCE(p.assigned_agent, '') = ''
+              AND p.activ IS DISTINCT FROM FALSE
+              AND NOT EXISTS (SELECT 1 FROM geo_firme g WHERE g.cui = p.cui)
+            LIMIT 60000
+          `;
+    const deLegat = [...clienti, ...dinRegistru];
+    if (deLegat.length === 0) {
       return Response.json(
         {
           error:
@@ -239,7 +268,7 @@ export async function POST(req: Request) {
       centreRanduri.map((c) => [neted(c.localitate), { lat: c.lat, lng: c.lng }]),
     );
 
-    const potriviri = potriveștePuncte(puncte, clienti, 0.7, centre);
+    const potriviri = potriveștePuncte(puncte, deLegat, 0.7, centre);
     const gasite = potriviri.filter((p) => p.client !== null);
     const nepotrivite = potriviri.filter((p) => p.client === null);
 
@@ -248,6 +277,7 @@ export async function POST(req: Request) {
       verificare: true,
       totalPuncte: puncte.length,
       totalClienti: clienti.length,
+      totalDinRegistru: dinRegistru.length,
       // Ce n-a intrat și DE CE — ca omul să nu creadă că le-a luat pe toate
       // și să caute pe hartă magazine care n-au fost niciodată puse acolo.
       sarite: {

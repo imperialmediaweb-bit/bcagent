@@ -170,11 +170,22 @@ async function main() {
       `${dupa?.lat}`,
     );
 
-    sectiune("Firmele nealocate din registrul comun");
-    const liber = await cere(ck, {
-      confirmate: [{ cui: cui(3), lat: LOC[0] + 0.01, lng: LOC[1] + 0.01 }],
+    sectiune("Se potrivesc și firmele din registru, nu doar clienții");
+    // Harta veche are magazine din tot județul. Firmele la care agenții
+    // n-au ajuns încă merită și ele locul lor: la prospectare, agentul e
+    // dus la ușă, nu în centrul satului.
+    const [inainte] = await sql<Array<{ n: string }>>`
+      SELECT COUNT(*)::text AS n FROM geo_firme WHERE cui = ${cui(3)}`;
+    void inainte;
+    const dinRegistru = await cere(ck, {
+      confirmate: [{ cui: cui(3), lat: LOC[0] + 0.02, lng: LOC[1] + 0.02 }],
     });
-    check("un prospect nealocat poate primi loc", liber.d.scrise === 1, `scrise=${liber.d.scrise}`);
+    check(
+      "o firmă nealocată din registru primește loc",
+      dinRegistru.d.scrise === 1,
+      `scrise=${dinRegistru.d.scrise}`,
+    );
+    check("…și chiar e în bază", !!(await pin(cui(3))));
 
     sectiune("Coordonatele imposibile nu intră în bază");
     const aiurea = await cere(ck, {
