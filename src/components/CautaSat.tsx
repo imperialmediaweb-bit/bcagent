@@ -39,6 +39,8 @@ export default function CautaSat({
   zona?: boolean;
 }) {
   const [q, setQ] = useState("");
+  /** La o zonă: satele scrise dintr-o dată, unul pe rând. */
+  const [scrise, setScrise] = useState("");
   const [lista, setLista] = useState<string[]>([]);
   const [caut, setCaut] = useState(false);
   const [deschis, setDeschis] = useState(false);
@@ -91,6 +93,48 @@ export default function CautaSat({
       >
         🔍 {eticheta}
       </button>
+    );
+  }
+
+  // ── LA O ZONĂ: ÎNTREBĂM SIMPLU ──
+  // „Țara Dornelor (toate locațiile)" — omul le știe pe de rost. Pentru
+  // el e mai ușor să le scrie dintr-o dată decât să caute fiecare sat în
+  // parte. Îl întrebăm direct și le ia pe toate deodată.
+  if (zona) {
+    const satele = scrise
+      .split(/[\n,;]+/)
+      .map((x) => x.trim())
+      .filter((x) => x.length >= 2);
+    return (
+      <div className="mt-1">
+        <p className="break-words text-xs font-semibold leading-snug text-amber-900">
+          Care sunt satele din ea? Scrie-le, unul pe rând.
+        </p>
+        <textarea
+          autoFocus
+          value={scrise}
+          onChange={(e) => setScrise(e.target.value)}
+          rows={4}
+          placeholder={"Vatra Dornei\nDorna Candrenilor\nPoiana Stampei\n…"}
+          className="mt-1 block w-full min-w-0 rounded-lg border border-amber-300 bg-white px-3 py-2 text-sm focus:border-amber-500 focus:outline-none"
+        />
+        <div className="mt-1 flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            disabled={satele.length === 0}
+            onClick={() => {
+              for (const sat of satele) onAlege(sat);
+              setScrise("");
+            }}
+            className="min-h-9 rounded-lg bg-emerald-600 px-3 py-2 text-xs font-semibold text-white hover:bg-emerald-700 disabled:opacity-50"
+          >
+            + Adaugă{satele.length > 0 ? ` cele ${satele.length} sate` : " satele"}
+          </button>
+          <span className="break-words text-xs leading-snug text-amber-800">
+            Le scrii o dată și rămân salvate.
+          </span>
+        </div>
+      </div>
     );
   }
 

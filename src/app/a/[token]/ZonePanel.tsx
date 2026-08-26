@@ -320,7 +320,7 @@ export default function ZonePanel({
                       extra={{ token }}
                       zona={n.zona === true}
                       eticheta={
-                        n.zona ? "caută satele din ea și alege-le" : "caută satul și alege-l"
+                        n.zona ? "scrie satele din ea" : "caută satul și alege-l"
                       }
                       onAlege={(loc) => {
                         const zi = ziPentru(n.scris);
