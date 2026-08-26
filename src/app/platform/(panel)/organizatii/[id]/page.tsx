@@ -1001,6 +1001,15 @@ function AiUsageCard({
  * dacă iese ceva strâmb nu s-ar mai ști cine a apăsat. Aici rămâne scris:
  * adminul platformei, pentru firma asta.
  */
+interface OSMRezultat {
+  peJudet: Array<{ judet: string; magazine: number; eroare?: string }>;
+  locuriPuse: number;
+  magazineNoi: number;
+  deja: number;
+  totalJudete: number;
+  urmator: number | null;
+}
+
 function HartaCard({ orgId }: { orgId: string }) {
   const [link, setLink] = useState("");
   const [busy, setBusy] = useState(false);
@@ -1015,33 +1024,62 @@ function HartaCard({ orgId }: { orgId: string }) {
     setErr(null);
     setMsg(null);
     try {
-      const d = await api<{
-        scrise?: number;
-        sterse?: number;
-        totalPuncte?: number;
-        nesigure?: number;
-        clientiCuLoc?: number;
-        magazineSalvate?: number;
-        faraLocPeHarta?: number;
-      }>(`/api/platform/orgs/${orgId}/harta`, {
-        method: "POST",
-        body: JSON.stringify(anuleaza ? { anuleaza: true } : { link }),
-      });
-      setMsg(
-        anuleaza
-          ? `Am șters ${d.sterse ?? 0} locuri aduse din hartă. Ce au pus agenții a rămas.`
+      // Fără link n-avem hartă de citit — sărim direct la OpenStreetMap.
+      const d =
+        !anuleaza && link.trim() === ""
+          ? {}
+          : await api<{
+              scrise?: number;
+              sterse?: number;
+              totalPuncte?: number;
+              nesigure?: number;
+              clientiCuLoc?: number;
+              magazineSalvate?: number;
+              faraLocPeHarta?: number;
+            }>(`/api/platform/orgs/${orgId}/harta`, {
+              method: "POST",
+              body: JSON.stringify(anuleaza ? { anuleaza: true } : { link }),
+            });
+      const text = anuleaza
+        ? `Am șters ${d.sterse ?? 0} locuri aduse din hartă. Ce au pus agenții a rămas.`
+        : link.trim() === ""
+          ? "N-ai dat link de hartă — caut doar pe OpenStreetMap."
           : `Am pus locul la ${d.scrise ?? 0} magazine, din ${d.totalPuncte ?? 0} câte are harta.` +
-            (d.clientiCuLoc !== undefined
-              ? ` Acum ${d.clientiCuLoc} dintre clienții firmei au locul exact pe hartă.`
-              : "") +
-            (d.nesigure ? ` ${d.nesigure} n-au fost sigure — le pun agenții din teren.` : "") +
-            (d.magazineSalvate
-              ? ` Plus ${d.magazineSalvate} magazine de prospectat, cu locul lor.`
-              : "") +
-            (d.faraLocPeHarta
-              ? ` ${d.faraLocPeHarta} firme erau în hartă fără coordonate.`
-              : ""),
-      );
+          (d.clientiCuLoc !== undefined
+            ? ` Acum ${d.clientiCuLoc} dintre clienții firmei au locul exact pe hartă.`
+            : "") +
+          (d.nesigure ? ` ${d.nesigure} n-au fost sigure — le pun agenții din teren.` : "") +
+          (d.magazineSalvate
+            ? ` Plus ${d.magazineSalvate} magazine de prospectat, cu locul lor.`
+            : "") +
+          (d.faraLocPeHarta
+            ? ` ${d.faraLocPeHarta} firme erau în hartă fără coordonate.`
+            : "");
+      setMsg(text);
+
+      // A DOUA JUMĂTATE A ACELEIAȘI APĂSĂRI: magazinele de pe
+      // OpenStreetMap. Vin în cereri separate doar pentru că serviciul lor
+      // e lent, județ cu județ — nu ca să mai apese cineva un buton.
+      if (!anuleaza) {
+        let puse = 0;
+        let noi = 0;
+        let deLa = 0;
+        for (let tura = 0; tura < 8; tura++) {
+          const r = await api<{ osm: OSMRezultat }>(
+            `/api/platform/orgs/${orgId}/harta`,
+            { method: "POST", body: JSON.stringify({ osm: true, osmDeLa: deLa }) },
+          );
+          puse += r.osm.locuriPuse;
+          noi += r.osm.magazineNoi;
+          setMsg(
+            `${text} Din OpenStreetMap: ${noi} magazine de prospectat` +
+              (puse ? `, plus ${puse} firme care au primit locul` : "") +
+              `. (${r.osm.peJudet.map((j) => `${j.judet}: ${j.eroare ? "n-a mers" : j.magazine}`).join(", ")})`,
+          );
+          if (r.osm.urmator === null || r.osm.urmator <= deLa) break;
+          deLa = r.osm.urmator;
+        }
+      }
     } catch (e) {
       setErr(e instanceof Error ? e.message : String(e));
     } finally {
@@ -1052,11 +1090,13 @@ function HartaCard({ orgId }: { orgId: string }) {
   return (
     <Card>
       <h2 className="text-sm font-semibold text-slate-800">
-        Adu locațiile din harta lor
+        Adu locațiile magazinelor
       </h2>
       <p className="mt-1 break-words text-xs leading-snug text-slate-500">
         Dacă firma are o hartă Google My Maps cu magazinele puse de mână, le
-        aducem aici. De atunci agenții navighează pe coordonate exacte.
+        aducem aici. Aceeași apăsare caută și pe OpenStreetMap magazinele la
+        care n-a ajuns niciun agent. De atunci agenții navighează pe
+        coordonate exacte.
       </p>
       <input
         value={link}
@@ -1068,7 +1108,7 @@ function HartaCard({ orgId }: { orgId: string }) {
         <button
           type="button"
           onClick={() => ruleaza(false)}
-          disabled={busy || !link.trim()}
+          disabled={busy}
           className="min-h-11 rounded-lg bg-emerald-600 px-3 py-2 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-50"
         >
           {busy ? "Lucrez..." : "Adu locațiile"}

@@ -52,7 +52,7 @@ export async function POST(req: Request) {
   if (!payload) {
     return Response.json({ error: "Token invalid sau expirat" }, { status: 401 });
   }
-  const id = String(body.id ?? "").slice(0, 120);
+  const id = String(body.id ?? "").slice(0, 220);
   const stare = body.stare === "exista" || body.stare === "inchis" ? body.stare : "";
   if (id === "" || stare === "") {
     return Response.json({ error: "Spune ce magazin și ce ai găsit acolo" }, { status: 400 });

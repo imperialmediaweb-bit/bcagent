@@ -76,6 +76,15 @@ export async function POST(req: Request) {
     automat?: boolean;
     /** Șterge locurile aduse din hartă (nu și pe cele puse de agenți). */
     anuleaza?: boolean;
+    /**
+     * A doua jumătate a aceluiași buton: magazinele din OpenStreetMap.
+     * Vine ca o cerere separată nu ca să mai apese omul o dată, ci pentru
+     * că Overpass e lent și fiecare cerere are bugetul ei de timp. Pagina
+     * o cheamă singură, după hartă.
+     */
+    osm?: boolean;
+    /** De la al câtelea județ reluăm (cursorul din răspunsul trecut). */
+    osmDeLa?: number;
   };
   try {
     body = await req.json();
@@ -104,6 +113,24 @@ export async function POST(req: Request) {
                OR p.assigned_agent = ANY(${numeAg.length ? numeAg : [""]}))
       `;
       return Response.json({ ok: true, sterse: sters.count });
+    }
+
+    // ── MAGAZINELE DIN OPENSTREETMAP ──
+    // Harta lui Bogdan are magazinele LUI. Registrul Finanțelor are sediul
+    // social — la un PFA, casa omului. Ce lipsește sunt magazinele la care
+    // n-a ajuns încă nimeni: alimentara din satul fără niciun client.
+    // Alea le-au pus pe OSM oameni care au trecut pe-acolo.
+    if (body.osm === true) {
+      const { listOrgAgents } = await import("@/modules/platform");
+      const { aduMagazineOSM } = await import("@/modules/prospects/osm-import");
+      const numeAg = (await listOrgAgents(auth.session.orgId)).map((a) => a.name);
+      const r = await aduMagazineOSM(
+        db,
+        auth.session.orgId,
+        numeAg,
+        Number(body.osmDeLa ?? 0),
+      );
+      return Response.json({ ok: true, osm: r });
     }
 
     // ── treapta 2: scriem ce a confirmat omul ──

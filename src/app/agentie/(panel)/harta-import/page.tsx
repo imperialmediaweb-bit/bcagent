@@ -40,6 +40,15 @@ interface Automat {
   sarite?: { faraLocPeHarta: number; inafara: number; liniiSiZone: number };
   nepotrivite: Rand[];
 }
+/** Ce a adus OpenStreetMap — a doua jumătate a aceleiași apăsări. */
+interface OSM {
+  peJudet: Array<{ judet: string; magazine: number; eroare?: string }>;
+  locuriPuse: number;
+  magazineNoi: number;
+  deja: number;
+  totalJudete: number;
+  urmator: number | null;
+}
 interface Verificare {
   totalPuncte: number;
   totalClienti: number;
@@ -62,11 +71,18 @@ export default function HartaImportPage() {
   const [alese, setAlese] = useState<Record<string, string>>({});
 
   const [gata, setGata] = useState<Automat | null>(null);
+  const [osm, setOsm] = useState<OSM | null>(null);
+  /** Ce face acum, cu vorbele lui: „citesc harta", „caut în Suceava"… */
+  const [pas, setPas] = useState("");
 
   /**
    * „Fă tot singur": aduce harta, leagă ce e sigur și SCRIE. Nimeni nu se
    * uită la 2450 de rânduri — deci nu-l punem. Ce rămâne nesigur i se
    * arată după, scurt, iar totul se poate da înapoi dintr-un buton.
+   *
+   * Tot aici, FĂRĂ alt buton, aduce și magazinele de pe OpenStreetMap:
+   * alea la care n-a ajuns nimeni. Vin în cereri separate doar pentru că
+   * serviciul lor e lent — omul tot o apăsare face.
    */
   async function automat() {
     setLucreaza(true);
@@ -74,15 +90,49 @@ export default function HartaImportPage() {
     setMesaj(null);
     setV(null);
     setGata(null);
+    setOsm(null);
     try {
-      const d = await api<Automat>("/api/agentie/harta-import", {
-        method: "POST",
-        body: JSON.stringify({ link, kml, automat: true }),
-      });
-      setGata(d);
+      // 1) Harta firmei, dacă are una. Fără link, sărim direct la OSM.
+      if (link.trim() !== "" || kml.trim() !== "") {
+        setPas("Citesc harta ta…");
+        const d = await api<Automat>("/api/agentie/harta-import", {
+          method: "POST",
+          body: JSON.stringify({ link, kml, automat: true }),
+        });
+        setGata(d);
+      }
+
+      // 2) Magazinele de pe OpenStreetMap, județ cu județ. Dacă pică, nu
+      // stricăm ce a ieșit din hartă — doar spunem ce n-a mers.
+      const total: OSM = {
+        peJudet: [], locuriPuse: 0, magazineNoi: 0, deja: 0,
+        totalJudete: 0, urmator: null,
+      };
+      let deLa = 0;
+      // Plasă de siguranță: nu sunăm la nesfârșit dacă serverul n-avansează.
+      for (let tura = 0; tura < 8; tura++) {
+        setPas(
+          total.totalJudete > 0
+            ? `Caut magazine pe OpenStreetMap (județul ${deLa + 1} din ${total.totalJudete})…`
+            : "Caut magazine pe OpenStreetMap…",
+        );
+        const r = await api<{ osm: OSM }>("/api/agentie/harta-import", {
+          method: "POST",
+          body: JSON.stringify({ osm: true, osmDeLa: deLa }),
+        });
+        total.peJudet.push(...r.osm.peJudet);
+        total.locuriPuse += r.osm.locuriPuse;
+        total.magazineNoi += r.osm.magazineNoi;
+        total.deja += r.osm.deja;
+        total.totalJudete = r.osm.totalJudete;
+        setOsm({ ...total });
+        if (r.osm.urmator === null || r.osm.urmator <= deLa) break;
+        deLa = r.osm.urmator;
+      }
     } catch (e) {
       setEroare(e instanceof Error ? e.message : String(e));
     } finally {
+      setPas("");
       setLucreaza(false);
     }
   }
@@ -97,6 +147,7 @@ export default function HartaImportPage() {
         body: JSON.stringify({ anuleaza: true }),
       });
       setGata(null);
+      setOsm(null);
       setV(null);
       setMesaj(`Am șters ${d.sterse} locuri aduse din hartă. Ce au pus agenții pe teren n-am atins.`);
     } catch (e) {
@@ -111,6 +162,7 @@ export default function HartaImportPage() {
     setEroare(null);
     setMesaj(null);
     setV(null);
+    setOsm(null);
     setScoase(new Set());
     setAlese({});
     try {
@@ -170,12 +222,14 @@ export default function HartaImportPage() {
       <div>
         <h1 className="flex items-center gap-2 text-lg font-semibold text-slate-900">
           <MapPin className="h-5 w-5 text-rose-600" />
-          Adu locațiile din Google My Maps
+          Adu locațiile magazinelor
         </h1>
         <p className="mt-1 max-w-2xl break-words text-sm leading-snug text-slate-600">
-          Dacă ai o hartă cu magazinele puse de mână, o aducem aici. De atunci,
-          agenții navighează pe coordonate exacte, nu pe adresa din registru —
-          îi duce la ușă, nu în centrul satului.
+          O apăsare aduce tot ce se poate: harta ta cu magazinele puse de mână
+          (dacă ai una) <b>și</b> magazinele pe care le-au pus alți oameni pe
+          OpenStreetMap — alea la care n-a ajuns încă niciun agent de-al tău.
+          De atunci, agenții navighează pe coordonate exacte, nu pe adresa din
+          registru: îi duce la ușă, nu în centrul satului.
         </p>
       </div>
 
@@ -231,10 +285,10 @@ export default function HartaImportPage() {
           <button
             type="button"
             onClick={automat}
-            disabled={lucreaza || (!link.trim() && !kml.trim())}
+            disabled={lucreaza}
             className="min-h-11 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-50"
           >
-            {lucreaza ? "Lucrez..." : "Adu locațiile (fă tot singur)"}
+            {lucreaza ? (pas || "Lucrez...") : "Adu locațiile (fă tot singur)"}
           </button>
           <Button onClick={verifica} disabled={lucreaza || (!link.trim() && !kml.trim())}>
             {lucreaza ? "Citesc harta..." : "Vreau să văd întâi lista"}
@@ -250,8 +304,9 @@ export default function HartaImportPage() {
         </div>
         <p className="mt-2 break-words text-xs leading-snug text-slate-500">
           „Fă tot singur" pune locurile unde numele se potrivește exact —
-          restul ți le arată, scurt. Ce au pus agenții din teren nu se atinge,
-          iar tot ce aduce se poate șterge cu „Anulează".
+          restul ți le arată, scurt. Merge și fără link: atunci aduce doar
+          magazinele de pe OpenStreetMap. Ce au pus agenții din teren nu se
+          atinge, iar tot ce aduce se poate șterge cu „Anulează".
         </p>
       </Card>
 
@@ -287,7 +342,7 @@ export default function HartaImportPage() {
               🟣 Am păstrat și <b>{gata.magazineSalvate}</b> magazine din hartă
               care nu sunt în listele tale. Nu-s pierdute: sunt magazine
               adevărate, cu locul pus de mână. Agenții le văd pe hartă cu
-              butonul „Magazine din harta veche" și au drumul gata știut —
+              butonul „Magazine de prospectat" și au drumul gata știut —
               bune de prospectat. Când ajung acolo, spun dacă magazinul mai
               există sau nu.
             </p>
@@ -317,6 +372,55 @@ export default function HartaImportPage() {
               )}
             </details>
           )}
+        </Card>
+      )}
+
+      {osm && (
+        <Card>
+          <p className="break-words text-sm leading-snug text-slate-800">
+            🗺️ Am căutat și pe <b>OpenStreetMap</b> — magazinele puse acolo de
+            oameni care au trecut pe drum.
+          </p>
+          {osm.magazineNoi > 0 && (
+            <p className="mt-1 break-words rounded-lg bg-cyan-50 p-3 text-sm leading-snug text-cyan-900">
+              🔵 <b>{osm.magazineNoi}</b> magazine noi de prospectat, cu locul
+              exact. Agenții le văd pe hartă la butonul „Magazine de
+              prospectat", albastre. Când ajung acolo, spun dacă magazinul mai
+              există.
+            </p>
+          )}
+          {osm.locuriPuse > 0 && (
+            <p className="mt-1 break-words text-sm font-medium leading-snug text-emerald-800">
+              Și <b>{osm.locuriPuse}</b> firme din listele tale au primit locul
+              exact de acolo.
+            </p>
+          )}
+          {osm.magazineNoi === 0 && osm.locuriPuse === 0 && (
+            <p className="mt-1 break-words text-sm leading-snug text-slate-600">
+              N-a ieșit nimic nou de acolo
+              {osm.deja > 0 ? ` — cele ${osm.deja} găsite le aveai deja pe hartă.` : "."}
+            </p>
+          )}
+          <details className="mt-2">
+            <summary className="cursor-pointer text-xs font-medium text-slate-600">
+              Pe județe
+            </summary>
+            <ul className="mt-2 space-y-1">
+              {osm.peJudet.map((j) => (
+                <li key={j.judet} className="break-words text-xs leading-snug text-slate-600">
+                  <b>{j.judet}</b>:{" "}
+                  {j.eroare
+                    ? `n-a mers acum (${j.eroare}) — mai apasă o dată peste câteva minute`
+                    : `${j.magazine} magazine citite`}
+                </li>
+              ))}
+            </ul>
+            {osm.deja > 0 && (
+              <p className="mt-2 break-words text-xs leading-snug text-slate-500">
+                {osm.deja} le aveai deja pe hartă — nu le-am pus a doua oară.
+              </p>
+            )}
+          </details>
         </Card>
       )}
 

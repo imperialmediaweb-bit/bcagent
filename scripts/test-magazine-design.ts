@@ -5,7 +5,7 @@
  * agentul le vede pe telefon, în mașină, și apasă pe ele cu degetul. Deci
  * trebuie verificat exact ce vede el:
  *
- *   deschide harta → apasă „Magazine din harta veche" → apar punctele →
+ *   deschide harta → apasă „Magazine de prospectat" → apar punctele →
  *   apasă pe unul → citește ce e → „Navighează" sau „✅ Există" / „✕ Nu mai e"
  *
  * Plus ce ține de mână: nimic nu iese din ecran, butoanele sunt întregi și
@@ -216,8 +216,8 @@ async function main() {
       }
 
       // ── butonul ──
-      const btn = page.locator("button", { hasText: "Magazine din harta veche" }).first();
-      check(`[${ecran.nume}] butonul „Magazine din harta veche" există`, (await btn.count()) > 0);
+      const btn = page.locator("button", { hasText: "Magazine de prospectat" }).first();
+      check(`[${ecran.nume}] butonul „Magazine de prospectat" există`, (await btn.count()) > 0);
       if ((await btn.count()) === 0) {
         check(`[${ecran.nume}] restul fluxului`, false, "fără buton nu pot merge mai departe");
         await ctx.close();
@@ -231,7 +231,7 @@ async function main() {
       );
       check(
         `[${ecran.nume}] scrie câte magazine sunt`,
-        /Magazine din harta veche \(\d+\)/.test(await page.evaluate(() => document.body.innerText)),
+        /Magazine de prospectat \(\d+\)/.test(await page.evaluate(() => document.body.innerText)),
       );
 
       const inainte = await page.locator("path.leaflet-interactive").count();
@@ -246,7 +246,7 @@ async function main() {
       check(`[${ecran.nume}] cu ele pe hartă, nimic nu iese din ecran`, (await iese(page)) <= 2, `${await iese(page)}px`);
       check(
         `[${ecran.nume}] butonul se schimbă în „Ascunde"`,
-        (await page.locator("button", { hasText: "Ascunde magazinele din harta veche" }).count()) > 0,
+        (await page.locator("button", { hasText: "Ascunde magazinele de prospectat" }).count()) > 0,
       );
 
       // ── balonașul unui magazin ──
@@ -256,7 +256,7 @@ async function main() {
         await puncte.nth(i).click({ force: true });
         await page.waitForTimeout(900);
         const t = await page.evaluate(() => document.body.innerText);
-        if (/harta veche/i.test(t) && /MAGAZINUL MIXT|ANDRONACHE|BAR LA VALE/i.test(t)) {
+        if (/harta veche|OpenStreetMap|nimeni n-a trecut/i.test(t) && /MAGAZINUL MIXT|ANDRONACHE|BAR LA VALE/i.test(t)) {
           deschis = true;
           break;
         }
@@ -266,7 +266,7 @@ async function main() {
         const t = await page.evaluate(() => document.body.innerText);
         check(
           `[${ecran.nume}] spune că e din harta veche, nu client`,
-          /nimeni n-a trecut încă|harta veche/i.test(t),
+          /nimeni n-a trecut încă|harta veche|OpenStreetMap/i.test(t),
         );
         check(
           `[${ecran.nume}] are „Navighează"`,

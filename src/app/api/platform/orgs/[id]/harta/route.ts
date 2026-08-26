@@ -38,7 +38,15 @@ export async function POST(
   if ("response" in auth) return auth.response;
   const { id: orgId } = await ctx.params;
 
-  let body: { link?: string; kml?: string; anuleaza?: boolean };
+  let body: {
+    link?: string;
+    kml?: string;
+    anuleaza?: boolean;
+    /** A doua jumătate a aceluiași buton: magazinele din OpenStreetMap. */
+    osm?: boolean;
+    /** De la al câtelea județ reluăm (cursorul din răspunsul trecut). */
+    osmDeLa?: number;
+  };
   try {
     body = await req.json();
   } catch {
@@ -67,6 +75,20 @@ export async function POST(
         sterse: sters.count,
       });
       return Response.json({ ok: true, sterse: sters.count });
+    }
+
+    // ── MAGAZINELE DIN OPENSTREETMAP ──
+    // Aceeași unealtă ca în panoul firmei, chemată din același buton.
+    // Rămâne scris în jurnal cine a apăsat și pentru cine.
+    if (body.osm === true) {
+      const { aduMagazineOSM } = await import("@/modules/prospects/osm-import");
+      const r = await aduMagazineOSM(db, orgId, agenti, Number(body.osmDeLa ?? 0));
+      await audit(auth.session.email, "harta.osm", orgId, {
+        locuriPuse: r.locuriPuse,
+        magazineNoi: r.magazineNoi,
+        judete: r.peJudet.map((j) => j.judet).join(","),
+      });
+      return Response.json({ ok: true, osm: r });
     }
 
     // ── aducem harta ──

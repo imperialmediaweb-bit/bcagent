@@ -231,9 +231,11 @@ export default function MapPanel({
   // mea" (Bogdan, 26.08). Harta arată tot județul; agentul umblă azi în
   // cinci sate. Comutatorul le lasă doar pe alea.
   const [zonaAzi, setZonaAzi] = useState<{ zi: string; localitati: string[] } | null>(null);
-  // MAGAZINELE DIN HARTA VECHE a firmei: magazine adevărate, cu locul pus
-  // de mână, care n-au pereche în registru. Sunt puncte de prospectare
-  // gata verificate — de-aia merită văzute pe hartă.
+  // MAGAZINELE DE PROSPECTAT: magazine adevărate care n-au pereche în
+  // registru. Vin din două locuri — harta veche a firmei (puse de mână,
+  // punct cu punct) și OpenStreetMap (puse de oameni care au trecut
+  // pe-acolo). Amândouă sunt drumuri gata știute; `strat` spune de unde
+  // vine fiecare, ca agentul să știe cât să se bizuie pe el.
   const [magHarta, setMagHarta] = useState<
     Array<{
       id: string;
@@ -241,6 +243,7 @@ export default function MapPanel({
       adresa: string;
       lat: number;
       lng: number;
+      strat?: string;
       confirmat?: boolean;
     }>
   >([]);
@@ -735,10 +738,15 @@ export default function MapPanel({
       // sunt locuri de prospectat, cu drum gata știut.
       if (aratMag && magHarta.length > 0) {
         for (const m of magHarta) {
+          // TOATE LA FEL PE HARTĂ: un punct mov, un buton, o listă. Pentru
+          // agent sunt același lucru — un magazin la care merită să intre.
+          // De unde știm de el scrie în balonaș, un rând, când îl deschide.
+          const dinOSM = m.strat === "OpenStreetMap";
+          const culoare = "#7c3aed";
           const punct = L.circleMarker([m.lat, m.lng], {
             radius: 5,
             color: "#ffffff",
-            fillColor: "#7c3aed",
+            fillColor: culoare,
             fillOpacity: 0.95,
             weight: 2,
           });
@@ -746,10 +754,12 @@ export default function MapPanel({
             `<div style="min-width:0">
               <div style="font-weight:700;font-size:13px;overflow-wrap:anywhere">${escHtml(m.nume)}</div>
               ${m.adresa ? `<div style="font-size:11px;color:#475569;margin-top:2px">${escHtml(m.adresa.slice(0, 120))}</div>` : ""}
-              <div style="font-size:11px;color:#7c3aed;margin-top:4px">${
+              <div style="font-size:11px;color:${culoare};margin-top:4px">${
                 m.confirmat
                   ? "✅ confirmat de un coleg — magazinul există"
-                  : "magazin din harta veche — nimeni n-a trecut încă pe la el"
+                  : dinOSM
+                    ? "magazin de pe OpenStreetMap — pus de cineva care a trecut pe-acolo, dar nimeni de la noi n-a fost încă"
+                    : "magazin din harta veche — nimeni n-a trecut încă pe la el"
               }</div>
               <a href="${escHtml(gmapsDir(`${m.lat},${m.lng}`))}" target="_blank" rel="noopener" style="display:flex;align-items:center;justify-content:center;min-height:40px;margin-top:8px;font-size:13px;font-weight:700;color:#1d4ed8;text-decoration:none;background:#eff6ff;border-radius:8px">🧭 Navighează</a>
               <div style="display:flex;gap:6px;margin-top:8px">
@@ -1230,12 +1240,12 @@ export default function MapPanel({
                   ? "bg-violet-700 text-white shadow-sm"
                   : "bg-violet-50 text-violet-700 hover:bg-violet-100"
               }`}
-              title="Magazine din harta veche a firmei — locuri de prospectat, cu drumul gata știut"
+              title="Magazine de prospectat — locuri unde merită să intri, cu drumul gata știut"
             >
               🟣{" "}
               {aratMag
-                ? "Ascunde magazinele din harta veche"
-                : `Magazine din harta veche (${magHarta.length})`}
+                ? "Ascunde magazinele de prospectat"
+                : `Magazine de prospectat (${magHarta.length})`}
             </button>
           )}
           {doarZona && buleInZona === 0 && (
