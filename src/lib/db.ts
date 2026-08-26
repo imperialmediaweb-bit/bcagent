@@ -294,6 +294,11 @@ export async function ensureSchema(): Promise<void> {
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
 
+    -- De unde vine locul: „deget"/„gps" = pus de om pe teren, „import" =
+    -- adus dintr-o hartă. Fără asta, un import făcut din greșeală nu se
+    -- putea da înapoi fără să ștergi și munca agenților.
+    ALTER TABLE geo_firme ADD COLUMN IF NOT EXISTS sursa TEXT NOT NULL DEFAULT '';
+
     CREATE TABLE IF NOT EXISTS geo_localitati (
       judet TEXT NOT NULL,
       localitate TEXT NOT NULL,

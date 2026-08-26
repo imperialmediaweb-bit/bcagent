@@ -37,8 +37,11 @@ interface ClientRand {
 }
 
 /** Ce trimitem înapoi pentru un pin — destul cât să poată verifica omul. */
-function pentruEcran(p: Potrivire) {
+function pentruEcran(p: Potrivire, clientiiMei?: Set<string>) {
   return {
+    // Clienții firmei contează cel mai mult; restul sunt firme din registru,
+    // bune de avut, dar nu de verificat rând cu rând.
+    eClientDeAlMeu: p.client ? (clientiiMei?.has(p.client.cui) ?? false) : false,
     nume: p.punct.nume,
     strat: (p.punct as { strat?: string }).strat ?? "",
     lat: p.punct.lat,
@@ -69,6 +72,10 @@ export async function POST(req: Request) {
     verificaDoar?: boolean;
     /** La salvare: perechile confirmate de om (cui ↔ coordonate). */
     confirmate?: Array<{ cui?: string; lat?: number; lng?: number }>;
+    /** „Fă tot singur": scrie potrivirile SIGURE, fără să mai întrebe. */
+    automat?: boolean;
+    /** Șterge locurile aduse din hartă (nu și pe cele puse de agenți). */
+    anuleaza?: boolean;
   };
   try {
     body = await req.json();
@@ -81,6 +88,23 @@ export async function POST(req: Request) {
 
   try {
     await ensureSchema();
+
+    // ── ANULARE: ștergem DOAR ce a adus importul ──
+    // Ce au pus agenții pe teren („Pune locul", „Sunt aici", „Am fost")
+    // rămâne neatins: aia e muncă făcută la fața locului, nu ghicit.
+    if (body.anuleaza === true) {
+      const { listOrgAgents } = await import("@/modules/platform");
+      const numeAg = (await listOrgAgents(auth.session.orgId)).map((a) => a.name);
+      const sters = await db`
+        DELETE FROM geo_firme g
+        USING prospects p
+        WHERE p.cui = g.cui
+          AND g.sursa = 'import'
+          AND (COALESCE(p.assigned_agent, '') = ''
+               OR p.assigned_agent = ANY(${numeAg.length ? numeAg : [""]}))
+      `;
+      return Response.json({ ok: true, sterse: sters.count });
+    }
 
     // ── treapta 2: scriem ce a confirmat omul ──
     if (!body.verificaDoar && Array.isArray(body.confirmate)) {
@@ -104,15 +128,22 @@ export async function POST(req: Request) {
         // IZOLARE: scriem doar pe firmele agenției noastre. Registrul e
         // comun — pinul altei agenții nu se atinge.
         const r = await db`
-          INSERT INTO geo_firme (cui, lat, lng, aprox, failed)
-          SELECT p.cui, ${lat}, ${lng}, FALSE, FALSE
+          INSERT INTO geo_firme (cui, lat, lng, aprox, failed, sursa)
+          SELECT p.cui, ${lat}, ${lng}, FALSE, FALSE, 'import'
           FROM prospects p
           WHERE p.cui = ${cui}
             AND (COALESCE(p.assigned_agent, '') = ''
                  OR p.assigned_agent = ANY(${agenti.length ? agenti : [""]}))
+            -- CE A PUS OMUL PE TEREN NU SE ATINGE. Agentul a fost acolo;
+            -- importul doar ghicește după nume.
+            AND NOT EXISTS (
+              SELECT 1 FROM geo_firme g
+              WHERE g.cui = p.cui AND g.sursa IN ('deget', 'gps')
+            )
           ON CONFLICT (cui) DO UPDATE
             SET lat = EXCLUDED.lat, lng = EXCLUDED.lng,
-                aprox = FALSE, failed = FALSE, updated_at = NOW()
+                aprox = FALSE, failed = FALSE, sursa = 'import',
+                updated_at = NOW()
         `;
         if (r.count > 0) scrise++;
         else sarite++;
@@ -268,9 +299,58 @@ export async function POST(req: Request) {
       centreRanduri.map((c) => [neted(c.localitate), { lat: c.lat, lng: c.lng }]),
     );
 
+    const cuiuriClienti = new Set(clienti.map((c) => c.cui));
     const potriviri = potriveștePuncte(puncte, deLegat, 0.7, centre);
     const gasite = potriviri.filter((p) => p.client !== null);
     const nepotrivite = potriviri.filter((p) => p.client === null);
+
+    // ── „FĂ TOT SINGUR" ──
+    // Nimeni nu se uită la 2450 de rânduri. Scriem singuri potrivirile
+    // SIGURE (nume identic sau identic fără forma juridică — pe harta
+    // reală, zero greșeli din astea) și-i arătăm doar ce a rămas nesigur.
+    // Se poate da înapoi oricând, cu un buton: locurile aduse din hartă
+    // sunt marcate, cele puse de agenți nu se ating.
+    if (body.automat === true) {
+      const { listOrgAgents } = await import("@/modules/platform");
+      const numeAg = (await listOrgAgents(auth.session.orgId)).map((a) => a.name);
+      const sigure = potriviri.filter((p) => p.client && p.scor >= 0.9);
+      let scrise = 0;
+      for (const g of sigure) {
+        const r = await db`
+          INSERT INTO geo_firme (cui, lat, lng, aprox, failed, sursa)
+          SELECT p.cui, ${g.punct.lat}, ${g.punct.lng}, FALSE, FALSE, 'import'
+          FROM prospects p
+          WHERE p.cui = ${g.client!.cui}
+            AND (COALESCE(p.assigned_agent, '') = ''
+                 OR p.assigned_agent = ANY(${numeAg.length ? numeAg : [""]}))
+            AND NOT EXISTS (
+              SELECT 1 FROM geo_firme gf
+              WHERE gf.cui = p.cui AND gf.sursa IN ('deget', 'gps')
+            )
+          ON CONFLICT (cui) DO UPDATE
+            SET lat = EXCLUDED.lat, lng = EXCLUDED.lng,
+                aprox = FALSE, failed = FALSE, sursa = 'import',
+                updated_at = NOW()
+        `;
+        if (r.count > 0) scrise++;
+      }
+      const deVazut = potriviri.filter((p) => !p.client || p.scor < 0.9);
+      return Response.json({
+        ok: true,
+        automat: true,
+        scrise,
+        totalPuncte: puncte.length,
+        totalClienti: clienti.length,
+        totalDinRegistru: dinRegistru.length,
+        sarite: {
+          faraLocPeHarta: raport.faraLocPeHarta,
+          inafara: raport.inafara,
+          liniiSiZone: raport.liniiSiZone,
+        },
+        // Doar ce a rămas nesigur — atât are omul de verificat.
+        nepotrivite: deVazut.map((n) => pentruEcran(n, cuiuriClienti)),
+      });
+    }
 
     return Response.json({
       ok: true,
@@ -285,8 +365,8 @@ export async function POST(req: Request) {
         inafara: raport.inafara,
         liniiSiZone: raport.liniiSiZone,
       },
-      gasite: gasite.map(pentruEcran),
-      nepotrivite: nepotrivite.map(pentruEcran),
+      gasite: gasite.map((g) => pentruEcran(g, cuiuriClienti)),
+      nepotrivite: nepotrivite.map((n) => pentruEcran(n, cuiuriClienti)),
     });
   } catch (e) {
     console.error("[harta-import]", e);

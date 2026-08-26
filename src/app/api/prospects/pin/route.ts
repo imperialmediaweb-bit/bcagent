@@ -111,8 +111,8 @@ export async function POST(req: Request) {
     }
 
     const scris = await db`
-      INSERT INTO geo_firme (cui, lat, lng, aprox, failed)
-      SELECT p.cui, ${lat}, ${lng}, FALSE, FALSE
+      INSERT INTO geo_firme (cui, lat, lng, aprox, failed, sursa)
+      SELECT p.cui, ${lat}, ${lng}, FALSE, FALSE, ${sursa}
       FROM prospects p
       WHERE p.cui = ${cui}
         AND (COALESCE(p.assigned_agent, '') = ''

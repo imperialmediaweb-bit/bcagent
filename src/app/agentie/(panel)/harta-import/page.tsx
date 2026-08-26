@@ -29,6 +29,15 @@ interface Rand {
   motiv: string;
   variante: Array<{ cui: string; denumire: string; localitate: string }>;
 }
+interface Automat {
+  automat: true;
+  scrise: number;
+  totalPuncte: number;
+  totalClienti: number;
+  totalDinRegistru?: number;
+  sarite?: { faraLocPeHarta: number; inafara: number; liniiSiZone: number };
+  nepotrivite: Rand[];
+}
 interface Verificare {
   totalPuncte: number;
   totalClienti: number;
@@ -49,6 +58,51 @@ export default function HartaImportPage() {
   const [scoase, setScoase] = useState<Set<string>>(new Set());
   /** Ce am ales manual pentru pinurile nepotrivite: nume pin → CUI. */
   const [alese, setAlese] = useState<Record<string, string>>({});
+
+  const [gata, setGata] = useState<Automat | null>(null);
+
+  /**
+   * „Fă tot singur": aduce harta, leagă ce e sigur și SCRIE. Nimeni nu se
+   * uită la 2450 de rânduri — deci nu-l punem. Ce rămâne nesigur i se
+   * arată după, scurt, iar totul se poate da înapoi dintr-un buton.
+   */
+  async function automat() {
+    setLucreaza(true);
+    setEroare(null);
+    setMesaj(null);
+    setV(null);
+    setGata(null);
+    try {
+      const d = await api<Automat>("/api/agentie/harta-import", {
+        method: "POST",
+        body: JSON.stringify({ link, kml, automat: true }),
+      });
+      setGata(d);
+    } catch (e) {
+      setEroare(e instanceof Error ? e.message : String(e));
+    } finally {
+      setLucreaza(false);
+    }
+  }
+
+  async function anuleaza() {
+    if (!confirm("Șterg locurile aduse din hartă. Cele puse de agenți din teren rămân. Continui?")) return;
+    setLucreaza(true);
+    setEroare(null);
+    try {
+      const d = await api<{ sterse: number }>("/api/agentie/harta-import", {
+        method: "POST",
+        body: JSON.stringify({ anuleaza: true }),
+      });
+      setGata(null);
+      setV(null);
+      setMesaj(`Am șters ${d.sterse} locuri aduse din hartă. Ce au pus agenții pe teren n-am atins.`);
+    } catch (e) {
+      setEroare(e instanceof Error ? e.message : String(e));
+    } finally {
+      setLucreaza(false);
+    }
+  }
 
   async function verifica() {
     setLucreaza(true);
@@ -171,15 +225,82 @@ export default function HartaImportPage() {
             className="mt-2 block w-full text-xs"
           />
         </details>
-        <div className="mt-3">
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={automat}
+            disabled={lucreaza || (!link.trim() && !kml.trim())}
+            className="min-h-11 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-50"
+          >
+            {lucreaza ? "Lucrez..." : "Adu locațiile (fă tot singur)"}
+          </button>
           <Button onClick={verifica} disabled={lucreaza || (!link.trim() && !kml.trim())}>
-            {lucreaza ? "Citesc harta..." : "Vezi ce am înțeles"}
+            {lucreaza ? "Citesc harta..." : "Vreau să văd întâi lista"}
           </Button>
+          <button
+            type="button"
+            onClick={anuleaza}
+            disabled={lucreaza}
+            className="min-h-11 rounded-lg border border-slate-200 px-3 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50 disabled:opacity-50"
+          >
+            Anulează ce am adus
+          </button>
         </div>
+        <p className="mt-2 break-words text-xs leading-snug text-slate-500">
+          „Fă tot singur" pune locurile unde numele se potrivește exact —
+          restul ți le arată, scurt. Ce au pus agenții din teren nu se atinge,
+          iar tot ce aduce se poate șterge cu „Anulează".
+        </p>
       </Card>
 
       {eroare && <Alert kind="error">{eroare}</Alert>}
       {mesaj && <Alert kind="success">{mesaj}</Alert>}
+
+      {gata && (
+        <Card>
+          <p className="break-words text-sm leading-snug text-slate-800">
+            ✅ Gata. Am pus locul exact la <b>{gata.scrise}</b> magazine, din{" "}
+            <b>{gata.totalPuncte}</b> câte are harta.
+          </p>
+          <p className="mt-1 break-words text-xs leading-snug text-slate-500">
+            Agenții le văd la următoarea deschidere a hărții. „Navighează" îi
+            duce acum la ușă, nu în centrul satului.
+            {gata.sarite && gata.sarite.faraLocPeHarta > 0 && (
+              <>
+                {" "}
+                Din hartă, <b>{gata.sarite.faraLocPeHarta}</b> firme erau
+                trecute în listă dar niciodată puse pe ea — alea n-au
+                coordonate de adus.
+              </>
+            )}
+          </p>
+          {gata.nepotrivite.length > 0 && (
+            <details className="mt-3">
+              <summary className="cursor-pointer break-words text-sm font-medium leading-snug text-amber-700">
+                {gata.nepotrivite.length} n-am fost sigur — apasă dacă vrei să
+                le pui și pe alea (nu e obligatoriu)
+              </summary>
+              <ul className="mt-2 divide-y divide-slate-100">
+                {gata.nepotrivite.slice(0, 200).map((n) => (
+                  <li key={n.nume + n.lat} className="py-2">
+                    <p className="break-words text-sm leading-snug text-slate-900">
+                      <b>{n.nume}</b>
+                    </p>
+                    <p className="break-words text-xs leading-snug text-amber-700">
+                      {n.motiv}
+                    </p>
+                  </li>
+                ))}
+              </ul>
+              {gata.nepotrivite.length > 200 && (
+                <p className="mt-2 text-xs text-slate-500">
+                  …și încă {gata.nepotrivite.length - 200}.
+                </p>
+              )}
+            </details>
+          )}
+        </Card>
+      )}
 
       {v && (
         <>

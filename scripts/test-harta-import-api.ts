@@ -114,8 +114,8 @@ async function main() {
     };
   };
   const pin = async (c: string) =>
-    (await sql<Array<{ lat: number; lng: number; aprox: boolean }>>`
-      SELECT lat, lng, aprox FROM geo_firme WHERE cui = ${c}`)[0];
+    (await sql<Array<{ lat: number; lng: number; aprox: boolean; sursa: string }>>`
+      SELECT lat, lng, aprox, sursa FROM geo_firme WHERE cui = ${c}`)[0];
 
   try {
     sectiune("Linkul dat de om");
@@ -208,12 +208,72 @@ async function main() {
     const gol = await cere(ck, { confirmate: [] });
     check("„n-am bifat nimic” nu e o eroare", gol.s === 200 && gol.d.scrise === 0);
 
+    sectiune("„Fă tot singur”: scrie ce e sigur, fără să întrebe");
+    // Curățăm locurile puse mai sus, ca să pornim de la zero.
+    await sql`DELETE FROM geo_firme WHERE cui = ANY(${[0, 1, 2, 3].map(cui)})`;
+    // Agentul a pus DEJA locul primei firme, din teren.
+    await sql`INSERT INTO geo_firme (cui, lat, lng, aprox, failed, sursa)
+              VALUES (${cui(0)}, 47.111, 26.111, FALSE, FALSE, 'deget')`;
+
+    const auto = await cere(ck, {
+      kml: `<kml><Document>
+        <Placemark><name>MAGAZIN UNU ${SUS} SRL</name><Point><coordinates>26.9,47.9,0</coordinates></Point></Placemark>
+        <Placemark><name>MAGAZIN DOI ${SUS} SRL</name><Point><coordinates>26.8,47.8,0</coordinates></Point></Placemark>
+        <Placemark><name>CEVA CE NU EXISTA ${SUS}</name><Point><coordinates>26.7,47.7,0</coordinates></Point></Placemark>
+      </Document></kml>`,
+      automat: true,
+    });
+    check("importul automat merge", auto.s === 200, `status ${auto.s}`);
+    const dAuto = auto.d as unknown as {
+      scrise?: number;
+      nepotrivite?: Array<{ nume: string }>;
+    };
+    check("a scris singur potrivirile sigure", (dAuto.scrise ?? 0) >= 1, `scrise=${dAuto.scrise}`);
+    const pinImport = await pin(cui(1));
+    check("firma a doua a primit locul din hartă", !!pinImport);
+    check("…marcat ca venit din import", pinImport?.sursa === "import");
+
+    const pinAgent = await pin(cui(0));
+    check(
+      "LOCUL PUS DE AGENT NU S-A ATINS",
+      Math.abs((pinAgent?.lat ?? 0) - 47.111) < 0.0001,
+      `${pinAgent?.lat}`,
+    );
+    check(
+      "…și a rămas marcat ca pus cu degetul",
+      pinAgent?.sursa === "deget",
+      pinAgent?.sursa,
+    );
+    check(
+      "ce n-a găsit e raportat, nu ghicit",
+      (dAuto.nepotrivite ?? []).some((n) => n.nume.includes("NU EXISTA")),
+      JSON.stringify(dAuto.nepotrivite?.map((n) => n.nume)),
+    );
+
+    sectiune("Anularea șterge DOAR ce a adus importul");
+    const anul = await cere(ck, { anuleaza: true });
+    check("anularea merge", anul.s === 200, `status ${anul.s}`);
+    check("…și spune câte a șters", ((anul.d as unknown as { sterse?: number }).sterse ?? 0) >= 1);
+    check("locul adus din hartă a dispărut", !(await pin(cui(1))));
+    const p0dupa = await pin(cui(0));
+    check(
+      "LOCUL AGENTULUI A RĂMAS PE LOC",
+      Math.abs((p0dupa?.lat ?? 0) - 47.111) < 0.0001,
+      `${p0dupa?.lat}`,
+    );
+
     sectiune("Pagina se deschide");
     const pag = await fetch(`${BASE}/agentie/harta-import`, { headers: { cookie: ck } });
     check("pagina răspunde", pag.status === 200, `status ${pag.status}`);
     const html = await pag.text();
     check("are câmpul pentru link", /My Maps/i.test(html));
-    check("spune că nimic nu se salvează pe încredere", /ce am înțeles/i.test(html));
+    check("are butonul care face tot singur", /fă tot singur/i.test(html));
+    check("…dar și varianta cu lista, pentru cine vrea", /să văd întâi lista/i.test(html));
+    check("…și butonul de anulare", /Anulează ce am adus/i.test(html));
+    check(
+      "spune limpede că ce au pus agenții nu se atinge",
+      /puse? de agenți/i.test(html) || /din teren nu se atinge/i.test(html),
+    );
   } finally {
     sectiune("Curățenie");
     await curata();

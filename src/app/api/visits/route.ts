@@ -260,8 +260,8 @@ export async function POST(req: Request) {
     let pinScris = false;
     if (fixBun) {
       const scris = await db`
-        INSERT INTO geo_firme (cui, lat, lng, aprox, failed)
-        SELECT p.cui, ${lat}, ${lng}, FALSE, FALSE
+        INSERT INTO geo_firme (cui, lat, lng, aprox, failed, sursa)
+        SELECT p.cui, ${lat}, ${lng}, FALSE, FALSE, 'gps'
         FROM prospects p
         WHERE p.cui = ${cui}
           AND (COALESCE(p.assigned_agent, '') = ''
@@ -269,7 +269,8 @@ export async function POST(req: Request) {
                OR p.assigned_agent = ANY(${aiMei}))
         ON CONFLICT (cui) DO UPDATE
           SET lat = EXCLUDED.lat, lng = EXCLUDED.lng,
-              aprox = FALSE, failed = FALSE, updated_at = NOW()
+              aprox = FALSE, failed = FALSE, sursa = 'gps',
+              updated_at = NOW()
       `;
       pinScris = scris.count > 0;
     }
