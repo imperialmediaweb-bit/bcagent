@@ -324,6 +324,7 @@ export async function POST(req: Request) {
         adreseScrise: r.adreseScrise,
         pinuriCuCui: r.pinuriCuCui,
         adreseCuNumar: r.adreseCuNumar,
+        cuCuiNecunoscut: r.cuCuiNecunoscut,
         clientiCuLoc: r.clientiCuLoc,
         magazineSalvate: r.magazineSalvate,
         totalPuncte: puncte.length,

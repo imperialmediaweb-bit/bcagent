@@ -332,6 +332,14 @@ export async function ensureSchema(): Promise<void> {
     -- ani: unele magazine s-au închis, altele s-au mutat. Agentul care
     -- trece pe-acolo confirmă sau taie — și de-atunci nu mai pierde nimeni
     -- drumul degeaba.
+    -- CINE E, când pinul o spune. Harta lui Bogdan are pe fiecare pin un
+    -- tabel întreg: Cod Fiscal, Nume Legal, Adresa cu număr. Dintre cele
+    -- 2450 de pinuri, 1634 au CUI-uri care nu-s în registrul nostru —
+    -- firme adevărate, doar că necunoscute nouă. Fără coloanele astea,
+    -- agentul vedea un punct mov fără nume și fără adresă; cu ele, vede
+    -- „OVI-TACOMAX SRL · CUI 18584450 · Str. Principală 183A".
+    ALTER TABLE magazin_harta ADD COLUMN IF NOT EXISTS cui TEXT NOT NULL DEFAULT '';
+    ALTER TABLE magazin_harta ADD COLUMN IF NOT EXISTS nume_legal TEXT NOT NULL DEFAULT '';
     ALTER TABLE magazin_harta ADD COLUMN IF NOT EXISTS stare TEXT NOT NULL DEFAULT '';
     ALTER TABLE magazin_harta ADD COLUMN IF NOT EXISTS confirmat_de TEXT NOT NULL DEFAULT '';
     ALTER TABLE magazin_harta ADD COLUMN IF NOT EXISTS confirmat_la TIMESTAMPTZ;

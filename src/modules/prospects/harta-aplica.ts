@@ -52,6 +52,12 @@ export interface RezultatHarta {
   adreseCuNumar: number;
   /** Câți clienți ai firmei au acum locul exact. */
   clientiCuLoc: number;
+  /**
+   * Pinuri cu CUI scris, dar al cărui CUI nu e nicăieri în baza noastră.
+   * Fără cifra asta, „1634 n-am putut lega" nu spune nimic: omul nu știe
+   * dacă e vina potrivirii sau pur și simplu firme pe care nu le avem.
+   */
+  cuCuiNecunoscut: number;
   totalClienti: number;
   totalDinRegistru: number;
   /** Potrivirile, ca să le poată arăta ruta pe ecran. */
@@ -178,6 +184,7 @@ export async function aplicaHarta(
 
   const potriviri = potriveștePuncte(puncte, toate, 0.7, centre);
   const sigure = potriviri.filter((p) => p.client && p.scor >= 0.9);
+  const stiute = new Set(toate.map((f) => f.cui));
 
   const rez: RezultatHarta = {
     scrise: 0,
@@ -192,6 +199,10 @@ export async function aplicaHarta(
     clientiCuLoc: 0,
     totalClienti: clienti,
     totalDinRegistru: registru,
+    cuCuiNecunoscut: puncte.filter((p) => {
+      const c = String(p.cui ?? "").replace(/\D/g, "");
+      return c !== "" && !stiute.has(c);
+    }).length,
     potriviri,
   };
 
@@ -296,6 +307,12 @@ export async function aplicaHarta(
         lat: p.punct.lat,
         lng: p.punct.lng,
         strat: String(k.strat ?? "").slice(0, 120),
+        // CINE E. 1634 de pinuri au CUI-uri care nu-s în registrul nostru
+        // — firme adevărate, doar necunoscute nouă. Fără astea, agentul
+        // vedea un punct mov fără nume; cu ele, știe la cine intră și
+        // poate cere pe loc firma în listă.
+        cui: String(k.cui ?? "").replace(/\D/g, "").slice(0, 12),
+        nume_legal: String(k.numeLegal ?? "").slice(0, 200),
       };
     });
     const unice = Array.from(new Map(randuri.map((r) => [r.id, r])).values());
@@ -305,12 +322,13 @@ export async function aplicaHarta(
         INSERT INTO magazin_harta ${db(
           bucata,
           "id", "org_id", "nume", "adresa", "localitate", "judet",
-          "lat", "lng", "strat",
+          "lat", "lng", "strat", "cui", "nume_legal",
         )}
         ON CONFLICT (id) DO UPDATE
           SET nume = EXCLUDED.nume, lat = EXCLUDED.lat, lng = EXCLUDED.lng,
               adresa = EXCLUDED.adresa, localitate = EXCLUDED.localitate,
-              judet = EXCLUDED.judet, strat = EXCLUDED.strat
+              judet = EXCLUDED.judet, strat = EXCLUDED.strat,
+              cui = EXCLUDED.cui, nume_legal = EXCLUDED.nume_legal
       `;
       rez.magazineSalvate += r.count;
     }

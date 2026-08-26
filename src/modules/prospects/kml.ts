@@ -44,6 +44,8 @@ export interface PunctKML {
   judet: string;
   /** „Bar/Pub", „Convenience" — ce fel de loc e. */
   fel: string;
+  /** Denumirea din acte, când pinul o are separat de numele de pe firmă. */
+  numeLegal: string;
 }
 
 /**
@@ -255,6 +257,7 @@ export function citesteKML(kml: string): PunctKML[] {
       localitate: primul(camp, ["localitate", "localitatea", "oras"]).slice(0, 120),
       judet: primul(camp, ["judet", "judetul"]).slice(0, 60),
       fel: primul(camp, ["tip outlet", "tip", "fel"]).slice(0, 60),
+      numeLegal: primul(camp, ["nume legal", "denumire legala", "denumire"]).slice(0, 200),
     });
   }
   return out;

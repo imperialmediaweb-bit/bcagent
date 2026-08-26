@@ -42,6 +42,9 @@ interface Automat {
   pinuriCuCui?: number;
   adreseCuNumar?: number;
   adreseScrise?: number;
+  legate?: number;
+  neatinse?: number;
+  cuCuiNecunoscut?: number;
   sarite?: { faraLocPeHarta: number; inafara: number; liniiSiZone: number };
   nepotrivite: Rand[];
 }
@@ -352,14 +355,25 @@ export default function HartaImportPage() {
               <span className="text-slate-500">(harta veche, fără tabel)</span>
             ) : gata.pinuriCuCui > 0 ? (
               <>
-                <b className="text-emerald-700">{gata.pinuriCuCui}</b> pinuri au
-                CUI-ul scris în ele — pe alea nu le-am ghicit după nume, le-am
-                legat exact.
+                <b>{gata.pinuriCuCui}</b> pinuri au CUI-ul scris în ele. Pe alea
+                nu le ghicesc după nume — le caut după CUI, deci ori e firma
+                aia, ori nu e nimeni.
               </>
             ) : (
               <>
                 <b>niciun pin n-are CUI</b>. Harta asta are doar nume pe pinuri,
                 deci potrivirea se face după nume, cum se poate.
+              </>
+            )}
+            {(gata.legate ?? 0) > 0 && (
+              <>
+                {" "}
+                Din ele, <b className="text-emerald-700">{gata.legate}</b> s-au
+                legat de o firmă din bază
+                {(gata.neatinse ?? 0) > 0 && (
+                  <> ({gata.neatinse} erau deja la locul lor, n-am atins nimic)</>
+                )}
+                .
               </>
             )}
             {(gata.adreseCuNumar ?? 0) > 0 && (
@@ -374,6 +388,19 @@ export default function HartaImportPage() {
               </>
             )}
           </p>
+          {/* DE CE N-AU INTRAT RESTUL. Fără rândul ăsta, „1634 n-am putut
+              lega" nu spune nimic: omul nu poate ști dacă e vina potrivirii
+              sau pur și simplu firme pe care nu le avem în bază. */}
+          {(gata.cuCuiNecunoscut ?? 0) > 0 && (
+            <p className="mt-2 break-words rounded-lg bg-amber-50 p-3 text-xs leading-snug text-amber-900">
+              <b>{gata.cuCuiNecunoscut}</b> pinuri au CUI, dar firmele alea{" "}
+              <b>nu există în baza noastră</b> — nu-i vina potrivirii, pur și
+              simplu nu le avem. Nu-s pierdute: le-am păstrat cu numele lor,
+              CUI-ul lor și adresa lor, iar agenții le văd pe hartă la
+              „Magazine de prospectat". Când unul dintre ele merită să devină
+              client, îl adaugi din listă.
+            </p>
+          )}
           <p className="mt-1 break-words text-xs leading-snug text-slate-500">
             Agenții le văd la următoarea deschidere a hărții. „Navighează" îi
             duce acum la ușă, nu în centrul satului.

@@ -244,6 +244,9 @@ export default function MapPanel({
       lat: number;
       lng: number;
       strat?: string;
+      /** CUI-ul și denumirea din acte, când harta le are scrise în pin. */
+      cui?: string;
+      numeLegal?: string;
       confirmat?: boolean;
     }>
   >([]);
@@ -753,7 +756,17 @@ export default function MapPanel({
           punct.bindPopup(
             `<div style="min-width:0">
               <div style="font-weight:700;font-size:13px;overflow-wrap:anywhere">${escHtml(m.nume)}</div>
+              ${
+                m.numeLegal && m.numeLegal !== m.nume
+                  ? `<div style="font-size:11px;color:#475569;margin-top:2px">${escHtml(m.numeLegal.slice(0, 120))}</div>`
+                  : ""
+              }
               ${m.adresa ? `<div style="font-size:11px;color:#475569;margin-top:2px">${escHtml(m.adresa.slice(0, 120))}</div>` : ""}
+              ${
+                m.cui
+                  ? `<div style="font-size:11px;color:#64748b;margin-top:2px">CUI ${escHtml(m.cui)}</div>`
+                  : ""
+              }
               <div style="font-size:11px;color:${culoare};margin-top:4px">${
                 m.confirmat
                   ? "✅ confirmat de un coleg — magazinul există"

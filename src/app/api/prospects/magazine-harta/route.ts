@@ -25,6 +25,10 @@ interface Rand {
   strat: string;
   /** Ce a găsit agentul acolo: "" (nevăzut încă) sau "exista". */
   stare: string;
+  /** CUI-ul, când harta îl are scris în pin. */
+  cui: string;
+  /** Denumirea din acte, când diferă de numele de pe firmă. */
+  nume_legal: string;
 }
 
 /**
@@ -140,7 +144,8 @@ export async function GET(req: Request) {
     const areChenar = s !== null && n !== null && v !== null && e !== null;
 
     const randuri = await db<Rand[]>`
-      SELECT id, nume, adresa, lat, lng, strat, stare
+      SELECT id, nume, adresa, lat, lng, strat, stare,
+             COALESCE(cui, '') AS cui, COALESCE(nume_legal, '') AS nume_legal
       FROM magazin_harta
       WHERE org_id = ${orgId}
         -- Ce a găsit agentul închis nu-l mai trimitem pe nimeni acolo.
@@ -159,6 +164,10 @@ export async function GET(req: Request) {
         lat: r.lat,
         lng: r.lng,
         strat: r.strat,
+        // Cine e, când harta o spune. Agentul intră la un om, nu la un
+        // punct mov: știe firma, CUI-ul și adresa cu număr.
+        cui: r.cui,
+        numeLegal: r.nume_legal,
         confirmat: r.stare === "exista",
       })),
     });
