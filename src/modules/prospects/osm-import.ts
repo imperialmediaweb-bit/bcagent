@@ -33,14 +33,67 @@ import { cheieMagazin, neted, potriveștePuncte } from "./potrivire";
 type DB = NonNullable<ReturnType<typeof getDB>>;
 
 /**
- * MOLDOVA ÎNTREAGĂ.
+ * JUDEȚELE VECINE, CALCULATE DIN DATELE FIRMEI.
  *
- * Un distribuitor din Suceava nu se oprește la granița județului: vecinii
- * sunt la o oră de mers. Aducem magazinele din toată zona, nu doar de unde
- * are deja clienți — altfel harta e goală fix acolo unde ar avea de
- * crescut. Nu costă nimic: sunt puncte de prospectare, nu clienți.
+ * Un distribuitor nu se oprește la granița județului: vecinii sunt la o
+ * oră de mers, iar harta ar rămâne goală fix acolo unde ar avea de
+ * crescut.
+ *
+ * Aveam aici o listă scrisă de mine: „Moldova = SV, BT, IS, NT, BC, VS,
+ * VN, GL". Era bună pentru Uvertura și pentru nimeni altcineva —
+ * platforma nu e a unei singure firme. Pentru un distribuitor din
+ * Timișoara, lista aia nu însemna nimic.
+ *
+ * Acum se calculează: luăm mijlocul județelor în care firma ARE clienți
+ * și adăugăm județele aflate la mai puțin de `KM_VECIN`. Mijlocul îl
+ * scoatem din localitățile pe care le avem deja pe hartă — date, nu
+ * presupuneri. Merge la fel în Suceava și în Timiș.
  */
-export const MOLDOVA = ["SV", "BT", "IS", "NT", "BC", "VS", "VN", "GL"];
+const KM_VECIN = 130;
+
+/** Distanța dintre două locuri, în kilometri. */
+function kmIntre(
+  a: { lat: number; lng: number },
+  b: { lat: number; lng: number },
+): number {
+  const R = 6371;
+  const dLat = ((b.lat - a.lat) * Math.PI) / 180;
+  const dLng = ((b.lng - a.lng) * Math.PI) / 180;
+  const s =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos((a.lat * Math.PI) / 180) *
+      Math.cos((b.lat * Math.PI) / 180) *
+      Math.sin(dLng / 2) ** 2;
+  return 2 * R * Math.asin(Math.min(1, Math.sqrt(s)));
+}
+
+/**
+ * Județele vecine celor în care firma are clienți, după mijlocul lor
+ * geografic. Dacă n-avem de unde ști mijlocul, nu inventăm: întoarcem
+ * lista goală și rămân doar județele lor.
+ */
+export async function judeteVecine(
+  db: DB,
+  aleLor: string[],
+): Promise<string[]> {
+  if (aleLor.length === 0) return [];
+  const mijloc = await db<Array<{ judet: string; lat: number; lng: number }>>`
+    SELECT judet, AVG(lat)::float8 AS lat, AVG(lng)::float8 AS lng
+    FROM geo_localitati
+    WHERE lat IS NOT NULL AND lng IS NOT NULL AND judet <> ''
+    GROUP BY judet
+    HAVING COUNT(*) >= 5
+  `;
+  const dupaJudet = new Map(mijloc.map((m) => [m.judet, m]));
+  const ale = aleLor.map((j) => dupaJudet.get(j)).filter((x) => x !== undefined);
+  if (ale.length === 0) return [];
+  const vecini: string[] = [];
+  for (const m of mijloc) {
+    if (aleLor.includes(m.judet)) continue;
+    if (ale.some((a) => kmIntre(a!, m) <= KM_VECIN)) vecini.push(m.judet);
+  }
+  return vecini;
+}
 
 export interface TreabaOSM {
   judet: string;
@@ -144,15 +197,13 @@ export async function planificaOSM(db: DB, orgId: string): Promise<number> {
     puse.add(judet);
     randuri.push({ org_id: orgId, judet, motiv: "clienti", rang: i });
   });
-  // Vecinii intră doar dacă firma chiar e în Moldova — n-are rost să-i
-  // aducem Galațiul unuia din Timișoara.
-  if (aleLor.some((j) => MOLDOVA.includes(j))) {
-    MOLDOVA.forEach((judet, i) => {
-      if (puse.has(judet)) return;
-      puse.add(judet);
-      randuri.push({ org_id: orgId, judet, motiv: "vecin", rang: 100 + i });
-    });
-  }
+  // Vecinii, calculați din datele lor: județele de lângă cele în care au
+  // clienți. Nu o listă scrisă de noi — merge la fel oriunde în țară.
+  (await judeteVecine(db, aleLor)).forEach((judet, i) => {
+    if (puse.has(judet)) return;
+    puse.add(judet);
+    randuri.push({ org_id: orgId, judet, motiv: "vecin", rang: 100 + i });
+  });
   if (randuri.length === 0) return 0;
 
   await db`

@@ -230,6 +230,30 @@ export async function ensureSchema(): Promise<void> {
     -- se suprascriau fără să afle vreodată.
     ALTER TABLE agent_zone ADD COLUMN IF NOT EXISTS pus_de TEXT NOT NULL DEFAULT '';
     CREATE INDEX IF NOT EXISTS agent_zone_org ON agent_zone(org_id, agent_name);
+    -- CUM ZICE OMUL ↔ CE E ÎN REGISTRU, ÎNVĂȚAT DE LA EL.
+    --
+    -- Agentul scrie „Burdujeni", „Cn-lung", „Centru", „Țara Dornelor".
+    -- Niciunul nu e sat în registru. Am fost tentat să țin în cod o listă
+    -- cu ele — și am și ținut o vreme. E greșit din două motive: e scrisă
+    -- de mine (deci ghicit), și e bună doar pentru Suceava. Pentru un
+    -- distribuitor din Timișoara nu înseamnă nimic, iar platforma nu e a
+    -- unei singure firme.
+    --
+    -- Acum se învață: prima dată omul caută și alege, iar alegerea LUI se
+    -- ține minte pentru firma lui. A doua oară e automat. Merge pentru
+    -- orice oraș din țară, fără ca eu să scriu vreo listă.
+    CREATE TABLE IF NOT EXISTS zona_alias (
+      org_id TEXT NOT NULL,
+      -- cum a scris omul, curățat (fără diacritice, litere mici)
+      scris TEXT NOT NULL,
+      -- ce a ales din lista lui
+      localitate TEXT NOT NULL,
+      pus_de TEXT NOT NULL DEFAULT '',
+      folosit INT NOT NULL DEFAULT 0,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      PRIMARY KEY (org_id, scris, localitate)
+    );
+    CREATE INDEX IF NOT EXISTS zona_alias_org ON zona_alias(org_id, scris);
     -- Comenzile luate din teren: agentul le bate pe telefon la client,
     -- depozitul le vede instant, contabila le exportă pentru SAGA.
     CREATE TABLE IF NOT EXISTS orders (

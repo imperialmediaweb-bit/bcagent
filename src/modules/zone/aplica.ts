@@ -172,6 +172,56 @@ export async function cautaLocalitati(
 
 
 /**
+ * CE A ÎNVĂȚAT APLICAȚIA DE LA FIRMA ASTA.
+ *
+ * „Burdujeni" nu e sat în registru. Am ținut o vreme în cod o listă cu
+ * cartierele Sucevei și ale Iașiului — greșit din două motive: era
+ * scrisă de mine, și era bună doar pentru ei. Platforma nu e a unei
+ * singure firme; pentru un distribuitor din Timișoara nu însemna nimic.
+ *
+ * Acum se învață: prima dată omul caută și alege, iar alegerea LUI se
+ * ține minte pentru firma lui. A doua oară merge singur. Fără liste
+ * scrise de noi, fără ghicit, și merge pentru orice oraș din țară.
+ */
+export async function aliasuriInvatate(
+  db: DB,
+  orgId: string,
+): Promise<Map<string, string>> {
+  const r = await db<Array<{ scris: string; localitate: string }>>`
+    SELECT scris, localitate FROM zona_alias
+    WHERE org_id = ${orgId}
+    ORDER BY folosit DESC, created_at DESC
+    LIMIT 5000
+  `;
+  const m = new Map<string, string>();
+  // Primul găsit rămâne: cel mai folosit, apoi cel mai nou.
+  for (const x of r) if (!m.has(x.scris)) m.set(x.scris, x.localitate);
+  return m;
+}
+
+/**
+ * ÎNVAȚĂ. Omul a căutat și a ales — ținem minte, ca să nu mai caute.
+ * Se cheamă DOAR cu ce a ales el, niciodată cu ce am ghicit noi.
+ */
+export async function invataAlias(
+  db: DB,
+  orgId: string,
+  scris: string,
+  localitate: string,
+  pusDe: string,
+): Promise<void> {
+  const k = neted(scris);
+  if (k.length < 2 || localitate.trim() === "") return;
+  await db`
+    INSERT INTO zona_alias (org_id, scris, localitate, pus_de, folosit)
+    VALUES (${orgId}, ${k.slice(0, 120)}, ${localitate.slice(0, 120)},
+            ${pusDe.slice(0, 120)}, 1)
+    ON CONFLICT (org_id, scris, localitate)
+      DO UPDATE SET folosit = zona_alias.folosit + 1
+  `;
+}
+
+/**
  * Textul scris de om → ce am înțeles și ce n-am găsit.
  *
  * `centre` sunt locurile satelor pe hartă. Fără ele merge tot, doar că
@@ -180,7 +230,11 @@ export async function cautaLocalitati(
 export function citesteZone(
   text: string,
   cunoscute: string[],
-  centre?: Map<string, { lat: number; lng: number }>,
+  /**
+   * Ce a învățat aplicația de la firma asta: „burdujeni" → „SUCEAVA".
+   * Învățat din alegerile LOR, nu scris de noi în cod.
+   */
+  aliasuri?: Map<string, string>,
 ): CititeZone {
   const gasite: ZonaGasita[] = [];
   const negasite: ZonaNegasita[] = [];
@@ -204,6 +258,23 @@ export function citesteZone(
       /** Numele oficial din registru pentru un nume știut de noi. */
       const inRegistru = (nume: string) =>
         cunoscute.find((k) => neted(k) === neted(nume)) ?? null;
+
+      // 0. CE A ÎNVĂȚAT DE LA EI. Bate orice altceva: e alegerea lor, pe
+      // firma lor. Dacă un om de-al lor a spus o dată că „Burdujeni"
+      // înseamnă Suceava, așa e — nu mai întrebăm și nu mai ghicim. Iar
+      // un distribuitor din Timișoara își învață cartierele lui, fără ca
+      // noi să scriem vreo listă.
+      const invatat = aliasuri?.get(n);
+      const alInvatat = invatat ? inRegistru(invatat) : null;
+      if (alInvatat) {
+        adauga(
+          c.zi,
+          alInvatat,
+          c.localitate,
+          `${c.localitate} = ${alInvatat} (ați ales voi, mai demult)`,
+        );
+        continue;
+      }
 
       // 1. PRESCURTĂRILE. „Cn-lung" e Câmpulung Moldovenesc. Nimeni nu
       // scrie 22 de litere într-o listă de 40 de sate, pe telefon.

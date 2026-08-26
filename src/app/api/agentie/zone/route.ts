@@ -3,7 +3,9 @@ import { listOrgAgents, requireOrgUser } from "@/modules/platform";
 import { ZILE, neted as nivelat } from "@/modules/zone/parse";
 import {
   citesteZone,
+  aliasuriInvatate,
   cautaLocalitati,
+  invataAlias,
   localitatiCunoscute,
   salveazaZone,
 } from "@/modules/zone/aplica";
@@ -79,7 +81,15 @@ export async function POST(req: Request) {
      * recunoscut din text („Țara Dornelor"). Alegerea e a lui: noi doar
      * i-am arătat lista lui.
      */
-    alese?: Array<{ zi?: string; localitate?: string }>;
+    alese?: Array<{
+      zi?: string;
+      localitate?: string;
+      /**
+       * Pentru CE rând nerecunoscut a ales. Cu el învățăm: „Burdujeni" →
+       * „SUCEAVA", pentru firma lor, ca data viitoare să meargă singur.
+       */
+      pentru?: string;
+    }>;
     /** Caută în satele lui: două-trei litere, alege din listă. */
     cauta?: string;
   };
@@ -114,20 +124,42 @@ export async function POST(req: Request) {
     }
 
     const cunoscute = await localitatiCunoscute(db, numeAg);
-    const { gasite, negasite } = citesteZone(text, cunoscute);
+    // CE A ÎNVĂȚAT DE LA EI: „Burdujeni" → „SUCEAVA", fiindcă au ales-o
+    // ei odată. Nu scriem noi liste de cartiere pentru fiecare oraș din
+    // țară — fiecare firmă și-l învață pe al ei.
+    const aliasuri = await aliasuriInvatate(db, auth.session.orgId);
+    const { gasite, negasite } = citesteZone(text, cunoscute, aliasuri);
 
     // Ce a ales omul din căutare intră lângă ce am înțeles din text.
     // Verificăm și aici că satul e unul adevărat din lista LUI: ce vine
     // de la un ecran poate veni și de altundeva.
     const stiute = new Map(cunoscute.map((k) => [nivelat(k), k]));
     for (const a of (body.alese ?? []).slice(0, 500)) {
-      const oficial = stiute.get(nivelat(String(a.localitate ?? "")));
-      if (!oficial) continue;
+      const cerut = String(a.localitate ?? "").trim().slice(0, 120);
+      // SATUL POATE SĂ NU FIE ÎN LISTELE NOASTRE, ȘI TOTUȘI SĂ EXISTE.
+      // Tarnița, Palma, Poieni-Solca sunt sate prin care agentul trece
+      // săptămânal, dar în care nu e înregistrată nicio firmă — deci nu
+      // apar nici în registru, nici în tabelul de localități. Zona e a
+      // LUI: îl luăm cum l-a scris. Când apare acolo primul client sau
+      // primul magazin de pe hartă, se leagă singur.
+      const oficial = stiute.get(nivelat(cerut)) ?? cerut;
+      if (nivelat(oficial).length < 2) continue;
       const zi = String(a.zi ?? "").trim();
       if (gasite.some((g) => g.zi === zi && nivelat(g.localitate) === nivelat(oficial))) {
         continue;
       }
       gasite.push({ zi, localitate: oficial, scris: oficial, cum: "ales de tine din listă" });
+      // ÎNVAȚĂ. Data viitoare, „Burdujeni" merge singur.
+      const pentru = String(a.pentru ?? "").trim();
+      if (pentru !== "" && !body.verificaDoar) {
+        await invataAlias(
+          db,
+          auth.session.orgId,
+          pentru,
+          oficial,
+          auth.session.name || auth.session.email || "managerul firmei",
+        );
+      }
     }
 
     // „Verifică doar": arătăm ce am înțeles ÎNAINTE să salvăm, ca omul

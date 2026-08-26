@@ -93,7 +93,9 @@ export default function ZonePage() {
    * Satele alese de om din căutare, pentru ce n-am recunoscut din text.
    * NU ghicim noi ce e „Țara Dornelor" — el alege din lista lui.
    */
-  const [alese, setAlese] = useState<Array<{ zi: string; localitate: string }>>([]);
+  const [alese, setAlese] = useState<
+    Array<{ zi: string; localitate: string; pentru: string }>
+  >([]);
 
   /**
    * În ce zi era rândul pe care nu l-am recunoscut. Îl căutăm în textul
@@ -271,7 +273,7 @@ miercuri - Hudești, Alba, Nărănca, Darabani, Păltiniș`}
                         setAlese((a) =>
                           a.some((x) => x.zi === zi && x.localitate === loc)
                             ? a
-                            : [...a, { zi, localitate: loc }],
+                            : [...a, { zi, localitate: loc, pentru: n.scris }],
                         );
                       }}
                     />

@@ -79,7 +79,9 @@ export default function ZonePanel({
    * Satele alese de el din căutare, pentru ce n-am recunoscut din text.
    * NU ghicim noi ce e „Țara Dornelor" — le alege el, din lista lui.
    */
-  const [alese, setAlese] = useState<Array<{ zi: string; localitate: string }>>([]);
+  const [alese, setAlese] = useState<
+    Array<{ zi: string; localitate: string; pentru: string }>
+  >([]);
   const [ultima, setUltima] = useState<{ pusDe: string; cand: string } | null>(null);
   const [ocupat, setOcupat] = useState(false);
   const [mesaj, setMesaj] = useState<string | null>(null);
@@ -322,7 +324,7 @@ export default function ZonePanel({
                         setAlese((a) =>
                           a.some((x) => x.zi === zi && x.localitate === loc)
                             ? a
-                            : [...a, { zi, localitate: loc }],
+                            : [...a, { zi, localitate: loc, pentru: n.scris }],
                         );
                       }}
                     />

@@ -69,7 +69,15 @@ export async function POST(req: Request) {
     token?: string;
     text?: string;
     verificaDoar?: boolean;
-    alese?: Array<{ zi?: string; localitate?: string }>;
+    alese?: Array<{
+      zi?: string;
+      localitate?: string;
+      /**
+       * Pentru CE rând nerecunoscut a ales. Cu el învățăm: „Burdujeni" →
+       * „SUCEAVA", pentru firma lor, ca data viitoare să meargă singur.
+       */
+      pentru?: string;
+    }>;
     cauta?: string;
   };
   try {
@@ -93,8 +101,14 @@ export async function POST(req: Request) {
   if (!db) return Response.json({ enabled: false }, { status: 503 });
   try {
     await ensureSchema();
-    const { cautaLocalitati, citesteZone, localitatiCunoscute, salveazaZone } =
-      await import("@/modules/zone/aplica");
+    const {
+      aliasuriInvatate,
+      cautaLocalitati,
+      citesteZone,
+      invataAlias,
+      localitatiCunoscute,
+      salveazaZone,
+    } = await import("@/modules/zone/aplica");
     const { neted: nivelat } = await import("@/modules/zone/parse");
     const { orgAgentNamesForAgent } = await import("@/lib/org-scope");
     const aiMei = await orgAgentNamesForAgent(cine.payload.agentId);
@@ -109,21 +123,39 @@ export async function POST(req: Request) {
       });
     }
 
+    const { orgIdForAgent } = await import("@/lib/org-scope");
+    const orgId = await orgIdForAgent(cine.payload.agentId);
     const cunoscute = await localitatiCunoscute(db, numeAg);
-    const { gasite, negasite } = citesteZone(text, cunoscute);
+    // CE A ÎNVĂȚAT DE LA EI: „Burdujeni" → „SUCEAVA", fiindcă au ales-o
+    // ei odată. Nu ținem în cod cartierele fiecărui oraș din țară —
+    // fiecare firmă și-l învață pe al ei.
+    const aliasuri = orgId ? await aliasuriInvatate(db, orgId) : undefined;
+    const { gasite, negasite } = citesteZone(text, cunoscute, aliasuri);
 
     // Ce a ales el din căutare intră lângă ce am înțeles din text. Se
     // verifică și aici că satul e din lista LUI: ce vine de la un ecran
     // poate veni și de altundeva.
     const stiute = new Map(cunoscute.map((k) => [nivelat(k), k]));
     for (const a of (body.alese ?? []).slice(0, 500)) {
-      const oficial = stiute.get(nivelat(String(a.localitate ?? "")));
-      if (!oficial) continue;
+      const cerut = String(a.localitate ?? "").trim().slice(0, 120);
+      // SATUL POATE SĂ NU FIE ÎN LISTELE NOASTRE, ȘI TOTUȘI SĂ EXISTE.
+      // Tarnița, Palma, Poieni-Solca sunt sate prin care agentul trece
+      // săptămânal, dar în care nu e înregistrată nicio firmă — deci nu
+      // apar nici în registru, nici în tabelul de localități. Zona e a
+      // LUI: îl luăm cum l-a scris. Când apare acolo primul client sau
+      // primul magazin de pe hartă, se leagă singur.
+      const oficial = stiute.get(nivelat(cerut)) ?? cerut;
+      if (nivelat(oficial).length < 2) continue;
       const zi = String(a.zi ?? "").trim();
       if (gasite.some((g) => g.zi === zi && nivelat(g.localitate) === nivelat(oficial))) {
         continue;
       }
       gasite.push({ zi, localitate: oficial, scris: oficial, cum: "ales de tine din listă" });
+      // ÎNVAȚĂ. Data viitoare merge singur, fără să mai caute nimeni.
+      const pentru = String(a.pentru ?? "").trim();
+      if (pentru !== "" && !body.verificaDoar && orgId) {
+        await invataAlias(db, orgId, pentru, oficial, cine.payload.agentName);
+      }
     }
 
     // „Verifică doar": îi arătăm ce am înțeles ÎNAINTE să salvăm — pe

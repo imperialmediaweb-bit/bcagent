@@ -45,8 +45,11 @@ export default function CautaSat({
     }
     // Nu batem serverul la fiecare literă: așteptăm să se oprească din scris.
     const al = ++nr.current;
-    setCaut(true);
     const t = setTimeout(async () => {
+      // „Caut…" se aprinde ABIA când chiar plecăm la server. Înainte îl
+      // aprindeam odată cu tastarea, iar dacă omul mai scria o literă,
+      // așteptarea se anula — dar becul rămânea aprins la nesfârșit.
+      setCaut(true);
       try {
         const r = await fetch(adresa, {
           method: "POST",
@@ -61,7 +64,10 @@ export default function CautaSat({
         if (al === nr.current) setCaut(false);
       }
     }, 250);
-    return () => clearTimeout(t);
+    return () => {
+      clearTimeout(t);
+      setCaut(false);
+    };
     // `extra` e un obiect nou la fiecare randare a părintelui; dacă l-am
     // pune în listă, am căuta la nesfârșit.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -90,9 +96,30 @@ export default function CautaSat({
       />
       {caut && <p className="mt-1 text-xs text-amber-800">caut…</p>}
       {!caut && q.trim().length >= 2 && lista.length === 0 && (
-        <p className="mt-1 break-words text-xs leading-snug text-amber-800">
-          Niciun sat din listele tale nu seamănă cu asta.
-        </p>
+        <div className="mt-1">
+          <p className="break-words text-xs leading-snug text-amber-800">
+            Niciun sat din listele noastre nu seamănă cu asta — sunt sate
+            adevărate în care încă n-avem nicio firmă.
+          </p>
+          {/* SATUL EXISTĂ, DOAR CĂ NOI NU-L AVEM.
+              Tarnița, Palma, Poieni-Solca sunt sate prin care agentul
+              trece săptămânal, dar în care nu e înregistrată nicio firmă —
+              deci nu apar nici în registru, nici în tabelul de localități.
+              Nu-l punem pe om să se lupte cu lista noastră: îl ia așa cum
+              l-a scris el. Când apare acolo primul client sau primul
+              magazin de pe hartă, se leagă singur. */}
+          <button
+            type="button"
+            onClick={() => {
+              onAlege(q.trim());
+              setQ("");
+              setLista([]);
+            }}
+            className="mt-1 min-h-9 rounded-lg bg-emerald-600 px-3 py-2 text-xs font-semibold text-white hover:bg-emerald-700"
+          >
+            + Pune-l așa cum l-am scris: „{q.trim()}"
+          </button>
+        </div>
       )}
       {lista.length > 0 && (
         <ul className="mt-1 flex flex-wrap gap-1">
