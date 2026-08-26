@@ -340,6 +340,26 @@ export async function ensureSchema(): Promise<void> {
     -- „OVI-TACOMAX SRL · CUI 18584450 · Str. Principală 183A".
     ALTER TABLE magazin_harta ADD COLUMN IF NOT EXISTS cui TEXT NOT NULL DEFAULT '';
     ALTER TABLE magazin_harta ADD COLUMN IF NOT EXISTS nume_legal TEXT NOT NULL DEFAULT '';
+    -- UN CLIENT = UN MAGAZIN, nu o firmă.
+    -- „Da, așa ar trebui. Magazinele." (Bogdan, 26.08, 19:28)
+    -- Ovi Tacomax e o firmă, dar sunt ȘASE magazine: Cernești, Iurești,
+    -- două în Zlatunoaia, magazinul din Lunca și barul din Lunca. Agentul
+    -- vedea UN punct și avea de intrat în șase. Iar cele 30 „UVERTURA -…"
+    -- sunt SIS-urile lui — standurile lui, cu casele lui de marcat, în
+    -- magazinele altora: acolo agentul verifică stocul, nu vinde.
+    --
+    -- Magazinele stau tot aici, lângă cele de prospectat: sunt același
+    -- fel de lucru — un loc pe hartă unde intri. Ce le deosebește e
+    -- coloana FEL și faptul că au CUI-ul firmei lor.
+    ALTER TABLE magazin_harta ADD COLUMN IF NOT EXISTS fel TEXT NOT NULL DEFAULT '';
+    -- Cine trece pe la el. Gol = oricine din firmă.
+    ALTER TABLE magazin_harta ADD COLUMN IF NOT EXISTS agent TEXT NOT NULL DEFAULT '';
+    -- Cine l-a pus. Fișierul n-o să fie complet niciodată — Bogdan știa pe
+    -- de rost „Lunca magazin" și „Lunca bar", dar în fișier nu erau.
+    -- Agentul e acolo: apasă pe hartă, scrie numele, gata.
+    ALTER TABLE magazin_harta ADD COLUMN IF NOT EXISTS adaugat_de TEXT NOT NULL DEFAULT '';
+    ALTER TABLE magazin_harta ADD COLUMN IF NOT EXISTS telefon TEXT NOT NULL DEFAULT '';
+    CREATE INDEX IF NOT EXISTS magazin_harta_cui ON magazin_harta(org_id, cui);
     ALTER TABLE magazin_harta ADD COLUMN IF NOT EXISTS stare TEXT NOT NULL DEFAULT '';
     ALTER TABLE magazin_harta ADD COLUMN IF NOT EXISTS confirmat_de TEXT NOT NULL DEFAULT '';
     ALTER TABLE magazin_harta ADD COLUMN IF NOT EXISTS confirmat_la TIMESTAMPTZ;

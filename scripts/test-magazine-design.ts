@@ -246,7 +246,7 @@ async function main() {
       check(`[${ecran.nume}] cu ele pe hartă, nimic nu iese din ecran`, (await iese(page)) <= 2, `${await iese(page)}px`);
       check(
         `[${ecran.nume}] butonul se schimbă în „Ascunde"`,
-        (await page.locator("button", { hasText: "Ascunde magazinele de prospectat" }).count()) > 0,
+        (await page.locator("button", { hasText: "Ascunde magazinele" }).count()) > 0,
       );
 
       // ── balonașul unui magazin ──

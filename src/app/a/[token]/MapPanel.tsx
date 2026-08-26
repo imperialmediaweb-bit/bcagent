@@ -247,6 +247,9 @@ export default function MapPanel({
       /** CUI-ul și denumirea din acte, când harta le are scrise în pin. */
       cui?: string;
       numeLegal?: string;
+      /** Firma lui, dacă o știm — și dacă e client de-al nostru. */
+      firma?: string;
+      eAlClientului?: boolean;
       confirmat?: boolean;
     }>
   >([]);
@@ -741,13 +744,17 @@ export default function MapPanel({
       // sunt locuri de prospectat, cu drum gata știut.
       if (aratMag && magHarta.length > 0) {
         for (const m of magHarta) {
-          // TOATE LA FEL PE HARTĂ: un punct mov, un buton, o listă. Pentru
-          // agent sunt același lucru — un magazin la care merită să intre.
-          // De unde știm de el scrie în balonaș, un rând, când îl deschide.
+          // DOUĂ FELURI DE LOCURI, ȘI SE VĂD DIFERIT.
+          //
+          // Mov = de prospectat: n-am fost acolo, poate merită.
+          // VERDE = magazinul unui CLIENT de-al nostru. Ovi Tacomax e o
+          // firmă, dar are șase magazine; agentul vedea un punct și avea
+          // de intrat în șase. Alea nu-s de prospectat — sunt opriri.
           const dinOSM = m.strat === "OpenStreetMap";
-          const culoare = "#7c3aed";
+          const alClientului = m.eAlClientului === true;
+          const culoare = alClientului ? "#059669" : "#7c3aed";
           const punct = L.circleMarker([m.lat, m.lng], {
-            radius: 5,
+            radius: alClientului ? 6 : 5,
             color: "#ffffff",
             fillColor: culoare,
             fillOpacity: 0.95,
@@ -768,11 +775,13 @@ export default function MapPanel({
                   : ""
               }
               <div style="font-size:11px;color:${culoare};margin-top:4px">${
-                m.confirmat
-                  ? "✅ confirmat de un coleg — magazinul există"
-                  : dinOSM
-                    ? "magazin de pe OpenStreetMap — pus de cineva care a trecut pe-acolo, dar nimeni de la noi n-a fost încă"
-                    : "magazin din harta veche — nimeni n-a trecut încă pe la el"
+                alClientului
+                  ? `🟢 magazinul lui ${escHtml(m.firma ?? "clientului")} — e clientul tău, intră la el`
+                  : m.confirmat
+                    ? "✅ confirmat de un coleg — magazinul există"
+                    : dinOSM
+                      ? "magazin de pe OpenStreetMap — pus de cineva care a trecut pe-acolo, dar nimeni de la noi n-a fost încă"
+                      : "magazin din harta veche — nimeni n-a trecut încă pe la el"
               }</div>
               <a href="${escHtml(gmapsDir(`${m.lat},${m.lng}`))}" target="_blank" rel="noopener" style="display:flex;align-items:center;justify-content:center;min-height:40px;margin-top:8px;font-size:13px;font-weight:700;color:#1d4ed8;text-decoration:none;background:#eff6ff;border-radius:8px">🧭 Navighează</a>
               <div style="display:flex;gap:6px;margin-top:8px">
@@ -1257,8 +1266,15 @@ export default function MapPanel({
             >
               🟣{" "}
               {aratMag
-                ? "Ascunde magazinele de prospectat"
-                : `Magazine de prospectat (${magHarta.length})`}
+                ? "Ascunde magazinele"
+                : (() => {
+                    const aleClientilor = magHarta.filter((m) => m.eAlClientului).length;
+                    // Cifra care contează: câte dintre ele sunt magazine ale
+                    // CLIENȚILOR lui. Alea nu-s de prospectat, sunt opriri.
+                    return aleClientilor > 0
+                      ? `Magazine (${aleClientilor} ale clienților · ${magHarta.length - aleClientilor} de prospectat)`
+                      : `Magazine de prospectat (${magHarta.length})`;
+                  })()}
             </button>
           )}
           {doarZona && buleInZona === 0 && (
