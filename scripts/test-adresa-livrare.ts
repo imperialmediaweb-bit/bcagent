@@ -115,6 +115,55 @@ async function main() {
     ok(`„${antet}" e localitate`, p.clients[0]?.localitate === "Siret", p.clients[0]?.localitate);
   }
 
+  console.log("\n── FIȘIERUL ADEVĂRAT DE LA UVERTURA (Anexa 5) ──");
+  // Antetul REAL, copiat din fișierul lui Bogdan. Aici parserul alegea
+  // coloanele greșit: numea toți clienții „Calinciuc Gabriel" (din „Nume
+  // Agent") și punea agentul „SV01UV" (din „Cod Agent"). Trei coloane cu
+  // „nume" și două cu „cod" — capcană curată.
+  {
+    const p = await parseClientsFile(
+      fisier(
+        [
+          "Filiala Distribuitor Rural ;Cod Agent;Nume Agent;Tip Client;Nume Legal Locatie Acoperita;Nume Punct De Lucru;Cod fiscal client;Cod intern locatie Uvertura (Daca exista) ;Adresa punct de lucru client;localitate;Judet",
+          "SUCEAVA;SV01UV;Calinciuc Gabriel;Independent;AGRIFORCE SERV BUCOVINA S.R.L.;AGRIFORCE SERV BUCOVINA S.R.L.;44868752;;STR. PRINCIPALA;Balcauti;Suceava",
+          "SUCEAVA;SV02UV;Cojocaru Razvan;Independent;UVERTURA - STAR ALMA;NERO EXPRESS MARKET;6704005;;STR. GARII 4;Ipotesti;Suceava",
+        ].join("\n"),
+      ),
+    );
+    egal("numele clientului, nu al agentului", p.columns.name, "Nume Legal Locatie Acoperita");
+    egal("agentul pe NUME, nu pe cod", p.columns.agent, "Nume Agent");
+    egal("adresa e o adresă, nu numele magazinului", p.columns.adresa, "Adresa punct de lucru client");
+    egal("CUI-ul", p.columns.cui, "Cod fiscal client");
+    egal("localitatea", p.columns.localitate, "localitate");
+    egal("amândoi clienții intră", p.clients.length, 2);
+    egal("primul client are numele lui", p.clients[0]?.name, "AGRIFORCE SERV BUCOVINA S.R.L.");
+    egal("și agentul lui", p.clients[0]?.agent, "Calinciuc Gabriel");
+    egal("al doilea, la fel", p.clients[1]?.agent, "Cojocaru Razvan");
+    egal("adresa lui", p.clients[1]?.adresa, "STR. GARII 4");
+  }
+
+  console.log("\n── AL DOILEA FIȘIER: clienți activi, fără coloană de adresă ──");
+  {
+    const p = await parseClientsFile(
+      fisier(
+        [
+          "Iesiri marfuri pe documente",
+          "Nume partener;Cod fiscal;Judet|  Nume;Localitatea;Agent",
+          "OVI-TACOMAX SRL CERNESTI;18584450;Botosani;Zlatunoaia;Gavrilet Bogdan",
+          "OVI-TACOMAX SRL IURESTI;18584450;Botosani;Zlatunoaia;Gavrilet Bogdan",
+        ].join("\n"),
+      ),
+    );
+    egal("sare peste titlul foii", p.columns.name, "Nume partener");
+    egal("agentul", p.columns.agent, "Agent");
+    egal("fără adresă în fișier, fără adresă inventată", p.columns.adresa, "");
+    egal("localitatea", p.columns.localitate, "Localitatea");
+    // ACELAȘI CUI, DOUĂ MAGAZINE. Nu le pierdem la citire — ce facem cu
+    // ele mai departe e altă discuție, dar din fișier ies amândouă.
+    egal("două magazine ale aceleiași firme, amândouă citite", p.clients.length, 2);
+    egal("fiecare cu numele lui", p.clients[1]?.name, "OVI-TACOMAX SRL IURESTI");
+  }
+
   console.log("\n── CAPCANE ──");
   {
     // O firmă care se cheamă chiar „ADRESA COM SRL" nu e un antet.

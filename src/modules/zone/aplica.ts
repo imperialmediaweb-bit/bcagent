@@ -1,4 +1,5 @@
 import { getDB } from "@/lib/db";
+import { orasulCartierului } from "./cartiere";
 import { neted, parseZone, potriveste } from "./parse";
 
 /**
@@ -16,6 +17,12 @@ export interface ZonaGasita {
   localitate: string;
   /** Cum a scris omul — ca să-și recunoască rândul în confirmare. */
   scris: string;
+  /**
+   * Explicație, când n-am pus fix ce a scris: „Burdujeni e cartier în
+   * Suceava". Fără ea, omul vede în zi un oraș pe care nu l-a scris și
+   * crede că aplicația a greșit.
+   */
+  cum?: string;
 }
 export interface ZonaNegasita {
   scris: string;
@@ -55,11 +62,11 @@ export function citesteZone(text: string, cunoscute: string[]): CititeZone {
   const gasite: ZonaGasita[] = [];
   const negasite: ZonaNegasita[] = [];
   const vazute = new Set<string>();
-  const adauga = (zi: string, oficial: string, scris: string) => {
+  const adauga = (zi: string, oficial: string, scris: string, cum?: string) => {
     const cheie = `${zi}|${neted(oficial)}`;
     if (vazute.has(cheie)) return;
     vazute.add(cheie);
-    gasite.push({ zi, localitate: oficial, scris });
+    gasite.push({ zi, localitate: oficial, scris, ...(cum ? { cum } : {}) });
   };
   for (const c of parseZone(text)) {
     const p = potriveste(c.localitate, cunoscute);
@@ -70,7 +77,25 @@ export function citesteZone(text: string, cunoscute: string[]): CititeZone {
       // amândouă, ca al doilea să nu se piardă din zona agentului.
       for (const parte of p.parti) adauga(c.zi, parte, c.localitate);
     } else {
-      negasite.push({ scris: c.localitate, sugestii: p.sugestii });
+      // CARTIERELE. Agentul zice „luni fac Burdujeniul", dar la Finanțe
+      // firmele de acolo scriu „SUCEAVA" — cartierul nu apare niciodată
+      // în listele noastre. Îl traducem în oraș, ca ziua lui să nu rămână
+      // goală, și îi scriem pe ecran de ce vede Suceava în loc.
+      const oras = orasulCartierului(neted(c.localitate), neted);
+      const alOras =
+        oras === null
+          ? null
+          : cunoscute.find((k) => neted(k) === neted(oras)) ?? null;
+      if (alOras) {
+        adauga(
+          c.zi,
+          alOras,
+          c.localitate,
+          `${c.localitate} e cartier în ${alOras} — am pus tot orașul, ca să nu-ți lipsească niciun client de acolo`,
+        );
+      } else {
+        negasite.push({ scris: c.localitate, sugestii: p.sugestii });
+      }
     }
   }
   return { gasite, negasite };

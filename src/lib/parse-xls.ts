@@ -832,13 +832,31 @@ export async function parseClientsFile(
         const looksLikeFirm =
           h.length > 30 || /\b(SRL|S\.?R\.?L\.?|PFA|SA|SNC|II)\b\.?$/i.test(h);
         if (looksLikeFirm) continue;
-        if (n === -1 && CLIENT_NAME_HEADERS.test(h)) n = i;
+        // CINE E AGENTUL: „Nume Agent", nu „Cod Agent". Pe fișierul
+        // adevărat de la Uvertura, codul venea primul și agentul ieșea
+        // „SV01UV" în loc de „Calinciuc Gabriel".
+        const eCod = /\bcod\b|^cod/i.test(h);
+        if (a === -1 && CLIENT_AGENT_HEADERS.test(h) && !eCod) a = i;
+        // NUMELE CLIENTULUI nu e nici numele agentului („Nume Agent"),
+        // nici felul lui („Tip Client"), nici vreun cod sau filială.
+        // Fără paza asta, toți cei 269 de clienți s-ar fi numit la fel.
+        if (
+          n === -1 &&
+          CLIENT_NAME_HEADERS.test(h) &&
+          !CLIENT_AGENT_HEADERS.test(h) &&
+          !eCod &&
+          !/\btip\b|filial/i.test(h)
+        ) {
+          n = i;
+        }
         if (c === -1 && CLIENT_CUI_HEADERS.test(h)) c = i;
-        if (a === -1 && CLIENT_AGENT_HEADERS.test(h)) a = i;
-        // Livrarea bate adresa simplă: în multe exporturi „Adresa" E
-        // sediul social, iar aia o avem deja de la Finanțe.
-        if (adr === -1 && CLIENT_LIVRARE_HEADERS.test(h)) adr = i;
-        if (adrSimpla === -1 && CLIENT_ADRESA_HEADERS.test(h)) adrSimpla = i;
+        // ADRESA e o adresă, nu un nume. „Nume Punct De Lucru" e numele
+        // magazinului (ce scrie deasupra ușii) — bun de avut, dar nu e
+        // unde te duci. Livrarea bate adresa simplă: în multe exporturi
+        // „Adresa" E sediul social, aia o avem deja de la Finanțe.
+        const eNume = /nume|denumire/i.test(h);
+        if (adr === -1 && CLIENT_LIVRARE_HEADERS.test(h) && !eNume) adr = i;
+        if (adrSimpla === -1 && CLIENT_ADRESA_HEADERS.test(h) && !eNume) adrSimpla = i;
         if (loc === -1 && CLIENT_LOC_HEADERS.test(h)) loc = i;
       }
       if (n !== -1) {
