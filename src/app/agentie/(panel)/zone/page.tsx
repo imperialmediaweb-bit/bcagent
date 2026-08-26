@@ -266,6 +266,10 @@ miercuri - Hudești, Alba, Nărănca, Darabani, Păltiniș`}
                       )
                     )}
                     <CautaSat
+                      zona={n.zona === true}
+                      eticheta={
+                        n.zona ? "caută satele din ea și alege-le" : "caută satul și alege-l"
+                      }
                       onAlege={(loc) => {
                         // Ziua e cea în care a scris rândul negăsit; dacă
                         // n-avem cum s-o știm, intră fără zi (tot valabil).

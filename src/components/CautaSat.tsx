@@ -23,11 +23,20 @@ export default function CautaSat({
   /** Ce mai trebuie trimis ca să știe cine întreabă (tokenul agentului). */
   extra,
   eticheta = "caută satul și alege-l",
+  /**
+   * E o ZONĂ, nu un sat scris greșit („Țara Dornelor").
+   *
+   * Atunci NU are rost „pune-l așa cum l-am scris": niciun client nu stă
+   * într-un sat cu numele ăla. Omul trebuie să caute SATELE din ea și să
+   * le adauge pe rând — poate alege câte vrea, căsuța rămâne deschisă.
+   */
+  zona = false,
 }: {
   onAlege: (localitate: string) => void;
   adresa?: string;
   extra?: Record<string, unknown>;
   eticheta?: string;
+  zona?: boolean;
 }) {
   const [q, setQ] = useState("");
   const [lista, setLista] = useState<string[]>([]);
@@ -91,10 +100,20 @@ export default function CautaSat({
         autoFocus
         value={q}
         onChange={(e) => setQ(e.target.value)}
-        placeholder="scrie 2-3 litere: dorn, vatra, poi…"
+        placeholder={
+          zona
+            ? "scrie 2-3 litere din numele unui SAT: dorn, vatra…"
+            : "scrie 2-3 litere: dorn, vatra, poi…"
+        }
         className="block w-full min-w-0 rounded-lg border border-amber-300 bg-white px-3 py-2 text-sm focus:border-amber-500 focus:outline-none"
       />
       {caut && <p className="mt-1 text-xs text-amber-800">caut…</p>}
+      {zona && (
+        <p className="mt-1 break-words text-xs leading-snug text-amber-800">
+          Caută pe rând satele din ea și apasă pe fiecare. Poți alege câte
+          vrei — căsuța rămâne deschisă.
+        </p>
+      )}
       {!caut && q.trim().length >= 2 && lista.length === 0 && (
         <div className="mt-1">
           <p className="break-words text-xs leading-snug text-amber-800">
@@ -108,17 +127,21 @@ export default function CautaSat({
               Nu-l punem pe om să se lupte cu lista noastră: îl ia așa cum
               l-a scris el. Când apare acolo primul client sau primul
               magazin de pe hartă, se leagă singur. */}
-          <button
-            type="button"
-            onClick={() => {
-              onAlege(q.trim());
-              setQ("");
-              setLista([]);
-            }}
-            className="mt-1 min-h-9 rounded-lg bg-emerald-600 px-3 py-2 text-xs font-semibold text-white hover:bg-emerald-700"
-          >
-            + Pune-l așa cum l-am scris: „{q.trim()}"
-          </button>
+          {/* La o ZONĂ nu se pune numele ei ca sat: n-ar folosi la nimic,
+              fiindcă niciun client nu stă într-un sat cu numele ăla. */}
+          {!zona && (
+            <button
+              type="button"
+              onClick={() => {
+                onAlege(q.trim());
+                setQ("");
+                setLista([]);
+              }}
+              className="mt-1 min-h-9 rounded-lg bg-emerald-600 px-3 py-2 text-xs font-semibold text-white hover:bg-emerald-700"
+            >
+              + Pune-l așa cum l-am scris: „{q.trim()}"
+            </button>
+          )}
         </div>
       )}
       {lista.length > 0 && (

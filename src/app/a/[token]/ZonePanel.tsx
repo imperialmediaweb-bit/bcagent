@@ -318,7 +318,10 @@ export default function ZonePanel({
                     <CautaSat
                       adresa="/api/routes/zona"
                       extra={{ token }}
-                      eticheta="caută satele și alege-le"
+                      zona={n.zona === true}
+                      eticheta={
+                        n.zona ? "caută satele din ea și alege-le" : "caută satul și alege-l"
+                      }
                       onAlege={(loc) => {
                         const zi = ziPentru(n.scris);
                         setAlese((a) =>
