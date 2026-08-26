@@ -623,15 +623,51 @@ export async function touchOrgUserLogin(id: string): Promise<void> {
   await db()`UPDATE org_users SET last_login_at = NOW() WHERE id = ${id}`;
 }
 
+/**
+ * DOI AGENȚI CU ACELAȘI NUME ÎN ACEEAȘI FIRMĂ NU SE POT DEOSEBI.
+ *
+ * Vânzările vin din fișierul SAGA, unde agentul e scris CU NUMELE. Dacă
+ * firma are doi „Popescu Ion", nimic din platformă nu-i mai desparte:
+ * vânzările amândurora se adună la un loc, targetul e unul singur pentru
+ * doi oameni, clasamentul îi arată cu aceleași cifre, iar clienții
+ * alocați lui unul apar și la celălalt. Nu e o scăpare de programare —
+ * numele e cheia, și o cheie dublă nu mai e cheie.
+ *
+ * De-aia se refuză la intrare, cu o vorbă limpede: managerul are ce
+ * face, adaugă o inițială. Redenumirea aceluiași agent (același
+ * agent_id) rămâne liberă.
+ */
+export class NumeAgentFolosit extends Error {
+  constructor(public readonly nume: string) {
+    super(
+      `Mai ai un agent pe numele „${nume}". Două nume la fel nu se pot ` +
+        `deosebi: vânzările din fișier vin pe nume și s-ar aduna la un ` +
+        `loc. Scrie-l altfel — de exemplu cu inițiala numelui de familie.`,
+    );
+    this.name = "NumeAgentFolosit";
+  }
+}
+
 export async function addOrgAgent(
   orgId: string,
   agentId: string,
   name: string,
 ): Promise<void> {
   await ensurePlatformSchema();
+  const nume = name.trim();
+  if (nume !== "") {
+    const [existent] = await db()<Array<{ agent_id: string }>>`
+      SELECT agent_id FROM org_agents
+      WHERE org_id = ${orgId}
+        AND lower(btrim(name)) = ${nume.toLowerCase()}
+        AND agent_id <> ${agentId}
+      LIMIT 1
+    `;
+    if (existent) throw new NumeAgentFolosit(nume);
+  }
   await db()`
     INSERT INTO org_agents (id, org_id, agent_id, name)
-    VALUES (${newId("agt")}, ${orgId}, ${agentId}, ${name})
+    VALUES (${newId("agt")}, ${orgId}, ${agentId}, ${nume})
     ON CONFLICT (org_id, agent_id) DO UPDATE SET name = EXCLUDED.name, active = TRUE
   `;
 }

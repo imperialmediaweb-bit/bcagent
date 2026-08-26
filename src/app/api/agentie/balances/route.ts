@@ -1,4 +1,5 @@
 import { ensureSchema, isDBEnabled, getDB } from "@/lib/db";
+import { alAgentiei } from "@/lib/org-scope";
 import { audit, listOrgAgents, requireOrgUser } from "@/modules/platform";
 
 export const runtime = "nodejs";
@@ -153,9 +154,7 @@ export async function POST(req: Request) {
           payload as unknown as Parameters<typeof db.json>[0],
         )}) AS u(cui TEXT, sold BIGINT)
         WHERE p.cui = u.cui
-          AND p.assigned_agent = ANY(${
-            agentiiNostri.length ? agentiiNostri : [""]
-          })
+          AND ${alAgentiei(db, auth.session.orgId, agentiiNostri)}
       `;
       updated = res.count;
       await audit(auth.session.email, "balances.import", auth.session.orgId, {
@@ -205,7 +204,7 @@ export async function GET(req: Request) {
              sold_cents::text, sold_updated_at
       FROM prospects
       WHERE sold_cents IS NOT NULL AND sold_cents > 0
-        AND (status = 'client' OR assigned_agent = ANY(${names.length ? names : [""]}))
+        AND (status = 'client' OR ${alAgentiei(db, auth.session.orgId, names)})
       -- calificat: aliasul ::text din SELECT ar face sortarea lexicografică
       ORDER BY prospects.sold_cents DESC
       LIMIT ${Math.min(500, parseInt(new URL(req.url).searchParams.get("limit") ?? "200", 10) || 200)}

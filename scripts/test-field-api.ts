@@ -129,7 +129,7 @@ async function main() {
   }
   {
     const [before] = await sql`SELECT status FROM prospects WHERE cui = '9002'`;
-    await post("/api/visits", { token: TOK, cui: "9002", result: "inchis" });
+    await post("/api/visits", { token: TOK, cui: "9002", result: "nu_mai_exista" });
     const [after] = await sql`SELECT status FROM prospects WHERE cui = '9002'`;
     check("rezultatul inchis NU schimbă statusul", before.status === after.status);
   }

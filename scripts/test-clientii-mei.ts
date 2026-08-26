@@ -192,15 +192,15 @@ async function main() {
     JSON.stringify(dupaGps.map((f) => f.denumire)),
   );
 
-  console.log("\n══ „Închis” din teren scoate firma moartă de pe hartă ══");
+  console.log("\n══ „Nu mai există” din teren scoate firma moartă de pe hartă ══");
   await sql`INSERT INTO prospects (cui, denumire, adresa, localitate, judet, caen, status, assigned_agent, activ)
             VALUES (${cui(8)}, ${"PENSIUNE MOARTA " + RUN}, '', ${SAT}, 'SV', '4711', 'nou', '', TRUE)`;
   const rInchis = await fetch(`${BASE}/api/visits`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ token: tokA, cui: cui(8), denumire: "PENSIUNE MOARTA", result: "inchis", note: "nu mai există de 10 ani" }),
+    body: JSON.stringify({ token: tokA, cui: cui(8), denumire: "PENSIUNE MOARTA", result: "nu_mai_exista", note: "nu mai există de 10 ani" }),
   });
-  check("vizita „închis” se salvează", rInchis.ok);
+  check("vizita „nu mai există” se salvează", rInchis.ok);
   // Firma NEALOCATĂ (prospect din registrul comun) nu se stinge global —
   // registrul e al tuturor agențiilor. Se ascunde DOAR la noi.
   const [moarta] = await sql<Array<{ activ: boolean }>>`SELECT activ FROM prospects WHERE cui = ${cui(8)}`;
@@ -220,11 +220,11 @@ async function main() {
   await fetch(`${BASE}/api/visits`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ token: tokC, cui: cui(5), denumire: "x", result: "inchis", note: "" }),
+    body: JSON.stringify({ token: tokC, cui: cui(5), denumire: "x", result: "nu_mai_exista", note: "" }),
   });
   const [alMeu5dupa] = await sql<Array<{ activ: boolean | null }>>`SELECT activ FROM prospects WHERE cui = ${cui(5)}`;
   check(
-    "clientul MEU activ rămâne activ după „închis” de la firma străină",
+    "clientul MEU activ rămâne activ după „nu mai există” de la firma străină",
     alMeu5?.activ === true && alMeu5dupa?.activ === true,
     JSON.stringify({ inainte: alMeu5, dupa: alMeu5dupa }),
   );

@@ -148,8 +148,20 @@ export async function GET(req: Request) {
     // caen/caenIn funcționează pe PREFIX: "47" prinde tot 47xx, "4711" exact.
     const caenPattern = caen ? `${caen}%` : "";
     const caenInPatterns = caenIn.map((c) => `${c}%`);
+    // „E AL MEU?" — într-un singur loc, ca să nu se despartă în zece
+    // variante care se bat cap în cap.
+    //
+    // Numele agentului NU ajunge. „Popescu Ion" poate fi și la firma de
+    // alături; până acum, orice condiție de forma „alocat unuia de-ai
+    // mei" prindea și clienții ei — cu stare, notă și sold cu tot.
+    // Firma scrisă pe alocare hotărăște. Gol = alocare veche, dinainte
+    // de coloană: aia se judecă după nume, ca înainte, ca să nu rămână
+    // nimeni fără clienți peste noapte.
+    //
     // Fragment construit proaspăt la fiecare folosire (postgres.js nu
     // garantează reutilizarea aceluiași fragment în două interogări).
+    const alMeu = () => db`(assigned_agent = ANY(${mineArr})
+        AND (assigned_org = '' OR assigned_org = ${orgId || "-"}))`;
     const buildWhere = () => db`
       WHERE NOT EXISTS (
           -- Firmele pe care AGENȚII NOȘTRI le-au găsit închise pe teren
@@ -161,19 +173,28 @@ export async function GET(req: Request) {
         AND (
         ((${judet} = '' OR judet = ${judet})
         AND (${localitate} = '' OR localitate ILIKE ${"%" + localitate + "%"})
-        AND (${caenPattern} = '' OR caen LIKE ${caenPattern})
-        AND (${caenInPatterns.length === 0} OR caen LIKE ANY(${caenInPatterns}))
+        -- FIRMELE ADUSE DIN HARTA NOASTRĂ N-AU CAEN, fiindcă la Finanțe
+        -- n-au fost găsite. Un filtru pe domeniu le ascundea pe toate —
+        -- 1073 de magazine adevărate, cu locul pus de mână, dispăreau din
+        -- liste fără ca nimeni să afle de ce.
+        -- Nu pretindem că sunt alimentare: pretindem doar că sunt
+        -- magazinele de pe harta ACESTEI firme, ceea ce e un fapt. Ale
+        -- altor agenții rămân ascunse, ca până acum.
+        AND (${caenPattern} = '' OR caen LIKE ${caenPattern}
+             OR (COALESCE(caen,'') = '' AND adus_de_org = ${orgId || "-"}))
+        AND (${caenInPatterns.length === 0} OR caen LIKE ANY(${caenInPatterns})
+             OR (COALESCE(caen,'') = '' AND adus_de_org = ${orgId || "-"}))
         AND (${status} = ''
              -- Ramura asta folosește indexul pe status (1,3M firme).
              OR (status = ${status}
                  AND (${!masked} OR COALESCE(assigned_agent,'') = ''
-                      OR assigned_agent = ANY(${mineArr})))
+                      OR ${alMeu()}))
              -- Firmele altei agenții ne apar ca „nou".
              OR (${masked} AND ${status} = 'nou'
                  AND COALESCE(assigned_agent,'') <> ''
-                 AND NOT (assigned_agent = ANY(${mineArr}))))
+                 AND NOT (${alMeu()})))
         AND (${agent} = '' OR
-             (CASE WHEN ${!masked} OR assigned_agent = ANY(${mineArr})
+             (CASE WHEN ${!masked} OR ${alMeu()}
                    THEN assigned_agent ELSE '' END) = ${agent})
         AND (${!onlyActive} OR activ IS DISTINCT FROM FALSE)
         AND (${!onlyTva} OR tva IS TRUE)
@@ -233,19 +254,19 @@ export async function GET(req: Request) {
              -- mele, ale colegilor din firma mea, sau nealocate. Fără asta,
              -- agentul apăsa butonul și primea un refuz în plin teren.
              (${!masked} OR COALESCE(assigned_agent,'') = ''
-              OR assigned_agent = ANY(${mineArr})) AS pot_pin,
+              OR ${alMeu()}) AS pot_pin,
              (SELECT g.lat FROM geo_firme g WHERE g.cui = prospects.cui) AS pin_lat,
              (SELECT g.lng FROM geo_firme g WHERE g.cui = prospects.cui) AS pin_lng,
-             (CASE WHEN ${!masked} OR assigned_agent = '' OR assigned_agent = ANY(${mineArr})
+             (CASE WHEN ${!masked} OR assigned_agent = '' OR ${alMeu()}
                    THEN status ELSE 'nou' END) AS status,
-             (CASE WHEN ${!masked} OR assigned_agent = '' OR assigned_agent = ANY(${mineArr})
+             (CASE WHEN ${!masked} OR assigned_agent = '' OR ${alMeu()}
                    THEN note ELSE '' END) AS note,
-             (CASE WHEN ${!masked} OR assigned_agent = ANY(${mineArr})
+             (CASE WHEN ${!masked} OR ${alMeu()}
                    THEN assigned_agent ELSE '' END) AS assigned_agent,
              COALESCE(telefon, '') AS telefon,
              COALESCE(email, '') AS email,
              COALESCE(contact, '') AS contact,
-             (CASE WHEN ${!masked} OR assigned_agent = '' OR assigned_agent = ANY(${mineArr})
+             (CASE WHEN ${!masked} OR assigned_agent = '' OR ${alMeu()}
                    THEN sold_cents ELSE NULL END)::text AS sold_cents,
              updated_at
       FROM prospects
@@ -273,9 +294,9 @@ export async function GET(req: Request) {
     >`
       SELECT COUNT(*)::text AS total,
              COUNT(*) FILTER (WHERE status = 'contactat'
-               AND (${!masked} OR assigned_agent = '' OR assigned_agent = ANY(${mineArr})))::text AS contactati,
+               AND (${!masked} OR assigned_agent = '' OR ${alMeu()}))::text AS contactati,
              COUNT(*) FILTER (WHERE status = 'client'
-               AND (${!masked} OR assigned_agent = '' OR assigned_agent = ANY(${mineArr})))::text AS clienti
+               AND (${!masked} OR assigned_agent = '' OR ${alMeu()}))::text AS clienti
       FROM prospects
     `;
     return Response.json({
@@ -383,14 +404,27 @@ export async function PATCH(req: Request) {
   try {
     await ensureSchema();
     // IZOLARE: nu poți modifica o firmă aflată în lucru la ALTĂ agenție.
-    const { orgAgentNamesForAgent } = await import("@/lib/org-scope");
+    const { orgAgentNamesForAgent, orgIdForAgent } = await import(
+      "@/lib/org-scope"
+    );
     const mine = await orgAgentNamesForAgent(auth.agentId);
+    const firmaMea = await orgIdForAgent(auth.agentId);
     if (mine.length > 0) {
-      const [cur] = await db<Array<{ assigned_agent: string }>>`
-        SELECT COALESCE(assigned_agent, '') AS assigned_agent
+      const [cur] = await db<Array<{ assigned_agent: string; assigned_org: string }>>`
+        SELECT COALESCE(assigned_agent, '') AS assigned_agent,
+               COALESCE(assigned_org, '') AS assigned_org
         FROM prospects WHERE cui = ${cui}
       `;
-      if (cur && cur.assigned_agent !== "" && !mine.includes(cur.assigned_agent)) {
+      // NUMELE NU AJUNGE. Dacă firma e alocată unui „Popescu Ion" care e
+      // al altei agenții, numele se potrivește și poarta s-ar deschide.
+      // Firma scrisă pe alocare e cea care hotărăște; gol = alocare
+      // veche, și atunci rămâne judecata după nume, ca înainte.
+      const alAltora =
+        cur &&
+        cur.assigned_agent !== "" &&
+        (!mine.includes(cur.assigned_agent) ||
+          (cur.assigned_org !== "" && cur.assigned_org !== firmaMea));
+      if (alAltora) {
         return Response.json(
           { error: "Firma asta e gestionată de altă agenție." },
           { status: 403 },
@@ -402,8 +436,11 @@ export async function PATCH(req: Request) {
     const updates: Record<string, string> = {};
     if (body.status !== undefined) updates.status = body.status;
     if (body.note !== undefined) updates.note = String(body.note);
-    if (body.assignedAgent !== undefined)
+    if (body.assignedAgent !== undefined) {
       updates.assigned_agent = String(body.assignedAgent);
+      // Alocarea își poartă firma cu ea, ca să se știe mereu a cui e.
+      updates.assigned_org = firmaMea;
+    }
     if (body.telefon !== undefined)
       updates.telefon = normalizePhone(String(body.telefon)) || String(body.telefon).trim().slice(0, 40);
     if (body.email !== undefined) updates.email = String(body.email).trim();

@@ -1,4 +1,5 @@
 import { ensureSchema, isDBEnabled, getDB } from "@/lib/db";
+import { alAgentiei } from "@/lib/org-scope";
 import { audit, listOrgAgents, requireOrgUser } from "@/modules/platform";
 
 export const runtime = "nodejs";
@@ -37,7 +38,7 @@ export async function GET(req: Request) {
 
     const where = () => db`
       WHERE p.status = 'client'
-        AND p.assigned_agent = ANY(${scoped.length ? scoped : [""]})
+        AND ${alAgentiei(db, auth.session.orgId, scoped)}
         AND (${search} = '' OR p.denumire ILIKE ${"%" + search + "%"}
              OR p.localitate ILIKE ${"%" + search + "%"} OR p.cui LIKE ${search + "%"})
     `;
@@ -68,8 +69,43 @@ export async function GET(req: Request) {
       SELECT COUNT(*)::text AS count FROM prospects p ${where()}
     `;
 
+    // ── CE A FOST SCOS DIN LISTE DE PE TEREN ──
+    // Un agent a apăsat „Nu mai există". Dacă a greșit — sau firma s-a
+    // redeschis — managerul trebuie să AIBĂ UNDE SĂ VADĂ asta, altfel
+    // butonul de adus înapoi n-are cum să fie găsit. O listă scurtă,
+    // lângă clienți, cu cine a scos-o și când.
+    const scoase = await db<
+      Array<{
+        cui: string;
+        denumire: string;
+        localitate: string;
+        agent: string;
+        cand: Date | null;
+      }>
+    >`
+      SELECT p.cui, p.denumire, COALESCE(p.localitate,'') AS localitate,
+             COALESCE(
+               (SELECT v.agent_name FROM visits v
+                WHERE v.cui = p.cui AND v.result = 'nu_mai_exista'
+                ORDER BY v.visited_at DESC LIMIT 1), '') AS agent,
+             (SELECT MAX(v.visited_at) FROM visits v
+              WHERE v.cui = p.cui AND v.result = 'nu_mai_exista') AS cand
+      FROM prospects p
+      WHERE p.inchis_teren
+        AND ${alAgentiei(db, auth.session.orgId, names)}
+      ORDER BY p.denumire
+      LIMIT 200
+    `;
+
     return Response.json({
       total: parseInt(count, 10),
+      scoaseDeTeren: scoase.map((r) => ({
+        cui: r.cui,
+        denumire: r.denumire,
+        localitate: r.localitate,
+        agent: r.agent,
+        cand: r.cand ? r.cand.toISOString() : null,
+      })),
       clients: rows.map((r) => ({
         cui: r.cui,
         denumire: r.denumire,
@@ -95,7 +131,18 @@ export async function PATCH(req: Request) {
   const auth = await requireOrgUser();
   if ("response" in auth) return auth.response;
 
-  let body: { cui?: string; agent?: string };
+  let body: {
+    cui?: string;
+    agent?: string;
+    /**
+     * „ADU-L ÎNAPOI." Un agent a apăsat pe teren „Nu mai există" și a
+     * greșit — sau firma s-a redeschis. Până acum, apăsatul ăla era pe
+     * viață: firma ieșea din liste și din hartă pentru toată agenția, iar
+     * verificarea lunară de la ANAF era anume oprită să o mai reînvie.
+     * Nicăieri, în toată platforma, nu exista drumul înapoi.
+     */
+    redeschide?: boolean;
+  };
   try {
     body = await req.json();
   } catch {
@@ -111,15 +158,46 @@ export async function PATCH(req: Request) {
     await ensureSchema();
     const agents = await listOrgAgents(auth.session.orgId);
     const names = agents.map((a) => a.name);
+
+    // ── ADU-L ÎNAPOI ──
+    // Ridicăm și steagul de pe firmă (dacă e a noastră), și ascunderea
+    // pusă doar pentru firma noastră (dacă era un prospect nealocat).
+    if (body.redeschide === true) {
+      const inviat = await db`
+        UPDATE prospects
+        SET inchis_teren = FALSE, activ = TRUE, updated_at = NOW()
+        WHERE cui = ${cui}
+          AND (assigned_agent = '' OR ${alAgentiei(db, auth.session.orgId, names)})
+      `;
+      const dezascuns = await db`
+        DELETE FROM prospect_inchis
+        WHERE cui = ${cui} AND org_id = ${auth.session.orgId}
+      `;
+      if (inviat.count === 0 && dezascuns.count === 0) {
+        return Response.json(
+          { error: "Firma asta nu e a ta sau n-a fost scoasă din liste." },
+          { status: 403 },
+        );
+      }
+      await audit(auth.session.email, "client.redeschide", cui, {});
+      return Response.json({
+        ok: true,
+        // ANAF o va verifica din nou la următoarea tură: steagul care
+        // oprea reînvierea a fost ridicat.
+        redeschis: true,
+      });
+    }
+
     if (agent !== "" && !names.includes(agent)) {
       return Response.json({ error: "Agentul nu e al firmei tale" }, { status: 400 });
     }
     // Doar clienții firmei: alocați unui agent al ei sau nedistribuiți.
     const rows = await db<Array<{ cui: string }>>`
       UPDATE prospects
-      SET assigned_agent = ${agent}, updated_at = NOW()
+      SET assigned_agent = ${agent}, assigned_org = ${auth.session.orgId},
+          updated_at = NOW()
       WHERE cui = ${cui} AND status = 'client'
-        AND (assigned_agent = '' OR assigned_agent = ANY(${names.length ? names : [""]}))
+        AND (assigned_agent = '' OR ${alAgentiei(db, auth.session.orgId, names)})
       RETURNING cui
     `;
     if (rows.length === 0) {

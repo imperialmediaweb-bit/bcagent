@@ -1,4 +1,5 @@
 import { verifyFieldToken } from "@/lib/agent-guard";
+import { alAgentiei } from "@/lib/org-scope";
 import { ensureSchema, getDB, isDBEnabled } from "@/lib/db";
 import { clientIP, rateLimit } from "@/lib/rate-limit";
 
@@ -119,7 +120,7 @@ export async function POST(req: Request) {
         SELECT cui FROM prospects
         WHERE cui = ${cuiCerut}
           AND (COALESCE(assigned_agent, '') = ''
-               OR assigned_agent = ANY(${aiMei.length ? aiMei : [payload.agentName]}))
+               OR ${alAgentiei(db0, orgId, aiMei.length ? aiMei : [payload.agentName])})
       `;
       if (f) cui = f.cui;
     }

@@ -1020,7 +1020,12 @@ function HartaCard({ orgId }: { orgId: string }) {
   const [err, setErr] = useState<string | null>(null);
 
   async function ruleaza(anuleaza: boolean) {
-    if (anuleaza && !confirm("Șterg locurile aduse din hartă. Cele puse de agenți din teren rămân. Continui?")) {
+    if (
+      anuleaza &&
+      !confirm(
+        "Scot locurile și magazinele aduse din hartă. Ce au pus, confirmat sau vizitat agenții pe teren RĂMÂNE. Firmele intrate în registru rămân și ele — registrul e comun. Continui?",
+      )
+    ) {
       return;
     }
     setBusy(true);
@@ -1039,12 +1044,33 @@ function HartaCard({ orgId }: { orgId: string }) {
               clientiCuLoc?: number;
               magazineSalvate?: number;
               faraLocPeHarta?: number;
+              anulare?: {
+                locuri: number;
+                magazine: number;
+                pastrate: number;
+                firmeRamase: number;
+              };
             }>(`/api/platform/orgs/${orgId}/harta`, {
               method: "POST",
               body: JSON.stringify(anuleaza ? { anuleaza: true } : { link }),
             });
+      const a = d.anulare;
       const text = anuleaza
-        ? `Am șters ${d.sterse ?? 0} locuri aduse din hartă. Ce au pus agenții a rămas.`
+        ? a
+          ? // Ce s-a scos ȘI ce n-a putut fi scos, spus pe față: altfel
+            // omul apasă a doua oară crezând că butonul n-a mers.
+            [
+              `Am scos ${a.locuri} locuri de pe firme și ${a.magazine} magazine aduse din hartă.`,
+              a.pastrate > 0
+                ? `${a.pastrate} magazine rămân — agenții le-au confirmat, tăiat, adăugat sau au fost la ele.`
+                : "",
+              a.firmeRamase > 0
+                ? `${a.firmeRamase} firme intrate din hartă rămân în registrul comun.`
+                : "",
+            ]
+              .filter(Boolean)
+              .join(" ")
+          : `Am șters ${d.sterse ?? 0} locuri aduse din hartă. Ce au pus agenții a rămas.`
         : link.trim() === ""
           ? "N-ai dat link de hartă — caut doar pe OpenStreetMap."
           : `Am pus locul la ${d.scrise ?? 0} magazine, din ${d.totalPuncte ?? 0} câte are harta.` +

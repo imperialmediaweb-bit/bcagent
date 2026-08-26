@@ -51,3 +51,32 @@ export async function orgIdForAgent(agentId: string): Promise<string> {
     return "";
   }
 }
+
+type DB = NonNullable<ReturnType<typeof getDB>>;
+
+/**
+ * „E CLIENTUL FIRMEI ĂSTEIA?" — condiția, într-un singur loc.
+ *
+ * Până acum, întrebarea se punea peste tot la fel: „e alocat cuiva cu
+ * numele unuia dintre agenții mei?". Numele nu ajunge. „Popescu Ion" e
+ * cel mai obișnuit nume din țară, iar platforma e făcută pentru multe
+ * firme de distribuție deodată: în ziua în care două dintre ele au
+ * fiecare câte un Popescu Ion, fiecare o vedea pe cealaltă — stare,
+ * notă, sold, tot. Nu e o teamă, se arată în două rânduri de test.
+ *
+ * Coloana `assigned_org` spune CINE a alocat. Goală = alocare veche,
+ * dinainte de ea; aia se judecă după nume, ca înainte, ca să nu rămână
+ * nimeni fără clienți peste noapte.
+ *
+ * Se cheamă PROASPĂT la fiecare folosire: postgres.js nu garantează că
+ * același fragment poate fi refolosit în două interogări.
+ *
+ * Coloanele se scriu NEcalificate dinadins — merge și când tabelul e
+ * `prospects`, și când e `prospects p`, fiindcă în interogările noastre
+ * niciun alt tabel n-are coloanele astea.
+ */
+export function alAgentiei(db: DB, orgId: string, numeAgenti: string[]) {
+  const nume = numeAgenti.length ? numeAgenti : [""];
+  return db`(assigned_agent = ANY(${nume})
+             AND (assigned_org = '' OR assigned_org = ${orgId || "-"}))`;
+}

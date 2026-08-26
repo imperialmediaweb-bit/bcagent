@@ -140,7 +140,13 @@ function caCodeReview() {
       const t = citeste(f);
       const bucati = t.split(/INSERT INTO geo_firme|UPDATE prospects/).slice(1);
       const fara = bucati.filter(
-        (b) => !/assigned_agent|sursa NOT IN|org_id/.test(b.slice(0, 1400)),
+        // `alAgentiei(...)` E paza: e chiar condiția „al firmei mele",
+        // scrisă într-un singur loc (lib/org-scope). De când există, în
+        // rute nu mai apare textul `assigned_agent` — dar paza e mai
+        // tare decât înainte, fiindcă ține cont și de firmă, nu doar de
+        // numele agentului.
+        (b) =>
+          !/assigned_agent|alAgentiei|sursa NOT IN|org_id/.test(b.slice(0, 1400)),
       );
       check(`${f}: toate scrierile au pază`, fara.length === 0, `${fara.length} fără`);
     }

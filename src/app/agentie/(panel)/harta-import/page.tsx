@@ -152,18 +152,48 @@ export default function HartaImportPage() {
   }
 
   async function anuleaza() {
-    if (!confirm("Șterg locurile aduse din hartă. Cele puse de agenți din teren rămân. Continui?")) return;
+    if (
+      !confirm(
+        "Scot locurile și magazinele aduse din hartă. Ce au pus, confirmat sau vizitat agenții pe teren RĂMÂNE. Firmele intrate în registru rămân și ele — registrul e comun tuturor firmelor de pe platformă. Continui?",
+      )
+    )
+      return;
     setLucreaza(true);
     setEroare(null);
     try {
-      const d = await api<{ sterse: number }>("/api/agentie/harta-import", {
+      const d = await api<{
+        sterse: number;
+        anulare?: {
+          locuri: number;
+          magazine: number;
+          pastrate: number;
+          firmeRamase: number;
+        };
+      }>("/api/agentie/harta-import", {
         method: "POST",
         body: JSON.stringify({ anuleaza: true }),
       });
       setGata(null);
       setOsm(null);
       setV(null);
-      setMesaj(`Am șters ${d.sterse} locuri aduse din hartă. Ce au pus agenții pe teren n-am atins.`);
+      const a = d.anulare;
+      // Mesajul spune EXACT ce s-a întâmplat, inclusiv ce n-am scos și de
+      // ce. Altfel omul apasă a doua oară, crezând că n-a mers.
+      setMesaj(
+        a
+          ? [
+              `Am scos ${a.locuri} locuri de pe firme și ${a.magazine} magazine aduse din hartă.`,
+              a.pastrate > 0
+                ? `${a.pastrate} magazine rămân: agenții le-au confirmat, tăiat, adăugat sau au fost în vizită la ele.`
+                : "",
+              a.firmeRamase > 0
+                ? `${a.firmeRamase} firme intrate din hartă rămân în registru — au cod fiscal verificat, iar registrul e comun tuturor firmelor de pe platformă.`
+                : "",
+            ]
+              .filter(Boolean)
+              .join(" ")
+          : `Am șters ${d.sterse} locuri aduse din hartă. Ce au pus agenții pe teren n-am atins.`,
+      );
     } catch (e) {
       setEroare(e instanceof Error ? e.message : String(e));
     } finally {

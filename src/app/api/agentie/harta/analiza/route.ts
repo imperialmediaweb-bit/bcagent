@@ -1,4 +1,5 @@
 import { ensureSchema, getDB, isDBEnabled } from "@/lib/db";
+import { alAgentiei } from "@/lib/org-scope";
 import { isAIEnabled, streamCompletion } from "@/lib/llm";
 import { rateLimit } from "@/lib/rate-limit";
 import { listOrgAgents, orgAIFeatures, requireOrgUser } from "@/modules/platform";
@@ -103,7 +104,7 @@ export async function POST(req: Request) {
         ORDER BY visited_at DESC LIMIT 1
       ) v ON TRUE
       WHERE p.status = 'client'
-        AND p.assigned_agent = ANY(${cautati})
+        AND ${alAgentiei(db, auth.session.orgId, cautati)}
         AND p.activ IS DISTINCT FROM FALSE
       LIMIT 3000
     `;

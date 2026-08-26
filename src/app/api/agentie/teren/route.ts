@@ -60,7 +60,7 @@ export async function GET() {
                COUNT(*)::text AS n, MAX(g.updated_at)::text AS ultima
         FROM geo_firme g
         JOIN prospects p ON p.cui = g.cui
-        JOIN org_agents oa ON oa.name = p.assigned_agent AND oa.org_id = ${orgId}
+        JOIN org_agents oa ON oa.name = p.assigned_agent AND oa.org_id = ${orgId} AND (p.assigned_org = '' OR p.assigned_org = oa.org_id)
         WHERE g.sursa IN ('deget', 'gps')
         GROUP BY 1
       `,
@@ -161,7 +161,7 @@ export async function GET() {
         COUNT(*) FILTER (WHERE g.sursa IN ('deget', 'gps'))::text AS din_teren,
         (SELECT COUNT(*)::text FROM magazin_harta WHERE org_id = ${orgId}) AS magazine
       FROM prospects p
-      JOIN org_agents oa ON oa.name = p.assigned_agent AND oa.org_id = ${orgId}
+      JOIN org_agents oa ON oa.name = p.assigned_agent AND oa.org_id = ${orgId} AND (p.assigned_org = '' OR p.assigned_org = oa.org_id)
       LEFT JOIN geo_firme g ON g.cui = p.cui
     `;
 

@@ -75,13 +75,23 @@ export default function VanPanel({ token }: { token: string }) {
           })),
         }),
       });
-      const d = (await res.json()) as { error?: string };
+      const d = (await res.json()) as { error?: string; neatinse?: string[] };
       if (!res.ok) {
         setMsg(d.error ?? `Eroare ${res.status}`);
         return;
       }
       setLines([{ ...EMPTY }]);
-      setMsg(kind === "incarcare" ? "Marfă încărcată în dubă ✓" : "Retur salvat ✓");
+      // UN „GATA" PE O TREABĂ NEFĂCUTĂ E MAI RĂU DECÂT O EROARE.
+      // Dacă produsul dat retur nu era în dubă sub numele ăsta, nu s-a
+      // scăzut nimic — iar agentul ar fi rămas cu marfa scrisă pe el.
+      const lipsa = d.neatinse ?? [];
+      setMsg(
+        kind === "incarcare"
+          ? "Marfă încărcată în dubă ✓"
+          : lipsa.length === 0
+            ? "Retur salvat ✓"
+            : `Retur salvat, dar nu aveai în dubă: ${lipsa.join(", ")}. Verifică numele produsului.`,
+      );
       await load();
     } catch {
       setMsg("Fără semnal — reîncearcă.");

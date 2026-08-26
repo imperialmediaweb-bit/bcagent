@@ -1,4 +1,5 @@
 import { ensureSchema, getDB, isDBEnabled } from "@/lib/db";
+import { alAgentiei } from "@/lib/org-scope";
 import { normalizeName, variantsFor } from "@/lib/name-match";
 import { requestOrigin } from "@/lib/request-origin";
 import { signToken } from "@/lib/signed-token";
@@ -113,7 +114,18 @@ export async function POST(req: Request) {
         }
         const cleanName = raw.replace(/\s+/g, " ").trim().slice(0, 128);
         const agentId = `ag-${crypto.randomUUID().replace(/-/g, "").slice(0, 10)}`;
-        await addOrgAgent(auth.session.orgId, agentId, cleanName);
+        try {
+          await addOrgAgent(auth.session.orgId, agentId, cleanName);
+        } catch (e) {
+          // Un nume deja folosit nu oprește importul întreg: se trece
+          // peste agentul ăsta și i se spune omului care e.
+          const { NumeAgentFolosit } = await import("@/modules/platform");
+          if (e instanceof NumeAgentFolosit) {
+            unknownAgents.add(`${raw} (mai ai un agent cu numele ăsta)`);
+            continue;
+          }
+          throw e;
+        }
         agentNorm.push({ name: cleanName, norm: n });
         slots--;
         if (secret) {
@@ -258,13 +270,15 @@ export async function POST(req: Request) {
               WHEN u.agent <> '' THEN u.agent
               ELSE p.assigned_agent
             END,
+            -- Alocarea capătă și firma care a făcut-o.
+            assigned_org = ${auth.session.orgId},
             updated_at = NOW()
         FROM jsonb_to_recordset(${db.json(
           payload as unknown as Parameters<typeof db.json>[0],
         )}) AS u(cui TEXT, agent TEXT)
         WHERE p.cui = u.cui
           AND (COALESCE(p.assigned_agent, '') = ''
-               OR p.assigned_agent = ANY(${numeleNoastre.length ? numeleNoastre : [""]}))
+               OR ${alAgentiei(db, auth.session.orgId, numeleNoastre)})
       `;
       updated = result.count;
       await audit(auth.session.email, "clients.import", auth.session.orgId, {

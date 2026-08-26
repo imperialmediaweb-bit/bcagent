@@ -11,6 +11,8 @@ export const runtime = "nodejs";
 
 interface Stop {
   cui: string;
+  /** La care magazin al firmei, când firma are mai multe. Gol = firma. */
+  magazinId?: string;
   denumire: string;
   adresa: string;
   localitate: string;
@@ -39,6 +41,10 @@ function sanitizeStops(raw: unknown): Stop[] {
         lat >= 43.3 && lat <= 48.4 && lng >= 20.1 && lng <= 30.0;
       return {
         cui: String(s.cui ?? "").replace(/\D/g, "").slice(0, 12),
+        // LA CARE MAGAZIN al firmei. Fără el, ruta lui Ovi Tacomax cu
+        // șase opriri se stingea toată la prima bifă: „continuă ruta"
+        // sărea peste cinci magazine la care nu fusese nimeni.
+        magazinId: String(s.magazinId ?? "").slice(0, 220),
         denumire: String(s.denumire ?? "").slice(0, 200),
         adresa: String(s.adresa ?? "").slice(0, 300),
         localitate: String(s.localitate ?? "").slice(0, 120),

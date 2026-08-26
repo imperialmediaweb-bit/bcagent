@@ -25,6 +25,16 @@ interface Client {
 
 export default function ClientiPage() {
   const [clients, setClients] = useState<Client[]>([]);
+  /** Firmele pe care agenții le-au scos din liste de pe teren. */
+  const [scoase, setScoase] = useState<
+    Array<{
+      cui: string;
+      denumire: string;
+      localitate: string;
+      agent: string;
+      cand: string | null;
+    }>
+  >([]);
   const [total, setTotal] = useState(0);
   const [agents, setAgents] = useState<Array<{ agentId: string; name: string }>>([]);
   const [agent, setAgent] = useState("");
@@ -35,17 +45,47 @@ export default function ClientiPage() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const d = await api<{ clients: Client[]; total: number }>(
+      const d = await api<{
+        clients: Client[];
+        total: number;
+        scoaseDeTeren?: Array<{
+          cui: string;
+          denumire: string;
+          localitate: string;
+          agent: string;
+          cand: string | null;
+        }>;
+      }>(
         `/api/agentie/clients?agent=${encodeURIComponent(agent)}&search=${encodeURIComponent(search)}&limit=200`,
       );
       setClients(d.clients);
       setTotal(d.total);
+      setScoase(d.scoaseDeTeren ?? []);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
       setLoading(false);
     }
   }, [agent, search]);
+
+  /** Aduce înapoi o firmă scoasă din greșeală de pe teren. */
+  async function redeschide(cui: string, denumire: string) {
+    if (
+      !confirm(
+        `Aduc „${denumire}" înapoi în liste și pe hartă. Continui?`,
+      )
+    )
+      return;
+    try {
+      await api("/api/agentie/clients", {
+        method: "PATCH",
+        body: JSON.stringify({ cui, redeschide: true }),
+      });
+      await load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    }
+  }
 
   useEffect(() => {
     const t = setTimeout(load, search ? 300 : 0);
@@ -72,6 +112,50 @@ export default function ClientiPage() {
       </header>
 
       <ImportUniversCard onDone={load} agents={agents} />
+
+      {/* SCOASE DE PE TEREN.
+          Un agent a apăsat „Nu mai există" și firma a ieșit din listele
+          întregii agenții. Dacă a greșit — ori firma s-a redeschis —
+          managerul trebuie să AIBĂ UNDE SĂ VADĂ, altfel n-are cum să dea
+          înapoi. Până acum, apăsatul ăla era pe viață. */}
+      {scoase.length > 0 && (
+        <Card className="border-amber-200 p-4">
+          <h2 className="text-sm font-semibold text-slate-800">
+            Scoase din liste de pe teren ({scoase.length})
+          </h2>
+          <p className="mt-1 text-xs text-slate-500">
+            Agenții au raportat că firmele astea nu mai există. Nu apar pe
+            hartă și nu intră în rute. Dacă vreuna e o greșeală, adu-o
+            înapoi.
+          </p>
+          <ul className="mt-3 space-y-1.5">
+            {scoase.map((x) => (
+              <li
+                key={x.cui}
+                className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-amber-50/60 px-3 py-2"
+              >
+                <span className="min-w-0 text-sm text-slate-700">
+                  <span className="font-medium">{x.denumire}</span>
+                  {x.localitate ? ` · ${x.localitate}` : ""}
+                  <span className="text-slate-500">
+                    {x.agent ? ` · scoasă de ${x.agent}` : ""}
+                    {x.cand
+                      ? ` · ${new Date(x.cand).toLocaleDateString("ro-RO")}`
+                      : ""}
+                  </span>
+                </span>
+                <button
+                  type="button"
+                  onClick={() => void redeschide(x.cui, x.denumire)}
+                  className="shrink-0 rounded-md border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
+                >
+                  Adu-o înapoi
+                </button>
+              </li>
+            ))}
+          </ul>
+        </Card>
+      )}
 
       <Card className="p-4">
         <div className="flex flex-col gap-3 sm:flex-row">

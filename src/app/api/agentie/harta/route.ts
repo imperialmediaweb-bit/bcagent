@@ -1,4 +1,5 @@
 import { ensureSchema, getDB, isDBEnabled } from "@/lib/db";
+import { alAgentiei } from "@/lib/org-scope";
 import { listOrgAgents, requireOrgUser } from "@/modules/platform";
 
 export const runtime = "nodejs";
@@ -82,7 +83,7 @@ export async function GET(req: Request) {
         LIMIT 1
       ) v ON TRUE
       WHERE p.status = 'client'
-        AND p.assigned_agent = ANY(${cautati})
+        AND ${alAgentiei(db, auth.session.orgId, cautati)}
         AND p.activ IS DISTINCT FROM FALSE
       ORDER BY p.denumire ASC
       LIMIT 2000

@@ -41,10 +41,25 @@ export async function POST(req: Request, ctx: Ctx) {
     await ensureSchema();
     const org = await getOrg(id);
     if (!org) return Response.json({ error: "Organizația nu există" }, { status: 404 });
+    // AMÂNDOI AGENȚII TREBUIE SĂ FIE AI ACESTEI FIRME.
+    // Fără verificarea asta, o scăpare de tastare în panoul de admin muta
+    // clienții unei firme la un agent al alteia — și nimic n-ar fi crăpat.
+    const { listOrgAgents } = await import("@/modules/platform");
+    const numeleLor = new Set((await listOrgAgents(id)).map((a) => a.name));
+    if (!numeleLor.has(fromAgent) || !numeleLor.has(toAgent)) {
+      return Response.json(
+        { error: "Ambii agenți trebuie să fie ai acestei firme" },
+        { status: 400 },
+      );
+    }
 
     const moved = await db`
-      UPDATE prospects SET assigned_agent = ${toAgent}, updated_at = NOW()
+      UPDATE prospects
+      SET assigned_agent = ${toAgent}, assigned_org = ${id}, updated_at = NOW()
       WHERE assigned_agent = ${fromAgent}
+        -- Doar clienții firmei ăsteia: un omonim de la altă firmă de pe
+        -- platformă n-are voie să-și piardă clienții aici.
+        AND (assigned_org = '' OR assigned_org = ${id})
     `;
 
     if (body.deactivate !== false) {

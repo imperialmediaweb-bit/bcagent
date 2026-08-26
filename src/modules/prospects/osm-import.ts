@@ -1,4 +1,5 @@
 import { getDB } from "@/lib/db";
+import { alAgentiei } from "@/lib/org-scope";
 import {
   citesteOverpass,
   intrebareJudet,
@@ -183,7 +184,7 @@ export async function planificaOSM(db: DB, orgId: string): Promise<number> {
   const aleLor = (
     await db<Array<{ judet: string }>>`
       SELECT p.judet FROM prospects p
-      JOIN org_agents oa ON oa.name = p.assigned_agent
+      JOIN org_agents oa ON oa.name = p.assigned_agent AND (p.assigned_org = '' OR p.assigned_org = oa.org_id)
       WHERE oa.org_id = ${orgId} AND COALESCE(p.judet, '') <> ''
       GROUP BY p.judet ORDER BY COUNT(*) DESC
     `
@@ -310,7 +311,7 @@ export async function unJudetOSM(
   >`
     SELECT p.cui, p.denumire, COALESCE(p.localitate, '') AS localitate
     FROM prospects p
-    LEFT JOIN org_agents oa ON oa.name = p.assigned_agent AND oa.org_id = ${orgId}
+    LEFT JOIN org_agents oa ON oa.name = p.assigned_agent AND oa.org_id = ${orgId} AND (p.assigned_org = '' OR p.assigned_org = oa.org_id)
     WHERE p.judet = ${judet}
       AND (oa.id IS NOT NULL OR COALESCE(p.assigned_agent, '') = '')
       AND p.activ IS DISTINCT FROM FALSE
@@ -374,7 +375,7 @@ export async function unJudetOSM(
         FROM prospects pr
         WHERE pr.cui = ${p.client!.cui}
           AND (COALESCE(pr.assigned_agent, '') = ''
-               OR pr.assigned_agent = ANY(${numeAg}))
+               OR ${alAgentiei(db, orgId, numeAg)})
           AND NOT EXISTS (
             SELECT 1 FROM geo_firme g
             WHERE g.cui = pr.cui AND g.sursa IN ('deget', 'gps')

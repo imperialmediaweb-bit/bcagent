@@ -107,7 +107,17 @@ export async function POST(req: Request, ctx: Ctx) {
       );
     }
 
-    await addOrgAgent(id, agentId, agentName);
+    try {
+      await addOrgAgent(id, agentId, agentName);
+    } catch (e) {
+      // Nume deja folosit la firmă: e o greșeală de-a omului, nu o
+      // defecțiune. I-o spunem pe șleau, nu cu „eroare 500".
+      const { NumeAgentFolosit } = await import("@/modules/platform");
+      if (e instanceof NumeAgentFolosit) {
+        return Response.json({ error: e.message }, { status: 409 });
+      }
+      throw e;
+    }
     const exp = Math.floor(Date.now() / 1000) + ttlDays * 86400;
     const token = await signToken({ agentId, agentName, exp }, secret);
     const origin = requestOrigin(req);

@@ -6,8 +6,10 @@ import {
   aliasuriInvatate,
   cautaLocalitati,
   invataAlias,
+  listaAliasuri,
   localitatiCunoscute,
   salveazaZone,
+  uitaAlias,
 } from "@/modules/zone/aplica";
 
 export const runtime = "nodejs";
@@ -47,6 +49,9 @@ export async function GET() {
     `;
     return Response.json({
       zile: ZILE,
+      // CE A ÎNVĂȚAT APLICAȚIA DE LA EI. Se aplică singur, la toți
+      // agenții — deci trebuie să se și vadă, și să se poată șterge.
+      invatate: await listaAliasuri(db, auth.session.orgId),
       agenti: agents.map((a) => {
         const ale = rows.filter((r) => r.agent_name === a.name);
         // Cine a scris-o ultima dată: agentul de pe teren sau managerul.
@@ -92,6 +97,12 @@ export async function POST(req: Request) {
     }>;
     /** Caută în satele lui: două-trei litere, alege din listă. */
     cauta?: string;
+    /**
+     * „Uită ce ai învățat greșit." O alegere grăbită („Centru" →
+     * „SUCEAVA") lucra singură pentru totdeauna, la toți agenții firmei,
+     * fără ca cineva să poată da înapoi.
+     */
+    uita?: { scris?: string; localitate?: string };
   };
   try {
     body = await req.json();
@@ -100,12 +111,29 @@ export async function POST(req: Request) {
   }
   const agent = String(body.agent ?? "").trim();
   const text = String(body.text ?? "").slice(0, 20_000);
-  if (!agent) return Response.json({ error: "Alege agentul" }, { status: 400 });
 
   const db = getDB();
   if (!db) return Response.json({ enabled: false }, { status: 503 });
   try {
     await ensureSchema();
+
+    // ── UITĂ O ÎNVĂȚĂTURĂ GREȘITĂ ──
+    // Nu ține de niciun agent: e a firmei. De-aia stă înaintea
+    // verificării de agent, care aici n-are ce căuta.
+    if (body.uita) {
+      const sters = await uitaAlias(
+        db,
+        auth.session.orgId,
+        String(body.uita.scris ?? ""),
+        String(body.uita.localitate ?? ""),
+      );
+      return Response.json({
+        ok: true,
+        sters,
+        invatate: await listaAliasuri(db, auth.session.orgId),
+      });
+    }
+    if (!agent) return Response.json({ error: "Alege agentul" }, { status: 400 });
     const agents = await listOrgAgents(auth.session.orgId);
     if (!agents.some((a) => a.name === agent)) {
       return Response.json({ error: "Agentul nu e al firmei tale" }, { status: 403 });
@@ -119,11 +147,11 @@ export async function POST(req: Request) {
     if (typeof body.cauta === "string") {
       return Response.json({
         ok: true,
-        localitati: await cautaLocalitati(db, numeAg, body.cauta),
+        localitati: await cautaLocalitati(db, numeAg, body.cauta, 25, auth.session.orgId),
       });
     }
 
-    const cunoscute = await localitatiCunoscute(db, numeAg);
+    const cunoscute = await localitatiCunoscute(db, numeAg, auth.session.orgId);
     // CE A ÎNVĂȚAT DE LA EI: „Burdujeni" → „SUCEAVA", fiindcă au ales-o
     // ei odată. Nu scriem noi liste de cartiere pentru fiecare oraș din
     // țară — fiecare firmă și-l învață pe al ei.

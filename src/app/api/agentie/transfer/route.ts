@@ -46,9 +46,14 @@ export async function POST(req: Request) {
       );
     }
 
+    // NUMAI CLIENȚII FIRMEI MELE. Fără condiția pe firmă, mutarea lui
+    // „Popescu Ion → Ionescu" muta și clienții unui Popescu Ion de la altă
+    // firmă de distribuție, care n-are nicio treabă cu noi.
     const moved = await db`
-      UPDATE prospects SET assigned_agent = ${toAgent}, updated_at = NOW()
+      UPDATE prospects
+      SET assigned_agent = ${toAgent}, assigned_org = ${orgId}, updated_at = NOW()
       WHERE assigned_agent = ${fromAgent}
+        AND (assigned_org = '' OR assigned_org = ${orgId})
     `;
     if (body.deactivate !== false) {
       await db`

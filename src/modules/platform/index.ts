@@ -66,6 +66,7 @@ export {
 export type { OrgSession } from "./org-session";
 export {
   addOrgAgent,
+  NumeAgentFolosit,
   agentAIFeatures,
   audit,
   changeAdminPassword,

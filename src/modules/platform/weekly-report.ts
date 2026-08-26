@@ -1,4 +1,5 @@
 import { getDB } from "@/lib/db";
+import { alAgentiei } from "@/lib/org-scope";
 import { listOrgAgents } from "./repo";
 import { isAIEnabled, streamCompletion } from "@/lib/llm";
 
@@ -88,14 +89,14 @@ export async function buildWeeklyReport(
       (SELECT COUNT(*) FROM (
         SELECT p.cui FROM prospects p LEFT JOIN visits v ON v.cui = p.cui
         WHERE p.status = 'client'
-          AND p.assigned_agent = ANY(${names.length ? names : [""]})
+          AND ${alAgentiei(db, orgId, names)}
         GROUP BY p.cui
         HAVING MAX(v.visited_at) IS NULL
             OR MAX(v.visited_at) < NOW() - INTERVAL '7 days'
       ) t)::text AS scadenti,
       COALESCE((SELECT SUM(sold_cents) FROM prospects
         WHERE sold_cents > 0
-          AND assigned_agent = ANY(${names.length ? names : [""]})), 0)::text AS restante
+          AND ${alAgentiei(db, orgId, names)}), 0)::text AS restante
   `;
 
   const rows: WeeklyAgentRow[] = agents

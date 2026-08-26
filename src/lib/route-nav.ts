@@ -159,15 +159,35 @@ export function poateNaviga(s: NavStop): boolean {
   );
 }
 
-/** Opririle rămase: cele care NU au fost vizitate (după CUI). */
-export function remainingStops<T extends { cui: string }>(
+/**
+ * OPRIRILE RĂMASE: cele la care nu s-a ajuns încă.
+ *
+ * O oprire e un MAGAZIN, nu o firmă. Ovi Tacomax e o singură firmă cu
+ * șase magazine: dacă socoteala se ține pe CUI, o vizită la cel din
+ * Cernești scotea din rută toate șase, iar agentul „termina ruta" cu
+ * cinci magazine nevăzute. Ruta arăta bifat, drumul nu era făcut.
+ *
+ * Cheia unei opriri e deci magazinul, când îl știm, și firma când nu.
+ * Vizitele făcute vin scrise la fel: „magazinId dacă există, altfel CUI".
+ */
+export function cheieOprire(s: { cui: string; magazinId?: string }): string {
+  const m = String(s.magazinId ?? "").trim();
+  return m !== "" ? `m:${m}` : `c:${String(s.cui).replace(/\D/g, "")}`;
+}
+
+export function remainingStops<T extends { cui: string; magazinId?: string }>(
   stops: T[],
-  visitedCuis: Iterable<string>,
+  /** Ce s-a bifat azi: chei de oprire (vezi cheieOprire) sau CUI-uri
+   *  goale, pentru linkurile vechi care încă trimit doar CUI. */
+  vizitate: Iterable<string>,
 ): T[] {
-  const done = new Set(
-    Array.from(visitedCuis, (c) => String(c).replace(/\D/g, "")),
-  );
-  return stops.filter((s) => !done.has(String(s.cui).replace(/\D/g, "")));
+  const done = new Set<string>();
+  for (const v of vizitate) {
+    const t = String(v);
+    // Cheile noi vin gata scrise; ce vine simplu e un CUI, ca înainte.
+    done.add(t.startsWith("m:") || t.startsWith("c:") ? t : `c:${t.replace(/\D/g, "")}`);
+  }
+  return stops.filter((s) => !done.has(cheieOprire(s)));
 }
 
 /** Ruta spartă în etape de maximum 10 opriri (limita Google Maps). */

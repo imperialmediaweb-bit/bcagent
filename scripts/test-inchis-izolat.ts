@@ -74,7 +74,7 @@ async function main() {
     fetch(`${BASE}/api/visits`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ token, cui: c, denumire: "x", result: "inchis", note: "" }),
+      body: JSON.stringify({ token, cui: c, denumire: "x", result: "nu_mai_exista", note: "" }),
     });
   const lista = async (token: string) => {
     const p = new URLSearchParams({ token, judet: "SV", localitate: SAT, limit: "50", onlyActive: "1" });

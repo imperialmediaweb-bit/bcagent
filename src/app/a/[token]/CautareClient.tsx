@@ -5,6 +5,7 @@ import { Loader2, Search } from "lucide-react";
 import { navAddress } from "@/lib/route-nav";
 import OrderModal from "./OrderModal";
 import { VisitButtons, gmapsDir, type Firm } from "./MapPanel";
+import { STATUS_DUPA_VIZITA } from "@/modules/crm/stare-vizita";
 
 /**
  * CĂUTAREA DE CLIENȚI DE PE PRIMA PAGINĂ — cerută de agenți pe grup:
@@ -151,19 +152,11 @@ export default function CautareClient({
       showToast("Vizită salvată ✓");
       onVisitSaved?.();
       setRezultate((rs) =>
-        result === "inchis"
+        result === "nu_mai_exista"
           ? rs.filter((x) => x.cui !== f.cui)
           : rs.map((x) =>
               x.cui === f.cui
-                ? {
-                    ...x,
-                    status:
-                      result === "client"
-                        ? "client"
-                        : result === "nu_vrea"
-                          ? "respins"
-                          : "contactat",
-                  }
+                ? { ...x, status: STATUS_DUPA_VIZITA(x.status, result) ?? x.status }
                 : x,
             ),
       );

@@ -10,7 +10,7 @@ import {
   ShoppingCart,
   Target,
 } from "lucide-react";
-import { planRoute } from "@/lib/route-nav";
+import { cheieOprire, planRoute } from "@/lib/route-nav";
 
 /**
  * „Ziua mea" — cockpitul agentului: deschide telefonul dimineața și vede
@@ -34,6 +34,8 @@ const fmt = (n: number) =>
 interface Stop {
   judet?: string;
   cui: string;
+  /** La care magazin al firmei — vezi cheieOprire din lib/route-nav. */
+  magazinId?: string;
   denumire: string;
   adresa: string;
   localitate: string;
@@ -82,17 +84,24 @@ export default function DayPanel({
           (
             d: {
               today?: number;
-              visits?: Array<{ cui: string; visitedAt: string }>;
+              visits?: Array<{
+              cui: string;
+              magazinId?: string;
+              visitedAt: string;
+            }>;
             } | null,
           ) => {
             if (!d) return;
             if (d.today !== undefined) setVisitsToday(d.today);
             const startOfDay = new Date();
             startOfDay.setHours(0, 0, 0, 0);
+          // CHEIA E MAGAZINUL, nu firma: o vizită la unul dintre cele
+            // șase magazine ale lui Ovi Tacomax nu scoate din rută
+            // celelalte cinci.
             setDoneToday(
               (d.visits ?? [])
                 .filter((v) => new Date(v.visitedAt) >= startOfDay)
-                .map((v) => v.cui),
+                .map((v) => cheieOprire({ cui: v.cui, magazinId: v.magazinId })),
             );
           },
         )

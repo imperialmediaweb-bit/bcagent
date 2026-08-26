@@ -1,4 +1,5 @@
 import { getDB } from "@/lib/db";
+import { alAgentiei } from "@/lib/org-scope";
 
 /**
  * FAPTELE LUI, NU VORBE GENERALE.
@@ -95,7 +96,7 @@ export async function fapteDinDate(
            COUNT(*) FILTER (WHERE g.sursa IN ('deget','gps'))::text AS din_teren,
            (SELECT COUNT(*)::text FROM magazin_harta WHERE org_id = ${orgId}) AS magazine
     FROM prospects p
-    JOIN org_agents oa ON oa.name = p.assigned_agent AND oa.org_id = ${orgId}
+    JOIN org_agents oa ON oa.name = p.assigned_agent AND oa.org_id = ${orgId} AND (p.assigned_org = '' OR p.assigned_org = oa.org_id)
     LEFT JOIN geo_firme g ON g.cui = p.cui
   `;
   randuri.push(
@@ -130,12 +131,12 @@ export async function fapteDinDate(
       FROM prospects p
       LEFT JOIN geo_firme g ON g.cui = p.cui
       WHERE (COALESCE(p.assigned_agent,'') = ''
-             OR p.assigned_agent = ANY(${numeAgenti}))
+             OR ${alAgentiei(db, orgId, numeAgenti)})
         -- Fără diacritice, ca să prindem „Aghiorghiţoaie" și cu ț, și cu
         -- ţ, și fără. Î și Â merg la aceeași literă, ca peste tot la noi.
         AND lower(translate(p.denumire,
               'ăâîșțĂÂÎȘȚşţŞŢ', 'aaastAAASTstST')) LIKE ANY(${tipare})
-      ORDER BY (p.assigned_agent = ANY(${numeAgenti})) DESC, p.denumire
+      ORDER BY (${alAgentiei(db, orgId, numeAgenti)}) DESC, p.denumire
       LIMIT 8
     `;
     gasite = firme.length;

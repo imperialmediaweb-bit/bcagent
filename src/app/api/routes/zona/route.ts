@@ -110,22 +110,25 @@ export async function POST(req: Request) {
       salveazaZone,
     } = await import("@/modules/zone/aplica");
     const { neted: nivelat } = await import("@/modules/zone/parse");
-    const { orgAgentNamesForAgent } = await import("@/lib/org-scope");
+    const { orgAgentNamesForAgent, orgIdForAgent } = await import(
+      "@/lib/org-scope"
+    );
     const aiMei = await orgAgentNamesForAgent(cine.payload.agentId);
     const numeAg = aiMei.length ? aiMei : [cine.payload.agentName];
+    // Firma lui: fără ea, un omonim de la altă firmă ar aduce în listă
+    // satele din județele ALTORA.
+    const orgId = await orgIdForAgent(cine.payload.agentId);
 
     // CAUTĂ ÎN SATELE LUI. Pe telefon, în mașină, nimeni nu scrie
     // patruzeci de nume: tastează două-trei litere și alege din lista lui.
     if (typeof body.cauta === "string") {
       return Response.json({
         ok: true,
-        localitati: await cautaLocalitati(db, numeAg, body.cauta),
+        localitati: await cautaLocalitati(db, numeAg, body.cauta, 25, orgId),
       });
     }
 
-    const { orgIdForAgent } = await import("@/lib/org-scope");
-    const orgId = await orgIdForAgent(cine.payload.agentId);
-    const cunoscute = await localitatiCunoscute(db, numeAg);
+    const cunoscute = await localitatiCunoscute(db, numeAg, orgId);
     // CE A ÎNVĂȚAT DE LA EI: „Burdujeni" → „SUCEAVA", fiindcă au ales-o
     // ei odată. Nu ținem în cod cartierele fiecărui oraș din țară —
     // fiecare firmă și-l învață pe al ei.

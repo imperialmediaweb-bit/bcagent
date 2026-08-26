@@ -1,4 +1,5 @@
 import { ensureSchema, getDB, isDBEnabled } from "@/lib/db";
+import { alAgentiei } from "@/lib/org-scope";
 import { requireOrgUser } from "@/modules/platform";
 import {
   citesteKML,
@@ -101,16 +102,12 @@ export async function POST(req: Request) {
     // rămâne neatins: aia e muncă făcută la fața locului, nu ghicit.
     if (body.anuleaza === true) {
       const { listOrgAgents } = await import("@/modules/platform");
+      const { anuleazaImportul } = await import(
+        "@/modules/prospects/harta-aplica"
+      );
       const numeAg = (await listOrgAgents(auth.session.orgId)).map((a) => a.name);
-      const sters = await db`
-        DELETE FROM geo_firme g
-        USING prospects p
-        WHERE p.cui = g.cui
-          AND g.sursa = 'import'
-          AND (COALESCE(p.assigned_agent, '') = ''
-               OR p.assigned_agent = ANY(${numeAg.length ? numeAg : [""]}))
-      `;
-      return Response.json({ ok: true, sterse: sters.count });
+      const r = await anuleazaImportul(db, auth.session.orgId, numeAg);
+      return Response.json({ ok: true, sterse: r.locuri, anulare: r });
     }
 
     // ── MAGAZINELE DIN OPENSTREETMAP ──
@@ -166,7 +163,7 @@ export async function POST(req: Request) {
           FROM prospects p
           WHERE p.cui = ${cui}
             AND (COALESCE(p.assigned_agent, '') = ''
-                 OR p.assigned_agent = ANY(${agenti.length ? agenti : [""]}))
+                 OR ${alAgentiei(db, auth.session.orgId, agenti)})
             -- CE A PUS OMUL PE TEREN NU SE ATINGE. Agentul a fost acolo;
             -- importul doar ghicește după nume.
             AND NOT EXISTS (
@@ -305,7 +302,7 @@ export async function POST(req: Request) {
       (
         await db<Array<{ cui: string }>>`
           SELECT p.cui FROM prospects p
-          JOIN org_agents oa ON oa.name = p.assigned_agent
+          JOIN org_agents oa ON oa.name = p.assigned_agent AND (p.assigned_org = '' OR p.assigned_org = oa.org_id)
           WHERE oa.org_id = ${auth.session.orgId} LIMIT 20000
         `
       ).map((c) => c.cui),

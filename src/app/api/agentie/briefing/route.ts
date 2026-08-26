@@ -1,4 +1,5 @@
 import { mesajEroareAI } from "@/lib/ai-error";
+import { alAgentiei } from "@/lib/org-scope";
 import { ensureSchema, isDBEnabled, getDB } from "@/lib/db";
 import { isAIEnabled, streamCompletion } from "@/lib/llm";
 import { clientIP, rateLimit } from "@/lib/rate-limit";
@@ -91,12 +92,12 @@ export async function POST(req: Request) {
       SELECT
         (SELECT COUNT(*) FROM (
           SELECT p.cui FROM prospects p LEFT JOIN visits v ON v.cui = p.cui
-          WHERE p.status = 'client' AND p.assigned_agent = ANY(${names.length ? names : [""]})
+          WHERE p.status = 'client' AND ${alAgentiei(db, auth.session.orgId, names)}
           GROUP BY p.cui
           HAVING MAX(v.visited_at) IS NULL OR MAX(v.visited_at) < NOW() - INTERVAL '7 days'
         ) t)::text AS scadenti,
         COALESCE((SELECT SUM(sold_cents) FROM prospects
-          WHERE sold_cents > 0 AND assigned_agent = ANY(${names.length ? names : [""]})), 0)::text AS restante
+          WHERE sold_cents > 0 AND ${alAgentiei(db, auth.session.orgId, names)}), 0)::text AS restante
     `;
     const [ordersWeek] = await db<[{ n: string; valoare: string }]>`
       SELECT COUNT(*)::text AS n, COALESCE(SUM(total_value), 0)::text AS valoare

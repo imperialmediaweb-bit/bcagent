@@ -1,4 +1,5 @@
 import { getDB } from "@/lib/db";
+import { alAgentiei } from "@/lib/org-scope";
 import {
   NUME_GENERALE,
   PRESCURTARI,
@@ -67,9 +68,13 @@ const TINE_MINTE_MS = 5 * 60_000;
 export async function localitatiCunoscute(
   db: DB,
   numeAgenti: string[],
+  /** Firma lor. Fără ea, un omonim de la altă firmă de distribuție ar
+   *  aduce în listă județele ALTORA — agentul din Suceava ar primi de
+   *  ales sate din Timiș. */
+  orgId = "",
 ): Promise<string[]> {
   if (numeAgenti.length === 0) return [];
-  const cheieCache = [...numeAgenti].sort().join("|");
+  const cheieCache = [orgId, ...[...numeAgenti].sort()].join("|");
   const tinut = CACHE.get(cheieCache);
   if (tinut && Date.now() - tinut.la < TINE_MINTE_MS) return tinut.lista;
   // DOUĂ IZVOARE, nu unul.
@@ -83,7 +88,7 @@ export async function localitatiCunoscute(
     WHERE localitate <> ''
       AND judet IN (
         SELECT DISTINCT judet FROM prospects
-        WHERE assigned_agent = ANY(${numeAgenti}) AND judet <> ''
+        WHERE ${alAgentiei(db, orgId, numeAgenti)} AND judet <> ''
       )
     LIMIT 20000
   `;
@@ -92,7 +97,7 @@ export async function localitatiCunoscute(
     WHERE localitate <> ''
       AND judet IN (
         SELECT DISTINCT judet FROM prospects
-        WHERE assigned_agent = ANY(${numeAgenti}) AND judet <> ''
+        WHERE ${alAgentiei(db, orgId, numeAgenti)} AND judet <> ''
       )
     LIMIT 20000
   `;
@@ -145,10 +150,12 @@ export async function cautaLocalitati(
   numeAgenti: string[],
   q: string,
   cate = 25,
+  /** Firma lor — vezi localitatiCunoscute. */
+  orgId = "",
 ): Promise<string[]> {
   const cautat = neted(q);
   if (cautat.length < 2 || numeAgenti.length === 0) return [];
-  const toate = await localitatiCunoscute(db, numeAgenti);
+  const toate = await localitatiCunoscute(db, numeAgenti, orgId);
   const incep: string[] = [];
   const contin: string[] = [];
   for (const l of toate) {
@@ -219,6 +226,67 @@ export async function invataAlias(
     ON CONFLICT (org_id, scris, localitate)
       DO UPDATE SET folosit = zona_alias.folosit + 1
   `;
+}
+
+/** Un lucru învățat, așa cum îl vede omul care trebuie să-l judece. */
+export interface AliasInvatat {
+  scris: string;
+  localitate: string;
+  pusDe: string;
+  folosit: number;
+}
+
+/**
+ * CE A ÎNVĂȚAT APLICAȚIA DE LA FIRMA ASTA, scris pe față.
+ *
+ * Ce învață se aplică singur, la toți agenții, la fiecare zonă scrisă de
+ * atunci încolo. Un lucru care lucrează singur și nu se poate vedea e o
+ * capcană: dacă cineva a ales o dată din grabă „Centru → Suceava", toată
+ * firma trimitea de-atunci agenții greșit, iar nimeni n-avea unde să se
+ * uite ca să afle de ce.
+ */
+export async function listaAliasuri(
+  db: DB,
+  orgId: string,
+): Promise<AliasInvatat[]> {
+  if (orgId === "") return [];
+  const r = await db<
+    Array<{ scris: string; localitate: string; pus_de: string; folosit: number }>
+  >`
+    SELECT scris, localitate, COALESCE(pus_de,'') AS pus_de, folosit
+    FROM zona_alias WHERE org_id = ${orgId}
+    ORDER BY folosit DESC, scris
+    LIMIT 500
+  `;
+  return r.map((x) => ({
+    scris: x.scris,
+    localitate: x.localitate,
+    pusDe: x.pus_de,
+    folosit: x.folosit,
+  }));
+}
+
+/**
+ * UITĂ CE AI ÎNVĂȚAT GREȘIT.
+ *
+ * Perechea greșită se șterge, iar data viitoare aplicația întreabă din
+ * nou — adică se întoarce la starea cinstită: „nu știu, spune-mi tu".
+ * Zonele deja salvate nu se ating: alea sunt fapte, nu deducții.
+ */
+export async function uitaAlias(
+  db: DB,
+  orgId: string,
+  scris: string,
+  localitate: string,
+): Promise<number> {
+  if (orgId === "") return 0;
+  const r = await db`
+    DELETE FROM zona_alias
+    WHERE org_id = ${orgId}
+      AND scris = ${neted(scris).slice(0, 120)}
+      AND localitate = ${localitate.slice(0, 120)}
+  `;
+  return r.count;
 }
 
 /**

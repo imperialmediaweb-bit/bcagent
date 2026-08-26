@@ -1,4 +1,5 @@
 import { ensureSchema, isDBEnabled, getDB } from "@/lib/db";
+import { alAgentiei } from "@/lib/org-scope";
 import { requestOrigin } from "@/lib/request-origin";
 import { signToken } from "@/lib/signed-token";
 import {
@@ -41,7 +42,7 @@ export async function GET() {
     `;
     const clients = await db<Array<{ assigned_agent: string; n: string }>>`
       SELECT assigned_agent, COUNT(*)::text AS n FROM prospects
-      WHERE status = 'client' AND assigned_agent = ANY(${names.length ? names : [""]})
+      WHERE status = 'client' AND ${alAgentiei(db, auth.session.orgId, names)}
       GROUP BY assigned_agent
     `;
     const byId = Object.fromEntries(stats.map((s) => [s.agent_id, s]));
@@ -107,7 +108,17 @@ export async function POST(req: Request) {
       );
     }
 
-    await addOrgAgent(orgId, agentId, agentName);
+    try {
+      await addOrgAgent(orgId, agentId, agentName);
+    } catch (e) {
+      // Nume deja folosit la firmă: e o greșeală de-a omului, nu o
+      // defecțiune. I-o spunem pe șleau, nu cu „eroare 500".
+      const { NumeAgentFolosit } = await import("@/modules/platform");
+      if (e instanceof NumeAgentFolosit) {
+        return Response.json({ error: e.message }, { status: 409 });
+      }
+      throw e;
+    }
     const exp = Math.floor(Date.now() / 1000) + ttlDays * 86400;
     const token = await signToken({ agentId, agentName, exp }, secret);
     const origin = requestOrigin(req);

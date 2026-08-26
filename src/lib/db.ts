@@ -111,6 +111,42 @@ export async function ensureSchema(): Promise<void> {
     -- Stă pe COLOANA EI: nu ștergem sediul social, doar îl întrecem.
     ALTER TABLE prospects ADD COLUMN IF NOT EXISTS adresa_livrare TEXT NOT NULL DEFAULT '';
     ALTER TABLE prospects ADD COLUMN IF NOT EXISTS localitate_livrare TEXT NOT NULL DEFAULT '';
+    -- DE UNDE A VENIT FIRMA ASTA ÎN REGISTRU.
+    -- Gol = din registrul Finanțelor, ca toate celelalte. Altfel, id-ul
+    -- firmei a cărei hartă a adus-o: 1073 de CUI-uri din harta lui Bogdan
+    -- nu existau la Finanțe (PFA-uri, firme din alte județe), dar sunt
+    -- firme adevărate, cu cod fiscal verificat și adresă cu număr.
+    --
+    -- Fără coloana asta nu se putea răspunde la două întrebări cinstite:
+    -- „ce anume a adus butonul meu?" și „de ce firma asta n-are CAEN?".
+    -- Rămâne pusă doar la INSERT — dacă firma apare mai târziu și la
+    -- Finanțe, tot din hartă a intrat prima dată.
+    -- A CUI E CLIENTUL ĂSTA — nu „cum îl cheamă pe agent", ci CARE FIRMĂ
+    -- l-a alocat.
+    --
+    -- Toată despărțirea dintre firmele de pe platformă se sprijinea pe
+    -- coloana assigned_agent, care e un NUME scris cu litere. „Popescu
+    -- Ion" e cel mai obișnuit nume din țară. Dacă două firme de
+    -- distribuție au fiecare câte un Popescu Ion — și vor avea — atunci
+    -- întrebarea „ai cui sunt clienții alocați lui Popescu Ion?" n-are
+    -- răspuns, iar agentul uneia vedea și SCRIA pe clienții celeilalte:
+    -- stare, notă, sold. Nu e o închipuire: se arată în două rânduri.
+    --
+    -- Coloana asta dă răspunsul. Gol = alocare veche, dinainte de ea:
+    -- atunci se poartă exact ca înainte, ca să nu rămână nimeni fără
+    -- clienți peste noapte.
+    ALTER TABLE prospects ADD COLUMN IF NOT EXISTS assigned_org TEXT NOT NULL DEFAULT '';
+    CREATE INDEX IF NOT EXISTS prospects_assigned_org
+      ON prospects(assigned_org) WHERE assigned_org <> '';
+    -- „CLIENȚII MEI" se caută de patruzeci de ori în platformă, peste 1,3
+    -- milioane de firme, și n-avea niciun index: fiecare deschidere de
+    -- panou citea registrul întreg. Indexul e parțial — firmele nealocate
+    -- sunt marea majoritate și n-au ce căuta în el.
+    CREATE INDEX IF NOT EXISTS prospects_assigned_agent
+      ON prospects(assigned_agent) WHERE COALESCE(assigned_agent,'') <> '';
+    ALTER TABLE prospects ADD COLUMN IF NOT EXISTS adus_de_org TEXT NOT NULL DEFAULT '';
+    CREATE INDEX IF NOT EXISTS prospects_adus_de_org
+      ON prospects(adus_de_org) WHERE adus_de_org <> '';
     CREATE INDEX IF NOT EXISTS prospects_judet ON prospects(judet);
     CREATE INDEX IF NOT EXISTS prospects_status ON prospects(status);
     CREATE INDEX IF NOT EXISTS prospects_caen ON prospects(caen);
@@ -120,6 +156,23 @@ export async function ensureSchema(): Promise<void> {
     -- Coada de verificare ANAF (activ IS NULL) — index parțial, foarte mic
     CREATE INDEX IF NOT EXISTS prospects_pending_anaf ON prospects(cui)
       WHERE activ IS NULL;
+    -- CINE A ALOCAT CLIENȚII DE PÂNĂ ACUM.
+    -- Alocările vechi n-au firmă scrisă pe ele. O completăm din tabelul
+    -- de agenți, dar DOAR unde numele duce la o singură firmă: acolo unde
+    -- două firme au agenți cu același nume, nu se poate ști cine pe cine
+    -- a alocat, iar o ghiceală ar muta clienți dintr-o firmă în alta.
+    -- Alea rămân goale și se poartă ca înainte, până le atinge cineva.
+    UPDATE prospects p
+    SET assigned_org = x.org_id
+    FROM (
+      SELECT name, MIN(org_id) AS org_id
+      FROM org_agents
+      GROUP BY name
+      HAVING COUNT(DISTINCT org_id) = 1
+    ) x
+    WHERE p.assigned_org = ''
+      AND COALESCE(p.assigned_agent,'') <> ''
+      AND p.assigned_agent = x.name;
     -- Problemele raportate din platformă (de agenți/manageri sau automat),
     -- cu diagnosticul AI atașat — adminul le vede în /platform/probleme.
     CREATE TABLE IF NOT EXISTS issues (
@@ -172,6 +225,15 @@ export async function ensureSchema(): Promise<void> {
     );
     CREATE INDEX IF NOT EXISTS visits_agent ON visits(agent_id, visited_at DESC);
     CREATE INDEX IF NOT EXISTS visits_cui ON visits(cui, visited_at DESC);
+    -- LA CARE MAGAZIN A FOST, nu doar la ce firmă.
+    -- Ovi Tacomax are șase magazine. Gavrileț intra în cel din Cernești,
+    -- bifa „Am fost", și firma apărea vizitată — celelalte cinci păreau
+    -- făcute. Magazinele le-am făcut vizibile azi; vizitele rămăseseră pe
+    -- firmă. Fără coloana asta, cifrele mint în favoarea noastră, ceea ce
+    -- e cel mai rău fel de a minți.
+    ALTER TABLE visits ADD COLUMN IF NOT EXISTS magazin_id TEXT NOT NULL DEFAULT '';
+    CREATE INDEX IF NOT EXISTS visits_magazin
+      ON visits(magazin_id, visited_at DESC) WHERE magazin_id <> '';
     -- Targeturi lunare per agent (setate de agenție; realizatul se
     -- calculează din vânzările încărcate).
     CREATE TABLE IF NOT EXISTS targets (

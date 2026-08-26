@@ -1,4 +1,5 @@
 import { ensureSchema, isDBEnabled, getDB } from "@/lib/db";
+import { alAgentiei } from "@/lib/org-scope";
 import { getOrg, listOrgAgents, requireOrgUser } from "@/modules/platform";
 
 export const runtime = "nodejs";
@@ -45,7 +46,7 @@ export async function GET() {
         COUNT(*) FILTER (WHERE status = 'client'
           AND updated_at >= NOW() - INTERVAL '30 days')::text AS noi30
       FROM prospects
-      WHERE assigned_agent = ANY(${agentNames.length ? agentNames : [""]})
+      WHERE ${alAgentiei(db, auth.session.orgId, agentNames)}
     `;
 
     const [dueCount] = await db<[{ n: string }]>`
@@ -53,7 +54,7 @@ export async function GET() {
         SELECT p.cui FROM prospects p
         LEFT JOIN visits v ON v.cui = p.cui
         WHERE p.status = 'client'
-          AND p.assigned_agent = ANY(${agentNames.length ? agentNames : [""]})
+          AND ${alAgentiei(db, auth.session.orgId, agentNames)}
         GROUP BY p.cui
         HAVING MAX(v.visited_at) IS NULL
             OR MAX(v.visited_at) < NOW() - INTERVAL '7 days'

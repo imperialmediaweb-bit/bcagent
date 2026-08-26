@@ -652,9 +652,20 @@ Vrei să vezi înainte cum arată? Intri în demo, fără cont: provendi.ro/prez
           <Row icon="✍️" name="Cum marchez VIZITA (obligatoriu la fiecare client)">
             Pe firma la care ai fost apasă <B>„Am fost"</B> și alege:{" "}
             <B>client</B> (a cumpărat) / <B>se mai gândește</B> /{" "}
-            <B>ne sună</B> / <B>nu vrea</B>. Poți adăuga o notă — apasă
-            microfonul și <B>dictează</B>, se scrie singură. Din asta se
-            calculează scadenții și rapoartele șefului.
+            <B>ne sună</B> / <B>nu vrea</B> /{" "}
+            <B>închis azi</B> / <B>nu mai există</B>. Poți adăuga o notă —
+            apasă microfonul și <B>dictează</B>, se scrie singură. Din asta
+            se calculează scadenții și rapoartele șefului.
+            <br />
+            <B>Atenție la ultimele două:</B> „închis azi" înseamnă doar că
+            n-ai prins pe nimeni — firma rămâne cum era. „Nu mai există"
+            înseamnă că s-a desființat, și atunci iese din listele TUTUROR
+            colegilor și de pe hartă; te întreabă o dată înainte. Dacă
+            apeși din greșeală, șeful o poate aduce înapoi din{" "}
+            <B>Clienți → „Scoase din liste de pe teren"</B>.
+            <br />
+            La un client vechi, <B>„nu vrea"</B> înseamnă „nu ia marfă azi":
+            rămâne clientul tău și-ți apare iar peste o săptămână.
           </Row>
           <Row icon="🚐" name="Cum VÂND PE LOC din dubă (van)">
             Dimineața: cardul „Marfa din mașină" → <B>„Încarc marfă"</B> →

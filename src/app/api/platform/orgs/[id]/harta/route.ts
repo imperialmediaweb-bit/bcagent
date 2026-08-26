@@ -61,18 +61,14 @@ export async function POST(
 
     // ── anulare: ștergem doar ce a adus importul ──
     if (body.anuleaza === true) {
-      const sters = await db`
-        DELETE FROM geo_firme g
-        USING prospects p
-        WHERE p.cui = g.cui
-          AND g.sursa = 'import'
-          AND (COALESCE(p.assigned_agent, '') = ''
-               OR p.assigned_agent = ANY(${numeAg}))
-      `;
-      await audit(auth.session.email, "harta.anuleaza", orgId, {
-        sterse: sters.count,
-      });
-      return Response.json({ ok: true, sterse: sters.count });
+      // Aceeași unealtă ca în panoul firmei: ce se repară aici se repară
+      // și acolo, fiindcă e un singur loc.
+      const { anuleazaImportul } = await import(
+        "@/modules/prospects/harta-aplica"
+      );
+      const r = await anuleazaImportul(db, orgId, agenti);
+      await audit(auth.session.email, "harta.anuleaza", orgId, { ...r });
+      return Response.json({ ok: true, sterse: r.locuri, anulare: r });
     }
 
     // ── MAGAZINELE DIN OPENSTREETMAP ──

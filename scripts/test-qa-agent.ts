@@ -434,7 +434,7 @@ async function inchis() {
   sectiune("„Închis” pe teren curăță harta — dar doar la mine");
   const cMeu = cui(2);
   const r = await trimite("/api/visits", {
-    token: tokEu, cui: cMeu, denumire: "BODEGA", result: "inchis", note: "e zid",
+    token: tokEu, cui: cMeu, denumire: "BODEGA", result: "nu_mai_exista", note: "e zid",
   });
   check("„Închis” pe clientul meu se salvează", r.s === 200, `status ${r.s}`);
   const [p] = await sql<Array<{ activ: boolean; inchis_teren: boolean }>>`

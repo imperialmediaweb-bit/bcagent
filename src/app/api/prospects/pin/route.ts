@@ -1,4 +1,5 @@
 import { verifyFieldToken } from "@/lib/agent-guard";
+import { alAgentiei } from "@/lib/org-scope";
 import { ensureSchema, getDB, isDBEnabled } from "@/lib/db";
 import { clientIP, rateLimit } from "@/lib/rate-limit";
 
@@ -70,6 +71,10 @@ export async function POST(req: Request) {
     const { orgAgentNamesForAgent } = await import("@/lib/org-scope");
     const mine = await orgAgentNamesForAgent(payload.agentId);
     const aiMei = mine.length ? mine : [payload.agentName];
+    // Firma lui. Numele singur nu ajunge: „Popescu Ion" poate fi și la
+    // firma vecină, iar atunci i-ar muta ei pinurile clienților.
+    const { orgIdForAgent } = await import("@/lib/org-scope");
+    const firmaMea = await orgIdForAgent(payload.agentId);
 
     if (body.sterge === true) {
       const sters = await db`
@@ -80,7 +85,7 @@ export async function POST(req: Request) {
             WHERE p.cui = ${cui}
               AND (COALESCE(p.assigned_agent, '') = ''
                    OR p.assigned_agent = ${payload.agentName}
-                   OR p.assigned_agent = ANY(${aiMei}))
+                   OR ${alAgentiei(db, firmaMea, aiMei)})
           )
       `;
       return Response.json({ ok: true, sters: sters.count > 0 });
@@ -117,7 +122,7 @@ export async function POST(req: Request) {
       WHERE p.cui = ${cui}
         AND (COALESCE(p.assigned_agent, '') = ''
              OR p.assigned_agent = ${payload.agentName}
-             OR p.assigned_agent = ANY(${aiMei}))
+             OR ${alAgentiei(db, firmaMea, aiMei)})
       ON CONFLICT (cui) DO UPDATE
         -- SURSA TREBUIE scrisă și la suprascriere. Fără ea, o firmă care
         -- avea deja locul adus dintr-o hartă (sursa „import") rămânea

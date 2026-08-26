@@ -109,6 +109,8 @@ export async function POST(req: Request) {
   if (!db) return Response.json({ enabled: false }, { status: 503 });
   try {
     await ensureSchema();
+    // Produsele de retur care nu s-au găsit în dubă.
+    const neatinse: string[] = [];
     for (const l of lines) {
       if (kind === "incarcare") {
         await db`
@@ -119,12 +121,21 @@ export async function POST(req: Request) {
                         um = EXCLUDED.um, updated_at = NOW()
         `;
       } else {
-        await db`
+        // RETURUL TREBUIE SĂ NIMEREASCĂ PRODUSUL.
+        // În bază se compară cu btrim(produs), dar aici lipsea .trim():
+        // un nume cu un spațiu la coadă („Kent 4 ") nu se potrivea cu
+        // nimic. Agentul apăsa „Dă retur", primea „gata", iar în dubă
+        // marfa rămânea scrisă ca fiind la el. Managerul îi cerea a doua
+        // zi socoteala pentru marfă pe care o predase.
+        const r = await db`
           UPDATE van_stock
           SET cantitate = GREATEST(0, cantitate - ${l.cantitate}), updated_at = NOW()
           WHERE agent_id = ${payload.agentId}
-            AND lower(btrim(produs)) = ${l.produs.toLowerCase()}
+            AND lower(btrim(produs)) = ${l.produs.toLowerCase().trim()}
         `;
+        // Ce n-a nimerit nimic i se SPUNE. Un „gata" pe o treabă care nu
+        // s-a făcut e mai rău decât o eroare.
+        if (r.count === 0) neatinse.push(l.produs);
       }
     }
     // Rândurile pe zero nu mai încarcă lista.
@@ -132,7 +143,11 @@ export async function POST(req: Request) {
       DELETE FROM van_stock
       WHERE agent_id = ${payload.agentId} AND cantitate <= 0
     `;
-    return Response.json({ ok: true });
+    return Response.json({
+      ok: true,
+      // Gol = totul s-a scăzut. Altfel, exact ce n-a fost în dubă.
+      neatinse,
+    });
   } catch (e) {
     console.error("[van POST]", e);
     return Response.json({ error: "Eroare la actualizarea stocului" }, { status: 500 });

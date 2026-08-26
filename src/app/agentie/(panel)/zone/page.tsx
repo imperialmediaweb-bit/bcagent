@@ -75,10 +75,23 @@ export default function ZonePage() {
   const [lucreaza, setLucreaza] = useState(false);
   const [salvat, setSalvat] = useState<string | null>(null);
 
+  const [invatate, setInvatate] = useState<
+    Array<{ scris: string; localitate: string; pusDe: string; folosit: number }>
+  >([]);
+
   const incarca = useCallback(async () => {
     try {
-      const d = await api<{ agenti: AgentZone[] }>("/api/agentie/zone");
+      const d = await api<{
+        agenti: AgentZone[];
+        invatate?: Array<{
+          scris: string;
+          localitate: string;
+          pusDe: string;
+          folosit: number;
+        }>;
+      }>("/api/agentie/zone");
       setAgenti(d.agenti);
+      setInvatate(d.invatate ?? []);
       setAles((a) => a || d.agenti[0]?.nume || "");
     } catch (e) {
       setEroare(e instanceof Error ? e.message : String(e));
@@ -88,6 +101,32 @@ export default function ZonePage() {
   useEffect(() => {
     void incarca();
   }, [incarca]);
+
+  /** Scoate o învățătură greșită. Zonele deja salvate nu se ating. */
+  async function uita(scris: string, localitate: string) {
+    if (
+      !confirm(
+        `Scot „${scris} → ${localitate}". Data viitoare aplicația va întreba din nou. Zonele deja salvate rămân cum sunt. Continui?`,
+      )
+    )
+      return;
+    try {
+      const d = await api<{
+        invatate?: Array<{
+          scris: string;
+          localitate: string;
+          pusDe: string;
+          folosit: number;
+        }>;
+      }>("/api/agentie/zone", {
+        method: "POST",
+        body: JSON.stringify({ uita: { scris, localitate } }),
+      });
+      setInvatate(d.invatate ?? []);
+    } catch (e) {
+      setEroare(e instanceof Error ? e.message : String(e));
+    }
+  }
 
   /**
    * Satele alese de om din căutare, pentru ce n-am recunoscut din text.
@@ -185,6 +224,50 @@ export default function ZonePage() {
             {ultima.cand && `, ${cand(ultima.cand)}`}. Dacă salvezi acum, o
             înlocuiești pe a lui.
           </p>
+        )}
+
+        {/* CE A ÎNVĂȚAT APLICAȚIA DE LA VOI.
+            Alegerile de aici se aplică singure, la toți agenții, la
+            fiecare zonă scrisă de-atunci încolo. Un lucru care lucrează
+            singur și nu se poate vedea e o capcană: o alegere grăbită
+            („Centru" → „SUCEAVA") trimitea agenții greșit pentru
+            totdeauna, iar nimeni n-avea unde să se uite. */}
+        {invatate.length > 0 && (
+          <div className="mt-4 rounded-lg border border-slate-200 p-3">
+            <p className="text-xs font-semibold text-slate-700">
+              Ce a învățat aplicația de la voi ({invatate.length})
+            </p>
+            <p className="mt-1 text-xs text-slate-500">
+              Când scrieți zona, cuvintele astea merg singure la satul
+              ales de voi. Dacă vreunul e greșit, scoate-l — data
+              viitoare va întreba din nou.
+            </p>
+            <ul className="mt-2 grid gap-1.5 sm:grid-cols-2">
+              {invatate.map((x) => (
+                <li
+                  key={`${x.scris}|${x.localitate}`}
+                  className="flex min-w-0 items-center justify-between gap-2 rounded-md bg-slate-50 px-2.5 py-1.5"
+                >
+                  <span className="min-w-0 truncate text-xs text-slate-700">
+                    <span className="font-medium">{x.scris}</span> →{" "}
+                    {x.localitate}
+                    <span className="text-slate-400">
+                      {" "}
+                      · pus de {x.pusDe || "cineva"}
+                      {x.folosit > 1 ? ` · folosit de ${x.folosit} ori` : ""}
+                    </span>
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => void uita(x.scris, x.localitate)}
+                    className="shrink-0 rounded px-2 py-1 text-xs font-medium text-rose-700 hover:bg-rose-50"
+                  >
+                    Scoate
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </div>
         )}
 
         <label className="mt-4 block text-xs font-medium text-slate-500">

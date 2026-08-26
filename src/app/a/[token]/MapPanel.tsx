@@ -27,7 +27,8 @@ import {
 import OrderModal from "./OrderModal";
 import PinFirma from "./PinFirma";
 import MicButton from "./MicButton";
-import { navAddress, planRoute } from "@/lib/route-nav";
+import { cheieOprire, navAddress, planRoute } from "@/lib/route-nav";
+import { STATUS_DUPA_VIZITA } from "@/modules/crm/stare-vizita";
 
 const fmt = (n: number) =>
   new Intl.NumberFormat("ro-RO", { maximumFractionDigits: 0 }).format(n);
@@ -80,6 +81,8 @@ interface Stop {
    *  nimerească satul cu același nume din alt județ. */
   judet?: string;
   telefon: string;
+  /** La care magazin al firmei, când firma are mai multe. Gol = firma. */
+  magazinId?: string;
   /** Poziția exactă, dacă o știm — ruta navighează pe coordonate, nu pe
    *  adresă, ca Google să nu mai refuze traseul la adrese de sat. */
   lat?: number | null;
@@ -95,11 +98,19 @@ interface SavedRoute {
 
 interface DueClient {
   cui: string;
+  /**
+   * LA CARE MAGAZIN. Gol = firma n-are magazine cunoscute, deci oprirea e
+   * firma însăși. Ovi Tacomax are șase: șase opriri, șase rânduri aici.
+   */
+  magazinId: string;
   denumire: string;
   adresa: string;
   localitate: string;
   judet: string;
   telefon: string;
+  /** Locul magazinului, când e știut — ruta merge fix acolo, nu la sediu. */
+  lat: number | null;
+  lng: number | null;
   lastVisit: string | null;
 }
 
@@ -108,7 +119,12 @@ const VISIT_RESULTS: Array<{ id: string; label: string; emoji: string }> = [
   { id: "ne_suna", label: "Ne sună el", emoji: "📞" },
   { id: "client", label: "A devenit client", emoji: "🤝" },
   { id: "nu_vrea", label: "Nu vrea", emoji: "❌" },
-  { id: "inchis", label: "Închis / nu era nimeni", emoji: "🚪" },
+  // DOUĂ LUCRURI DIFERITE, DOUĂ BUTOANE.
+  // Erau unul singur: „Închis / nu era nimeni". Iar apăsatul ștergea
+  // firma din toată agenția, pentru totdeauna. Un client vechi găsit cu
+  // ușa închisă la prânz dispărea de pe hartă cu un deget.
+  { id: "inchis", label: "Închis azi / n-am prins pe nimeni", emoji: "🚪" },
+  { id: "nu_mai_exista", label: "Nu mai există (s-a desființat)", emoji: "🏚️" },
 ];
 
 /** Ziua curentă în cheile noastre de rută — „azi e luni → Ruta Rădăuți". */
@@ -430,6 +446,83 @@ export default function MapPanel({
     [token],
   );
 
+  /**
+   * „AM FOST LA MAGAZINUL ĂSTA."
+   *
+   * Ovi Tacomax e o firmă cu șase magazine. Până acum, vizita se scria pe
+   * firmă: agentul intra în cel din Cernești, iar celelalte cinci ieșeau
+   * din „de vizitat" ca și cum ar fi fost făcute. Butonul ăsta scrie
+   * vizita pe MAGAZIN, așa că fiecare dintre cele șase își cere rândul.
+   *
+   * E un singur apăsat, fără ecran de rezultat: la un client pe care-l ai
+   * deja, „am fost" e tot ce trebuie spus. Dacă are ceva de povestit,
+   * scrie nota pe fișa firmei, ca până acum. GPS-ul, dacă vine în 3
+   * secunde, mută pinul pe locul adevărat.
+   */
+  const [magVizitat, setMagVizitat] = useState<string[]>([]);
+  const vizitaLaMagazin = useCallback(
+    async (
+      m: { id: string; nume: string; cui?: string; firma?: string },
+      dupa: () => void,
+    ) => {
+      const pozitie = await new Promise<{
+        lat: number;
+        lng: number;
+        acc: number;
+      } | null>((resolve) => {
+        if (!navigator.geolocation) return resolve(null);
+        const ceas = setTimeout(() => resolve(null), 3000);
+        navigator.geolocation.getCurrentPosition(
+          (p) => {
+            clearTimeout(ceas);
+            resolve({
+              lat: p.coords.latitude,
+              lng: p.coords.longitude,
+              acc: p.coords.accuracy,
+            });
+          },
+          () => {
+            clearTimeout(ceas);
+            resolve(null);
+          },
+          { enableHighAccuracy: true, timeout: 2800, maximumAge: 0 },
+        );
+      });
+      try {
+        const r = await fetch("/api/visits", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            token,
+            cui: m.cui ?? "",
+            magazinId: m.id,
+            denumire: m.firma ? `${m.firma} · ${m.nume}` : m.nume,
+            // E clientul nostru și tot client rămâne. Rezultatul nu-i
+            // schimbă starea; ce contează e că s-a trecut pe la el.
+            result: "client",
+            note: "",
+            ...(pozitie ?? {}),
+          }),
+        });
+        if (!r.ok) {
+          setToast("N-am putut salva vizita. Încearcă din nou.");
+          setTimeout(() => setToast(null), 2500);
+          return;
+        }
+        setMagVizitat((l) => (l.includes(m.id) ? l : [...l, m.id]));
+        setToast(`Notat: ai fost la ${m.nume}.`);
+        setTimeout(() => setToast(null), 2500);
+        // Lista „de vizitat" trebuie să se subțieze pe loc, altfel omul
+        // apasă a doua oară crezând că n-a mers.
+        dupa();
+      } catch {
+        setToast("Fără semnal — încearcă din nou când prinzi rețea.");
+        setTimeout(() => setToast(null), 2500);
+      }
+    },
+    [token],
+  );
+
   function showToast(msg: string) {
     setToast(msg);
     setTimeout(() => setToast(null), 2500);
@@ -487,17 +580,24 @@ export default function MapPanel({
         (
           d: {
             today?: number;
-            visits?: Array<{ cui: string; visitedAt: string }>;
+            visits?: Array<{
+              cui: string;
+              magazinId?: string;
+              visitedAt: string;
+            }>;
           } | null,
         ) => {
           if (!d) return;
           if (d.today !== undefined) setVisitsToday(d.today);
           const startOfDay = new Date();
           startOfDay.setHours(0, 0, 0, 0);
+          // CHEIA E MAGAZINUL, nu firma: o vizită la unul dintre cele
+          // șase magazine ale lui Ovi Tacomax nu scoate din rută
+          // celelalte cinci.
           setDoneToday(
             (d.visits ?? [])
               .filter((v) => new Date(v.visitedAt) >= startOfDay)
-              .map((v) => v.cui),
+              .map((v) => cheieOprire({ cui: v.cui, magazinId: v.magazinId })),
           );
         },
       )
@@ -752,6 +852,7 @@ export default function MapPanel({
           // de intrat în șase. Alea nu-s de prospectat — sunt opriri.
           const dinOSM = m.strat === "OpenStreetMap";
           const alClientului = m.eAlClientului === true;
+          const bifat = magVizitat.includes(m.id);
           const culoare = alClientului ? "#059669" : "#7c3aed";
           const punct = L.circleMarker([m.lat, m.lng], {
             radius: alClientului ? 6 : 5,
@@ -784,10 +885,20 @@ export default function MapPanel({
                       : "magazin din harta veche — nimeni n-a trecut încă pe la el"
               }</div>
               <a href="${escHtml(gmapsDir(`${m.lat},${m.lng}`))}" target="_blank" rel="noopener" style="display:flex;align-items:center;justify-content:center;min-height:40px;margin-top:8px;font-size:13px;font-weight:700;color:#1d4ed8;text-decoration:none;background:#eff6ff;border-radius:8px">🧭 Navighează</a>
-              <div style="display:flex;gap:6px;margin-top:8px">
+              ${
+                // LA MAGAZINUL UNUI CLIENT nu întrebi „există?" — știi că
+                // există, e clientul tău. Întrebarea e dacă ai trecut pe
+                // la el săptămâna asta. Un apăsat, și oprirea asta iese
+                // din „de vizitat" — doar ea, nu și celelalte cinci.
+                alClientului
+                  ? bifat
+                    ? `<div style="display:flex;align-items:center;justify-content:center;min-height:40px;margin-top:8px;font-size:13px;font-weight:700;color:#059669;background:#ecfdf5;border-radius:8px">✓ Ai fost aici</div>`
+                    : `<button data-mag-vizita="${escHtml(m.id)}" style="width:100%;min-height:44px;margin-top:8px;font-size:14px;font-weight:700;color:#fff;background:#059669;border:none;border-radius:8px;cursor:pointer">✅ Am fost aici</button>`
+                  : `<div style="display:flex;gap:6px;margin-top:8px">
                 <button data-mag-ok="${escHtml(m.id)}" style="flex:1;min-height:40px;font-size:13px;font-weight:700;color:#fff;background:#059669;border:none;border-radius:8px;cursor:pointer">✅ Există</button>
                 <button data-mag-nu="${escHtml(m.id)}" style="flex:1;min-height:40px;font-size:13px;font-weight:700;color:#b91c1c;background:#fee2e2;border:none;border-radius:8px;cursor:pointer">✕ Nu mai e</button>
-              </div>
+              </div>`
+              }
             </div>`,
             // Pe telefon mic, un balonaș de 300px iese din ecran. Îl legăm
             // de lățimea ecranului, cu loc de margini.
@@ -795,6 +906,23 @@ export default function MapPanel({
           );
           // Butoanele din balonaș prind viață abia când se deschide.
           punct.on("popupopen", () => {
+            const bVizita = document.querySelector<HTMLButtonElement>(
+              `[data-mag-vizita="${CSS.escape(m.id)}"]`,
+            );
+            bVizita?.addEventListener(
+              "click",
+              () => {
+                // Apăsatul se vede pe loc: pe telefon slab, între apăsat
+                // și GPS trec 3 secunde de tăcere, iar omul apasă iar.
+                bVizita.textContent = "Se salvează…";
+                bVizita.disabled = true;
+                void vizitaLaMagazin(m, () => {
+                  setDueClients((l) => l.filter((d) => d.magazinId !== m.id));
+                });
+                map.closePopup();
+              },
+              { once: true },
+            );
             for (const [attr, stare] of [
               ["data-mag-ok", "exista"],
               ["data-mag-nu", "inchis"],
@@ -994,7 +1122,7 @@ export default function MapPanel({
     return () => {
       disposed = true;
     };
-  }, [localities, clientLocalities, selectedLoc, basket, pins, aratPins, euSunt, doarZona, zonaAzi, aratMag, magHarta, confirmaMagazin]);
+  }, [localities, clientLocalities, selectedLoc, basket, pins, aratPins, euSunt, doarZona, zonaAzi, aratMag, magHarta, confirmaMagazin, vizitaLaMagazin, magVizitat]);
 
   useEffect(
     () => () => {
@@ -1508,13 +1636,17 @@ export default function MapPanel({
                     const pin = pins.find((p) => p.cui === d.cui && !p.aprox);
                     return {
                       cui: d.cui,
+                      magazinId: d.magazinId,
                       denumire: d.denumire,
                       adresa: d.adresa,
                       localitate: d.localitate,
                       judet: judet,
                       telefon: d.telefon,
-                      lat: pin?.lat ?? null,
-                      lng: pin?.lng ?? null,
+                      // Locul MAGAZINULUI bate pinul firmei: la Ovi
+                      // Tacomax, pinul firmei e la sediu, iar magazinele
+                      // sunt în cinci sate diferite.
+                      lat: d.lat ?? pin?.lat ?? null,
+                      lng: d.lng ?? pin?.lng ?? null,
                     };
                   }),
                 );
@@ -1534,7 +1666,10 @@ export default function MapPanel({
           <ul className="mt-2 grid gap-1.5 sm:grid-cols-2 lg:grid-cols-3">
             {dueClients.slice(0, 9).map((d) => (
               <li
-                key={d.cui}
+                // Cheia e MAGAZINUL, nu firma: șase magazine ale aceleiași
+                // firme sunt șase rânduri, iar React n-are voie să le
+                // creadă același rând.
+                key={d.magazinId || d.cui}
                 className="rounded-lg border border-rose-100 bg-rose-50/50 px-3 py-2"
               >
                 <p className="truncate text-sm font-medium text-slate-800">
@@ -1903,6 +2038,18 @@ function LocalityFirms({
   }, [token, judet, localitate, caenParam]);
 
   async function saveVisit(f: Firm, result: string, note: string) {
+    // Singurul rezultat care ȘTERGE ceva pentru toată firma. Se întreabă
+    // o dată, cu vorbe limpezi: „închis azi" are butonul lui alături.
+    if (
+      result === "nu_mai_exista" &&
+      !confirm(
+        `Scoți „${f.denumire}" din listele firmei — nu mai apare pe hartă ` +
+          `nici ție, nici colegilor. Alege asta doar dacă firma chiar s-a ` +
+          `desființat. Dacă azi era doar închis, apasă „Închis azi". Continui?`,
+      )
+    ) {
+      return;
+    }
     try {
       // Agentul e CHIAR LA FIRMĂ acum — dacă telefonul dă poziția în ≤3s,
       // pinul firmei devine exact (nu „undeva în sat"). Fără permisiune
@@ -1955,20 +2102,15 @@ function LocalityFirms({
       showToast(`${label} ✓`);
       // Reflectăm local noul status. „Închis" = firma nu mai există în
       // realitate — dispare din listă pe loc (serverul a scos-o de pe hartă).
+      // Ecranul trebuie să arate EXACT ce a scris serverul, altfel omul
+      // vede o stare care nu există în bază. Regula e una singură, în
+      // modules/crm/stare-vizita — n-o mai scriem a doua oară aici.
       setFirms((fs) =>
-        result === "inchis"
+        result === "nu_mai_exista"
           ? fs.filter((x) => x.cui !== f.cui)
           : fs.map((x) =>
               x.cui === f.cui
-                ? {
-                    ...x,
-                    status:
-                      result === "client"
-                        ? "client"
-                        : result === "nu_vrea"
-                          ? "respins"
-                          : "contactat",
-                  }
+                ? { ...x, status: STATUS_DUPA_VIZITA(x.status, result) ?? x.status }
                 : x,
             ),
       );

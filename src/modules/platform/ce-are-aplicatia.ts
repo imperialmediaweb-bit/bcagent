@@ -39,8 +39,15 @@ ZIUA MEA:
   Google Maps cu opririle, în ordinea drumului.
 · „Adaugă în rută" / „Scoate din rută" pe fiecare client.
 · La fiecare oprire: „Am fost" → alege rezultatul (A devenit client / Se
-  mai gândește / Ne sună el / Nu vrea / Închis) și scrie o notă. Nota se
-  poate DICTA cu microfonul (merge doar în Chrome).
+  mai gândește / Ne sună el / Nu vrea / Închis azi, n-am prins pe nimeni /
+  Nu mai există, s-a desființat) și scrie o notă. Nota se poate DICTA cu
+  microfonul (merge doar în Chrome).
+· „Închis azi" NU schimbă nimic despre firmă — doar scrie vizita.
+  „Nu mai există" o scoate din listele ÎNTREGII firme și de pe hartă;
+  întreabă o dată înainte, iar managerul o poate aduce înapoi din
+  „Clienți" → „Scoase din liste de pe teren".
+· La un CLIENT vechi, „Nu vrea" înseamnă „nu ia marfă azi": rămâne
+  client. Doar la un prospect înseamnă „nu vrea cu noi".
 
 ZONELE LUI (pe zile):
 · Lipește textul cu satele, pe zile, exact cum îl are pe WhatsApp.
@@ -70,6 +77,10 @@ Probleme, Echipa, Setări.
 · „Agenți" — aici se emit linkurile agenților și se vede „Munca de teren"
   (câte locuri a pus fiecare, câte magazine a confirmat).
 · „Zonele agenților" — managerul poate scrie zonele în locul agentului.
+· „Clienți" — „Scoase din liste de pe teren": firmele pe care agenții
+  le-au raportat ca desființate, cu „Adu-o înapoi" pe fiecare.
+· „Zonele agenților" — „Ce a învățat aplicația de la voi": perechile
+  învățate („Burdujeni → SUCEAVA"), fiecare cu „Scoate".
 · „Clienți" — „Adu universul de clienți (XLS/CSV)"; dacă fișierul are
   coloană de adresă de livrare sau punct de lucru, ea se folosește la
   navigare, fiind mai bună decât sediul social.

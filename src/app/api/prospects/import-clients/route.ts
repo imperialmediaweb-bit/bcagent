@@ -1,4 +1,5 @@
 import { verifyFieldToken } from "@/lib/agent-guard";
+import { alAgentiei } from "@/lib/org-scope";
 import { ensureSchema, getDB, isDBEnabled } from "@/lib/db";
 import { clientIP, rateLimit } from "@/lib/rate-limit";
 import { variantsFor } from "@/lib/name-match";
@@ -173,6 +174,10 @@ export async function POST(req: Request) {
     // IZOLARE: nu punem mâna pe firmele aflate în lucru la ALTĂ agenție.
     const { orgAgentNamesForAgent } = await import("@/lib/org-scope");
     const numeleFirmei = await orgAgentNamesForAgent(identitate.agentId);
+    // FIRMA lui, nu doar numele colegilor: două firme pot avea agenți cu
+    // același nume, iar atunci „ai mei" ar cuprinde și clienții vecinilor.
+    const { orgIdForAgent } = await import("@/lib/org-scope");
+    const firmaMea = await orgIdForAgent(identitate.agentId);
 
     let updated = 0;
     if (!body.dryRun && matched.length > 0) {
@@ -184,13 +189,17 @@ export async function POST(req: Request) {
               WHEN p.assigned_agent = '' THEN u.agent
               ELSE p.assigned_agent
             END,
+            assigned_org = CASE
+              WHEN p.assigned_agent = '' THEN ${firmaMea}
+              ELSE p.assigned_org
+            END,
             updated_at = NOW()
         FROM jsonb_to_recordset(${db.json(
           payload as unknown as Parameters<typeof db.json>[0],
         )}) AS u(cui TEXT, agent TEXT)
         WHERE p.cui = u.cui
           AND (COALESCE(p.assigned_agent, '') = ''
-               OR p.assigned_agent = ANY(${numeleFirmei.length ? numeleFirmei : [""]}))
+               OR ${alAgentiei(db, firmaMea, numeleFirmei)})
       `;
       updated = result.count;
     }

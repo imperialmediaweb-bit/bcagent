@@ -1,4 +1,5 @@
 import { getDB } from "@/lib/db";
+import { alAgentiei } from "@/lib/org-scope";
 import { normalizeCounty } from "./caen";
 import { cuiValid, curataCui } from "./cui";
 import type { PunctKML } from "./kml";
@@ -116,13 +117,13 @@ async function firmeDePotrivit(
           FROM prospects p
           WHERE p.cui = ANY(${cuiuri})
             AND (COALESCE(p.assigned_agent, '') = ''
-                 OR p.assigned_agent = ANY(${agenti}))
+                 OR ${alAgentiei(db, orgId, agenti)})
         `;
 
   const clienti = await db<FirmaDePotrivit[]>`
     SELECT p.cui, p.denumire, COALESCE(p.localitate, '') AS localitate
     FROM prospects p
-    JOIN org_agents oa ON oa.name = p.assigned_agent
+    JOIN org_agents oa ON oa.name = p.assigned_agent AND (p.assigned_org = '' OR p.assigned_org = oa.org_id)
     WHERE oa.org_id = ${orgId}
     LIMIT 20000
   `;
@@ -130,7 +131,7 @@ async function firmeDePotrivit(
   const judete = (
     await db<Array<{ judet: string }>>`
       SELECT DISTINCT p.judet FROM prospects p
-      JOIN org_agents oa ON oa.name = p.assigned_agent
+      JOIN org_agents oa ON oa.name = p.assigned_agent AND (p.assigned_org = '' OR p.assigned_org = oa.org_id)
       WHERE oa.org_id = ${orgId} AND COALESCE(p.judet, '') <> ''
     `
   ).map((r) => r.judet);
@@ -247,7 +248,7 @@ export async function aplicaHarta(
         FROM prospects p
         WHERE p.cui = ${g.client!.cui}
           AND (COALESCE(p.assigned_agent, '') = ''
-               OR p.assigned_agent = ANY(${agenti}))
+               OR ${alAgentiei(db, orgId, agenti)})
           AND NOT EXISTS (
             SELECT 1 FROM geo_firme gf
             WHERE gf.cui = p.cui AND gf.sursa IN ('deget', 'gps')
@@ -286,7 +287,7 @@ export async function aplicaHarta(
         )}) AS u(cui TEXT, adresa TEXT, localitate TEXT)
         WHERE p.cui = u.cui
           AND (COALESCE(p.assigned_agent, '') = ''
-               OR p.assigned_agent = ANY(${agenti}))
+               OR ${alAgentiei(db, orgId, agenti)})
           -- Nu ștergem o adresă mai bună cu una identică: doar ce se schimbă.
           AND (COALESCE(p.adresa_livrare, '') IS DISTINCT FROM u.adresa
                OR COALESCE(p.localitate_livrare, '') IS DISTINCT FROM u.localitate)
@@ -340,6 +341,9 @@ export async function aplicaHarta(
         localitate: String(k.localitate ?? "").slice(0, 120),
         judet: normalizeCounty(String(k.judet ?? "")).slice(0, 2),
         status: "nou",
+        // Cine a adus-o. Fără asta nu se poate spune nici ce a adus
+        // butonul, nici de ce firma n-are CAEN.
+        adus_de_org: orgId,
       };
     });
     for (let i = 0; i < randuri.length; i += 500) {
@@ -348,6 +352,7 @@ export async function aplicaHarta(
         INSERT INTO prospects ${db(
           bucata,
           "cui", "denumire", "adresa", "localitate", "judet", "status",
+          "adus_de_org",
         )}
         -- NICIODATĂ peste o firmă care există deja. Dacă a apărut între
         -- timp, a ei e denumirea de la Finanțe, nu cea de pe hartă.
@@ -367,7 +372,7 @@ export async function aplicaHarta(
           -- măcar cu o coordonată. Testul a prins-o — fără rândul ăsta,
           -- importul lui Bogdan muta locurile clienților altcuiva.
           AND (COALESCE(pr.assigned_agent, '') = ''
-               OR pr.assigned_agent = ANY(${agenti}))
+               OR ${alAgentiei(db, orgId, agenti)})
           AND NOT EXISTS (
             SELECT 1 FROM geo_firme g
             WHERE g.cui = pr.cui AND g.sursa IN ('deget', 'gps')
@@ -444,10 +449,85 @@ export async function aplicaHarta(
   const [acoperire] = await db<[{ cu_loc: string }]>`
     SELECT COUNT(*)::text AS cu_loc
     FROM prospects p
-    JOIN org_agents oa ON oa.name = p.assigned_agent
+    JOIN org_agents oa ON oa.name = p.assigned_agent AND (p.assigned_org = '' OR p.assigned_org = oa.org_id)
     JOIN geo_firme g ON g.cui = p.cui
     WHERE oa.org_id = ${orgId}
   `;
   rez.clientiCuLoc = parseInt(acoperire.cu_loc, 10);
   return rez;
+}
+
+/** Ce a scos anularea, ca butonul să nu promită mai mult decât face. */
+export interface RezultatAnulare {
+  /** Locuri de pe firme, șterse. */
+  locuri: number;
+  /** Puncte de magazin aduse de import, șterse. */
+  magazine: number;
+  /** Magazine păstrate fiindcă un agent le-a atins (confirmat, tăiat,
+   *  adăugat de el, sau a fost în vizită acolo). */
+  pastrate: number;
+  /** Firme noi intrate în registrul comun — nu se pot scoate de aici. */
+  firmeRamase: number;
+}
+
+/**
+ * „ANULEAZĂ CE AM ADUS", spus cinstit.
+ *
+ * Butonul ștergea doar locurile firmelor. Magazinele aduse din hartă și
+ * din OpenStreetMap rămâneau pe hartă, iar omul apăsa a doua oară
+ * crezând că n-a mers. Acum scoate și punctele aduse de import.
+ *
+ * CE NU SE ATINGE, niciodată:
+ *   · locul pus de un agent cu degetul sau cu GPS-ul;
+ *   · magazinul confirmat, tăiat sau adăugat de un agent pe teren;
+ *   · magazinul la care s-a înregistrat o vizită;
+ *   · firmele noi intrate în registru. Registrul e COMUN tuturor
+ *     agențiilor: un CUI cu denumire și adresă e un fapt, iar un buton
+ *     apăsat la o firmă n-are voie să șteargă date de sub picioarele
+ *     celorlalte. Le numărăm și i-o spunem, nu le ștergem pe furiș.
+ */
+export async function anuleazaImportul(
+  db: DB,
+  orgId: string,
+  numeAgenti: string[],
+): Promise<RezultatAnulare> {
+  const agenti = numeAgenti.length ? numeAgenti : [""];
+  const locuri = await db`
+    DELETE FROM geo_firme g
+    USING prospects p
+    WHERE p.cui = g.cui
+      AND g.sursa = 'import'
+      AND (COALESCE(p.assigned_agent, '') = ''
+           OR ${alAgentiei(db, orgId, agenti)})
+  `;
+  // Câte magazine ale firmei poartă urma unui agent: alea rămân.
+  const [p] = await db<[{ n: string }]>`
+    SELECT COUNT(*)::text AS n FROM magazin_harta m
+    WHERE m.org_id = ${orgId}
+      AND (COALESCE(m.adaugat_de,'') <> ''
+           OR COALESCE(m.stare,'') <> ''
+           OR EXISTS (SELECT 1 FROM visits v WHERE v.magazin_id = m.id))
+  `;
+  const magazine = await db`
+    DELETE FROM magazin_harta m
+    WHERE m.org_id = ${orgId}
+      -- Pus de import, nu de un om: fără nume de agent pe el...
+      AND COALESCE(m.adaugat_de,'') = ''
+      -- ...neatins de nimeni pe teren...
+      AND COALESCE(m.stare,'') = ''
+      -- ...și fără nicio vizită scrisă pe el.
+      AND NOT EXISTS (SELECT 1 FROM visits v WHERE v.magazin_id = m.id)
+  `;
+  // Firmele intrate în registru din harta ACESTEI firme. Le numărăm ca să
+  // scrie negru pe alb ce rămâne în urmă — nu le ștergem.
+  const [f] = await db<[{ n: string }]>`
+    SELECT COUNT(*)::text AS n
+    FROM prospects pr WHERE pr.adus_de_org = ${orgId}
+  `;
+  return {
+    locuri: locuri.count,
+    magazine: magazine.count,
+    pastrate: parseInt(p.n, 10),
+    firmeRamase: parseInt(f.n, 10),
+  };
 }
