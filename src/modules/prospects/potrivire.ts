@@ -91,7 +91,11 @@ function suprapunere(a: string[], b: string[]): number {
   if (a.length === 0 || b.length === 0) return 0;
   const setB = new Set(b);
   const comune = a.filter((c) => setB.has(c)).length;
-  return comune / Math.min(a.length, b.length);
+  // Raportat la cel mai LUNG, nu la cel mai scurt: altfel un nume scurt
+  // („Ana Maria") se potrivea perfect cu oricare firmă care-l conține
+  // („Pristavu Ana-Maria"), deși sunt firme diferite. Cazul „numele e
+  // conținut în celălalt" e tratat separat, mai sus, cu chei.
+  return comune / Math.max(a.length, b.length);
 }
 
 /**
@@ -126,8 +130,17 @@ export function potriveștePuncte(
   // apoi restul. Altfel un pin slab putea fura clientul unuia exact.
   const calcul = puncte.map((p) => {
     const nP = neted(p.nume);
-    const tariP = cuvinteTari(`${p.nume} ${p.descriere ?? ""}`);
-    const cheieP = cheie(p.nume);
+    // ATENȚIE: NU băgăm toată descrierea la potrivire. În harta reală ea
+    // conține șablon („Tip Outlet: Convenience"), identic la toate pinurile
+    // — și crea potriviri din senin între firme fără nicio legătură.
+    // Harta exportată din sistemul vechi are în descriere „Nume Legal: X",
+    // adică exact denumirea din registru. Când există, e cheia cea mai
+    // bună — mai bună decât numele scurt de pe pin.
+    const numeLegal =
+      (p.descriere ?? "").match(/Nume Legal:\s*([^\n]+?)(?:\s+Tip Outlet:|$)/i)?.[1] ?? "";
+    const textPotrivire = numeLegal !== "" ? `${p.nume} ${numeLegal}` : p.nume;
+    const tariP = cuvinteTari(textPotrivire);
+    const cheieP = cheie(textPotrivire);
     const scoruri = pregatiti.map((q) => {
       let scor = 0;
       let motiv = "";
@@ -142,10 +155,14 @@ export function potriveștePuncte(
       } else if (
         cheieP !== "" &&
         q.cheie !== "" &&
-        (` ${q.cheie} `.includes(` ${cheieP} `) || ` ${cheieP} `.includes(` ${q.cheie} `))
+        // De la ÎNCEPUT, nu de oriunde. La firmele românești partea care
+        // deosebește stă în față („PODU COSNEI comert"), iar restul e
+        // generic. Fără regula asta, „ANA MARIA" se lipea de „PRISTAVU
+        // ANA-MARIA" — alt om, altă adresă.
+        (`${q.cheie} `.startsWith(`${cheieP} `) || `${cheieP} `.startsWith(`${q.cheie} `))
       ) {
         scor = 0.9;
-        motiv = "numele de pe hartă e în denumirea firmei";
+        motiv = "numele de pe hartă e începutul denumirii firmei";
       } else {
         const s = suprapunere(tariP, q.tari);
         if (s > 0) {
@@ -168,6 +185,23 @@ export function potriveștePuncte(
   calcul.sort((a, b) => (b.scoruri[0]?.scor ?? 0) - (a.scoruri[0]?.scor ?? 0));
 
   for (const { p, scoruri } of calcul) {
+    // Cel mai bun candidat, FĂRĂ să ne uităm cine e deja luat. Dacă ăsta e
+    // o potrivire tare dar firma lui e ocupată, înseamnă că avem al doilea
+    // magazin al aceleiași firme — NU că trebuie să căutăm altă firmă.
+    // Fără regula asta, „ANA MARIA SRL" (al doilea punct de lucru) ajungea
+    // legat de „PRISTAVU ANA-MARIA II", adică de cu totul altcineva, și
+    // trimitea agentul la adresa greșită.
+    const celMaiBun = scoruri[0];
+    if (celMaiBun && celMaiBun.scor >= 0.9 && luati.has(celMaiBun.q.c.cui)) {
+      rezultat.push({
+        punct: p,
+        client: null,
+        scor: Math.round(celMaiBun.scor * 100) / 100,
+        motiv: `firma „${celMaiBun.q.c.denumire}" are deja un magazin pus de pe hartă — ăsta pare al doilea punct de lucru`,
+        variante: [],
+      });
+      continue;
+    }
     const bun = scoruri.find((s) => s.scor >= prag && !luati.has(s.q.c.cui));
     // Ambiguu: doi candidați la fel de buni. Mai bine îl întrebăm pe om.
     const laFel =
@@ -219,7 +253,13 @@ export function potriveștePuncte(
         scor: Math.round((scoruri[0]?.scor ?? 0) * 100) / 100,
         motiv: aproapeLaFel
           ? "două firme se potrivesc la fel de bine — alege tu"
-          : "n-am găsit o firmă destul de asemănătoare",
+          : // O firmă poate avea mai multe magazine pe hartă („ADEMAT
+            // COMERT" la Cucuteni ȘI la Durnești), dar în aplicație ține
+            // un singur loc. Spunem adevărul: firma e deja luată, nu că
+            // „n-am găsit-o" — altfel omul caută o greșeală care nu există.
+            scoruri[0] !== undefined && scoruri[0].scor >= prag
+            ? `firma „${scoruri[0].q.c.denumire}" are deja un magazin pus de pe hartă — ăsta pare al doilea punct de lucru`
+            : "n-am găsit o firmă destul de asemănătoare",
         variante: scoruri
           .filter((s) => s.scor > 0.25 && !luati.has(s.q.c.cui))
           .slice(0, 5)

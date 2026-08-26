@@ -32,6 +32,7 @@ interface Rand {
 interface Verificare {
   totalPuncte: number;
   totalClienti: number;
+  sarite?: { faraLocPeHarta: number; inafara: number; liniiSiZone: number };
   gasite: Rand[];
   nepotrivite: Rand[];
 }
@@ -190,6 +191,27 @@ export default function HartaImportPage() {
               <b className="text-amber-700">{v.nepotrivite.length}</b> le las în
               seama ta.
             </p>
+            {v.sarite &&
+              (v.sarite.faraLocPeHarta > 0 || v.sarite.inafara > 0) && (
+                <p className="mt-2 break-words text-xs leading-snug text-slate-500">
+                  Din hartă n-am putut lua:{" "}
+                  {v.sarite.faraLocPeHarta > 0 && (
+                    <>
+                      <b>{v.sarite.faraLocPeHarta}</b> firme trecute în listă
+                      dar niciodată puse pe hartă
+                    </>
+                  )}
+                  {v.sarite.faraLocPeHarta > 0 && v.sarite.inafara > 0 && ", "}
+                  {v.sarite.inafara > 0 && (
+                    <>
+                      <b>{v.sarite.inafara}</b> cu locul greșit (0,0 sau în
+                      afara țării)
+                    </>
+                  )}
+                  . Alea n-au coordonate de adus — le pun agenții din teren, cu
+                  „Sunt aici".
+                </p>
+              )}
             <div className="mt-3 flex flex-wrap items-center gap-2">
               <button
                 type="button"

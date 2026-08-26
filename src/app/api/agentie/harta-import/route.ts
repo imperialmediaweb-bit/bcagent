@@ -2,6 +2,7 @@ import { ensureSchema, getDB, isDBEnabled } from "@/lib/db";
 import { requireOrgUser } from "@/modules/platform";
 import {
   citesteKML,
+  citesteKMLRaport,
   linkDinNetworkLink,
   linkKML,
   midDinLink,
@@ -176,13 +177,15 @@ export async function POST(req: Request) {
 
     // EXPORTUL POATE FI DOAR UN INDICATOR: „Exportă harta întreagă" dă un
     // fișier care conține un link către date, nu datele. Îl urmăm o dată.
-    let puncte = citesteKML(kml);
+    let raport = citesteKMLRaport(kml);
+    let puncte = raport.puncte;
     if (puncte.length === 0) {
       const catre = linkDinNetworkLink(kml);
       if (catre !== "") {
         try {
           kml = await descarca(catre);
-          puncte = citesteKML(kml);
+          raport = citesteKMLRaport(kml);
+          puncte = raport.puncte;
         } catch {
           return Response.json(
             {
@@ -245,6 +248,13 @@ export async function POST(req: Request) {
       verificare: true,
       totalPuncte: puncte.length,
       totalClienti: clienti.length,
+      // Ce n-a intrat și DE CE — ca omul să nu creadă că le-a luat pe toate
+      // și să caute pe hartă magazine care n-au fost niciodată puse acolo.
+      sarite: {
+        faraLocPeHarta: raport.faraLocPeHarta,
+        inafara: raport.inafara,
+        liniiSiZone: raport.liniiSiZone,
+      },
       gasite: gasite.map(pentruEcran),
       nepotrivite: nepotrivite.map(pentruEcran),
     });

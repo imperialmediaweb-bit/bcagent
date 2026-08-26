@@ -19,6 +19,7 @@
  */
 import {
   citesteKML,
+  citesteKMLRaport,
   linkDinNetworkLink,
   linkKML,
   midDinLink,
@@ -269,6 +270,85 @@ check(
     [{ cui: "30", denumire: "CARAUSU COM SRL", localitate: "X" }],
   )[0].client?.cui === "30",
 );
+
+sectiune("Ce ne-a învățat harta REALĂ a lui Bogdan (2450 de magazine)");
+
+// 1. O firmă cu MAI MULTE magazine. Pe hartă apar de două ori cu același
+//    nume; în aplicație firma ține un singur loc. Al doilea trebuie spus
+//    ca „al doilea punct de lucru", NU legat de altă firmă.
+const douaPuncte = potriveștePuncte(
+  [
+    { nume: "ADEMAT COMERT SRL", descriere: "Nume Legal: ADEMAT COMERT CUCUTENI", lat: 47.7782, lng: 27.138 },
+    { nume: "ADEMAT COMERT SRL", descriere: "Nume Legal: ADEMAT COMERT DURNESTI", lat: 47.7724, lng: 27.12 },
+  ],
+  [{ cui: "40", denumire: "ADEMAT COMERT SRL", localitate: "" }],
+);
+check("primul magazin al firmei se leagă", douaPuncte[0].client?.cui === "40");
+check("al doilea NU se leagă de altă firmă", douaPuncte[1].client === null);
+check(
+  "…și i se spune omului că e al doilea punct de lucru",
+  /punct de lucru/i.test(douaPuncte[1].motiv),
+  douaPuncte[1].motiv,
+);
+
+// 2. BUG-UL PRINS PE DATE REALE: când firma potrivită e deja luată, NU
+//    avem voie să cădem pe următoarea firmă asemănătoare. Așa ajungea
+//    „ANA MARIA SRL" legat de „PRISTAVU ANA-MARIA II" — alt om, altă adresă.
+const capcana = potriveștePuncte(
+  [
+    { nume: "ANA MARIA SRL", lat: 47.6, lng: 26.6 },
+    { nume: "ANA MARIA SRL", lat: 47.7, lng: 26.7 },
+  ],
+  [
+    { cui: "50", denumire: "ANA MARIA SRL", localitate: "" },
+    { cui: "51", denumire: "PRISTAVU ANA-MARIA II", localitate: "" },
+  ],
+);
+check("primul merge la firma lui", capcana[0].client?.cui === "50");
+check(
+  "al doilea NU e împins la o firmă cu nume asemănător",
+  capcana[1].client === null,
+  capcana[1].client?.denumire,
+);
+
+// 3. Un nume scurt nu mai înghite o firmă mai lungă doar fiindcă e conținut.
+const scurt = potriveștePuncte(
+  [{ nume: "ANA MARIA SRL", lat: 47.6, lng: 26.6 }],
+  [{ cui: "60", denumire: "PRISTAVU ANA-MARIA II", localitate: "" }],
+);
+check(
+  "ANA MARIA nu se leaga singur de PRISTAVU ANA-MARIA",
+  scurt[0].client === null,
+  scurt[0].client?.denumire,
+);
+
+// 4. Descrierea-șablon nu mai creează potriviri din senin. În harta reală
+//    fiecare pin are „Tip Outlet: …", identic la toate.
+const sablon = potriveștePuncte(
+  [{ nume: "IPM SRL", descriere: "Nume Legal: IPM Tip Outlet: Convenience Store", lat: 47.6, lng: 26.6 }],
+  [
+    { cui: "70", denumire: "RIAROM-IBANESTI SRL", localitate: "" },
+    { cui: "71", denumire: "NIKOANDRE SUCEAVA SRL", localitate: "" },
+  ],
+);
+check(
+  "text-șablon identic la toate pinurile nu leagă firme fără legătură",
+  sablon[0].client === null,
+  sablon[0].client?.denumire,
+);
+
+// 5. Raportul despre ce n-a intrat: 213 firme fără coordonate, 4 la 0,0.
+const RAPORT = `<kml><Document>
+  <Placemark><name>FARA LOC SRL</name></Placemark>
+  <Placemark><name>LA ZERO SRL</name><Point><coordinates>0,0,0</coordinates></Point></Placemark>
+  <Placemark><name>TRASEU</name><LineString><coordinates>25.4,47.5,0 25.5,47.6,0</coordinates></LineString></Placemark>
+  <Placemark><name>BUN SRL</name><Point><coordinates>26.5,47.8,0</coordinates></Point></Placemark>
+</Document></kml>`;
+const rap = citesteKMLRaport(RAPORT);
+check("raportul numără magazinele bune", rap.puncte.length === 1, `${rap.puncte.length}`);
+check("…firmele niciodată puse pe hartă", rap.faraLocPeHarta === 1, `${rap.faraLocPeHarta}`);
+check("…cele cu locul greșit (0,0)", rap.inafara === 1, `${rap.inafara}`);
+check("…și liniile desenate", rap.liniiSiZone === 1, `${rap.liniiSiZone}`);
 
 sectiune("Marginile");
 check("KML gol → nicio eroare, listă goală", citesteKML("").length === 0);

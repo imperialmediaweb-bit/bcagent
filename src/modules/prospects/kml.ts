@@ -55,8 +55,54 @@ function eticheta(bucata: string, nume: string): string {
   return m ? textCurat(m[1]) : "";
 }
 
+/** Ce n-am putut lua din hartă — se SPUNE, nu se înghite. */
+export interface RaportKML {
+  puncte: PunctKML[];
+  /** Firme trecute pe hartă, dar niciodată puse pe ea (fără coordonate). */
+  faraLocPeHarta: number;
+  /** Puncte la 0,0 sau în afara României — coordonate greșite. */
+  inafara: number;
+  /** Linii și zone desenate: nu sunt magazine. */
+  liniiSiZone: number;
+}
+
 /**
- * KML → lista de puncte. Ce nu are coordonate valide se sare în tăcere
+ * KML → lista de puncte, cu raport despre ce n-a intrat. Harta reală a
+ * lui Bogdan avea 2667 de însemnări: 2450 magazine bune, 213 firme fără
+ * coordonate (trecute în listă, dar niciodată puse pe hartă) și 4 lăsate
+ * la 0,0. Astea trebuie SPUSE — altfel omul crede că le-a importat pe
+ * toate și caută degeaba magazine care n-au fost niciodată acolo.
+ */
+export function citesteKMLRaport(kml: string): RaportKML {
+  const text = String(kml ?? "");
+  let faraLocPeHarta = 0;
+  let inafara = 0;
+  let liniiSiZone = 0;
+  const rePl = /<Placemark[^>]*>([\s\S]*?)<\/Placemark>/gi;
+  let m: RegExpExecArray | null;
+  while ((m = rePl.exec(text)) !== null) {
+    const b = m[1];
+    const c = b.match(/<Point[^>]*>[\s\S]*?<coordinates[^>]*>([\s\S]*?)<\/coordinates>/i);
+    if (!c) {
+      if (/<(LineString|Polygon|MultiGeometry)/i.test(b)) liniiSiZone++;
+      else faraLocPeHarta++;
+      continue;
+    }
+    const bucati = c[1].trim().split(/[\s,]+/);
+    const lng = parseFloat(bucati[0]);
+    const lat = parseFloat(bucati[1]);
+    if (
+      !Number.isFinite(lat) || !Number.isFinite(lng) ||
+      lat < 43.3 || lat > 48.4 || lng < 20.1 || lng > 30.1
+    ) {
+      inafara++;
+    }
+  }
+  return { puncte: citesteKML(text), faraLocPeHarta, inafara, liniiSiZone };
+}
+
+/**
+ * KML → lista de puncte. Ce nu are coordonate valide se sare
  * (My Maps pune și linii, poligoane, straturi goale).
  */
 export function citesteKML(kml: string): PunctKML[] {
