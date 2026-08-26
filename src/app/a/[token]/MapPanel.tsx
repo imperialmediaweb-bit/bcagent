@@ -157,6 +157,16 @@ function escHtml(s: string): string {
     .replace(/'/g, "&#39;");
 }
 
+const ZI_FRUMOS: Record<string, string> = {
+  luni: "luni",
+  marti: "marți",
+  miercuri: "miercuri",
+  joi: "joi",
+  vineri: "vineri",
+  sambata: "sâmbătă",
+  duminica: "duminică",
+};
+
 export function gmapsDir(address: string): string {
   return `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(address)}&travelmode=driving`;
 }
@@ -217,6 +227,11 @@ export default function MapPanel({
   const [faraLoc, setFaraLoc] = useState<
     Array<{ localitate: string; count: number; clienti: number }>
   >([]);
+  // ZONA DE AZI pe hartă: „să fie și pe ruta de la hartă — să fie zona
+  // mea" (Bogdan, 26.08). Harta arată tot județul; agentul umblă azi în
+  // cinci sate. Comutatorul le lasă doar pe alea.
+  const [zonaAzi, setZonaAzi] = useState<{ zi: string; localitati: string[] } | null>(null);
+  const [doarZona, setDoarZona] = useState(false);
   // CUI-urile bifate azi („Am fost") — o rută lungă se continuă a doua zi
   // exact de unde a rămas, fără opririle deja făcute.
   const [doneToday, setDoneToday] = useState<string[]>([]);
@@ -244,6 +259,24 @@ export default function MapPanel({
   // se deschide singură pe județul unde are OMUL clienții lui, iar dacă
   // și-a ales vreodată alt județ din listă, i-l ținem minte pe telefon.
   const judetAlesDeOm = useRef(false);
+  // Zona de azi, pusă de agent sau de manager. O aducem o dată — de ea
+  // atârnă comutatorul „doar zona de azi".
+  useEffect(() => {
+    let viu = true;
+    fetch(`/api/routes/zona?token=${encodeURIComponent(token)}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d: { zi?: string; localitati?: string[] } | null) => {
+        if (!viu || !d?.localitati?.length) return;
+        setZonaAzi({ zi: d.zi ?? "", localitati: d.localitati });
+      })
+      .catch(() => {
+        // fără semnal: harta merge normal, doar fără comutatorul de zonă
+      });
+    return () => {
+      viu = false;
+    };
+  }, [token]);
+
   useEffect(() => {
     try {
       const salvat = localStorage.getItem("harta-judet");
@@ -561,9 +594,15 @@ export default function MapPanel({
       const { map, layer } = leafletRef.current;
       layer.clearLayers();
 
+      // „Doar zona de azi": harta arată tot județul, dar agentul umblă azi
+      // în câteva sate. Restul îl încarcă degeaba și-l încurcă.
+      const satAzi = new Set((zonaAzi?.localitati ?? []).map(normLoc));
       const bounds: Array<[number, number]> = [];
       for (const loc of localities) {
         if (loc.lat === null || loc.lng === null) continue;
+        if (doarZona && satAzi.size > 0 && !satAzi.has(normLoc(loc.localitate))) {
+          continue;
+        }
         const key = normLoc(loc.localitate);
         // Verde dacă am clienți acolo — după numărătoarea SERVERULUI
         // (clienții alocați mie) sau după potrivirea fișierului meu.
@@ -768,7 +807,7 @@ export default function MapPanel({
     return () => {
       disposed = true;
     };
-  }, [localities, clientLocalities, selectedLoc, basket, pins, aratPins, euSunt]);
+  }, [localities, clientLocalities, selectedLoc, basket, pins, aratPins, euSunt, doarZona, zonaAzi]);
 
   useEffect(
     () => () => {
@@ -918,6 +957,17 @@ export default function MapPanel({
     await loadRoutes();
   }
 
+  // Câte sate din zona de azi se văd în județul ales acum. Dacă zona lui
+  // e în Botoșani și harta e pe Suceava, filtrul ar goli ecranul fără să
+  // spună de ce — așa că îi spunem.
+  const buleInZona = useMemo(() => {
+    const set = new Set((zonaAzi?.localitati ?? []).map(normLoc));
+    if (set.size === 0) return 0;
+    return localities.filter(
+      (l) => l.lat !== null && l.lng !== null && set.has(normLoc(l.localitate)),
+    ).length;
+  }, [localities, zonaAzi]);
+
   const whiteSpots = useMemo(
     () =>
       localities
@@ -996,6 +1046,32 @@ export default function MapPanel({
           >
             📍 {aratPins ? "Ascunde clienții de pe hartă" : "Arată clienții pe hartă"}
           </button>
+          {/* ZONA DE AZI: harta arată tot județul, dar agentul umblă azi în
+              câteva sate. Butonul apare doar dacă are zonă pusă pe ziua
+              curentă — altfel n-ar avea ce filtra. */}
+          {zonaAzi && zonaAzi.localitati.length > 0 && (
+            <button
+              type="button"
+              onClick={() => setDoarZona((v) => !v)}
+              title={zonaAzi.localitati.join(", ")}
+              className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold transition ${
+                doarZona
+                  ? "bg-indigo-600 text-white shadow-sm"
+                  : "bg-indigo-50 text-indigo-700 hover:bg-indigo-100"
+              }`}
+            >
+              🗓️{" "}
+              {doarZona
+                ? `Arată tot județul`
+                : `Doar zona de ${ZI_FRUMOS[zonaAzi.zi] ?? "azi"} (${zonaAzi.localitati.length} sate)`}
+            </button>
+          )}
+          {doarZona && buleInZona === 0 && (
+            <span className="break-words text-xs font-medium leading-snug text-amber-700">
+              Satele tale de azi nu-s în județul ăsta — schimbă județul de
+              mai sus.
+            </span>
+          )}
           <button
             type="button"
             onClick={() => {

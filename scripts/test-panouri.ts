@@ -702,11 +702,18 @@ async function main() {
     "CUI-urile cu spații/puncte se potrivesc la fel",
     remainingStops([{ cui: "RO 1000" }], ["1000"]).length === 0,
   );
-  check(
-    "adresa de navigare are județul și țara",
-    navAddress({ adresa: "Str 1", localitate: "Vatra Dornei", judet: "SV" }) ===
-      "Str 1, Vatra Dornei, Suceava, Romania",
-  );
+  {
+    // Verificăm ÎNȚELESUL, nu litera: adresa se rescrie pentru Google
+    // („Str 1" → „Strada 1"), deci o aserțiune pe textul exact s-ar rupe
+    // la fiecare formă de adresă pe care o mai curățăm.
+    const a = navAddress({ adresa: "Str 1", localitate: "Vatra Dornei", judet: "SV" });
+    check("adresa de navigare are strada, localitatea, județul și țara",
+      /Strada 1/.test(a) && a.includes("Vatra Dornei") && a.includes("Suceava") &&
+        a.endsWith("Romania"), a);
+    check("…exact în ordinea asta, de la mic la mare",
+      a.indexOf("Strada 1") < a.indexOf("Vatra Dornei") &&
+        a.indexOf("Vatra Dornei") < a.indexOf("Suceava"), a);
+  }
   check("etapă goală → link gol", legMapsUrl([], "SV") === "");
   // Coșul făcut cu mâna: TOATE opririle pleacă, chiar dacă agentul a fost
   // azi pe la vreuna (bug prins în teren: puneai 3 firme, plecau 2).

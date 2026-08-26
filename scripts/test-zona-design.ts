@@ -359,6 +359,55 @@ async function main() {
         rele = await butoaneRele(page, E, ecran.mobil);
         check(`[${ecran.nume}] butoanele de traseu sunt întregi`, rele.length === 0, rele.join(" | "));
       }
+      // ── harta: „doar zona de azi" ──
+      // „Să fie și pe ruta de la hartă — să fie zona mea" (Bogdan, 26.08).
+      // Harta arată tot județul; agentul umblă azi în câteva sate.
+      await page.locator("header button").first().click().catch(() => {});
+      await page.waitForTimeout(500);
+      await page
+        .locator("button, a")
+        .filter({ hasText: "Harta pieței" })
+        .first()
+        .click()
+        .catch(() => {});
+      await page.waitForTimeout(4500);
+      const buleTot = await page.locator("path.leaflet-interactive").count();
+      const btnZona = page.locator("button", { hasText: "Doar zona de" }).first();
+      check(`[${ecran.nume}] harta are butonul „Doar zona de azi"`, (await btnZona.count()) > 0);
+      if ((await btnZona.count()) > 0) {
+        const cz = await btnZona.boundingBox();
+        check(
+          `[${ecran.nume}] butonul de zonă e ÎN ecran și apăsabil`,
+          !!cz && cz.x >= -1 && cz.x + cz.width <= E + 2 && cz.height >= 28,
+          JSON.stringify(cz),
+        );
+        check(
+          `[${ecran.nume}] scrie câte sate are zona`,
+          /\(\d+ sate\)/.test(await page.evaluate(() => document.body.innerText)),
+        );
+        await btnZona.click();
+        await page.waitForTimeout(3000);
+        const buleZona = await page.locator("path.leaflet-interactive").count();
+        check(
+          `[${ecran.nume}] apăsat, harta arată DOAR satele de azi`,
+          buleZona > 0 && buleZona < buleTot,
+          `${buleZona} din ${buleTot}`,
+        );
+        check(
+          `[${ecran.nume}] butonul se schimbă în „Arată tot județul"`,
+          (await page.locator("button", { hasText: "Arată tot județul" }).count()) > 0,
+        );
+        check(`[${ecran.nume}] cu filtrul pornit, nimic nu iese din ecran`, (await iese(page)) <= 2, `${await iese(page)}px`);
+        await page.locator("button", { hasText: "Arată tot județul" }).first().click();
+        await page.waitForTimeout(3000);
+        const inapoi = await page.locator("path.leaflet-interactive").count();
+        check(
+          `[${ecran.nume}] apăsat din nou, se vede iar tot județul`,
+          inapoi === buleTot,
+          `${inapoi} vs ${buleTot}`,
+        );
+      }
+
       check(`[${ecran.nume}] zero erori JavaScript în tot fluxul`, erori.length === 0, erori.slice(0, 2).join(" | "));
       await ctx.close();
     }
