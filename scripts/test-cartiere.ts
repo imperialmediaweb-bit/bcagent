@@ -52,11 +52,15 @@ console.log("\n── PĂȚANIA LUI RĂZVAN ──");
   ok("celelalte sate n-au explicație inutilă", luni.filter((g) => g.cum).length === 1);
 }
 
-console.log("\n── CARTIERELE DIN CELE TREI ORAȘE ──");
+console.log("\n── CARTIERELE ──");
+// Aici aveam si cartiere din Botosani, puse de mine din memorie. Le-am
+// scos: nu le scrisese niciun om, iar unul („Bucovina") se batea cu
+// numele tinutului. Raman doar cele scrise de agenti si cele
+// binecunoscute ale oraselor unde lucreaza.
 for (const [cartier, oras] of [
   ["Itcani", "SUCEAVA"], ["Obcini", "SUCEAVA"], ["Zamca", "SUCEAVA"],
   ["George Enescu", "SUCEAVA"], ["Copou", "IASI"], ["Pacurari", "IASI"],
-  ["Tatarasi", "IASI"], ["Nicolina", "IASI"], ["Primaverii", "BOTOSANI"],
+  ["Tatarasi", "IASI"], ["Nicolina", "IASI"],
 ] as const) {
   const r = citesteZone(`Marti\n${cartier}`, REGISTRU);
   ok(

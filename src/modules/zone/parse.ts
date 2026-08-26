@@ -23,16 +23,74 @@ export const ZILE = [
 ] as const;
 export type Zi = (typeof ZILE)[number];
 
-/** Textul, adus la litere simple: fără diacritice, fără majuscule. */
+/**
+ * Textul, adus la litere simple: fără diacritice, fără majuscule.
+ *
+ * Î ȘI Â SUNT ACEEAȘI LITERĂ. Reforma din 1993 a schimbat scrierea, iar
+ * registrele n-au ținut pasul: Finanțele scriu „Pîrteştii de Sus", omul
+ * scrie „Pârteștii de Sus", și satul nu se mai găsea — deși e același.
+ * La fel „Cîmpulung"/„Câmpulung", „Rîmnicu"/„Râmnicu". Le facem pe
+ * amândouă la fel, altfel pierdem sate întregi din zona agentului.
+ */
 export function neted(s: string): string {
   return s
     .toLowerCase()
-    .replace(/[ăâ]/g, "a")
-    .replace(/î/g, "i")
+    .replace(/[ăâî]/g, "a")
     .replace(/[șş]/g, "s")
     .replace(/[țţ]/g, "t")
+    // LINIUȚA E TOT SPAȚIU. Registrul scrie „Poieni-Solca", omul scrie
+    // „Poieni Solca" — același sat. La fel „Vatra-Moldoviței".
+    .replace(/[-–—]+/g, " ")
     .replace(/\s+/g, " ")
     .trim();
+}
+
+/**
+ * ANTETUL DE WHATSAPP, tăiat din capul rândului.
+ *
+ * Când omul copiază conversația, nu doar mesajul, fiecare rând vine așa:
+ *   [18:04, 26.08.2026] +40 749 714 955: LUNI
+ * Iar ora și data au virgulă în ele — deci se rupeau în două „localități"
+ * și ieșeau pe ecran „[18:04" și „26.08.2026] +40 749 714 955: LUNI".
+ * Se taie ÎNAINTE de orice altceva, altfel virgula lor strică tot rândul.
+ */
+export function faraAntetWhatsApp(rand: string): string {
+  return String(rand ?? "")
+    // [18:04, 26.08.2026] +40 749 714 955:  ·  [18:04] Nume:  ·  18:04 - Nume:
+    .replace(
+      /^\s*\[?\s*\d{1,2}[:.]\d{2}(\s*[:.]\d{2})?\s*(,\s*[\d./-]{6,12})?\s*\]?\s*(-\s*)?([^:]{0,40}:)?\s*/u,
+      "",
+    )
+    .trim();
+}
+
+/**
+ * Ce scrie omul în paranteză e o lămurire, nu un sat: „(toate locațiile)",
+ * „(dacă am timp)", „(2 magazine)". O scoatem — dar o ținem minte, ca să
+ * putem spune pe ecran ce am înțeles.
+ */
+export function faraParanteze(text: string): { curat: string; nota: string } {
+  const note: string[] = [];
+  let curat = String(text ?? "")
+    .replace(/[（(]([^)）]*)[)）]/gu, (_, ce: string) => {
+      const t = String(ce).trim();
+      if (t) note.push(t);
+      return " ";
+    })
+    .replace(/\s+/g, " ")
+    .trim();
+  // Aceeași lămurire, scrisă cu linie în loc de paranteză:
+  //   „Țara Dornelor – toate locațiile"
+  // Omul o scrie cum îi vine la îndemână pe telefon; pentru noi e tot o
+  // lămurire, nu parte din numele satului.
+  const dupaLinie = curat.match(
+    /^(.*?)\s*[-–—]\s*(toate\s+loca[țt]iile?|toate|tot|tot\s+ce\s+e)\s*$/iu,
+  );
+  if (dupaLinie) {
+    note.push(dupaLinie[2].trim());
+    curat = dupaLinie[1].trim();
+  }
+  return { curat, nota: note.join("; ") };
 }
 
 /**
@@ -76,8 +134,27 @@ export function parseZone(text: string): ZonaLinie[] {
   let ziCurenta: Zi | "" = "";
 
   for (const randBrut of String(text ?? "").split(/\r?\n/)) {
-    let rand = randBrut.trim();
+    // Antetul de WhatsApp PRIMUL: ora lui are virgulă, iar virgula e
+    // separator de localități. Dacă nu-l tăiem întâi, rândul se rupe în
+    // bucăți care nu înseamnă nimic.
+    let rand = faraAntetWhatsApp(randBrut);
     if (!rand) continue;
+    // „Completare vineri", „continuare luni", „încă la marți" — nu e o zi
+    // nouă, e o adăugire la una scrisă mai sus. Fără asta, satele de sub
+    // ea rămâneau fără zi, sau se lipeau de ziua greșită.
+    const completare = rand.match(
+      /^\s*(completare|completari|complet[aă]ri|continuare|inca la|inc[aă] la|si la|[șs]i la|adaug|adaugare|ad[aă]ugare)\b[\s:.\-–]*(.*)$/iu,
+    );
+    if (completare) {
+      const z = ziDinText(completare[2].trim());
+      if (z) {
+        ziCurenta = z;
+        rand = "";
+      } else {
+        rand = completare[2].trim();
+      }
+      if (!rand) continue;
+    }
 
     // Ziua din capul rândului, scrisă oricum: „luni - …", „Marți: …",
     // „joi-ungureni" (fără spațiu), „miercuri hudesti".
@@ -95,11 +172,15 @@ export function parseZone(text: string): ZonaLinie[] {
     }
 
     for (const bucata of rand.split(/[,;/|]+/)) {
-      const loc = bucata
+      // Lămuririle din paranteză nu sunt sate.
+      const { curat } = faraParanteze(bucata);
+      const loc = curat
         .replace(/^[\s\-–:.]+/, "")
         .replace(/[\s\-–:.]+$/, "")
         .trim();
       if (loc.length < 2) continue;
+      // Un rest de număr de telefon sau de dată nu e sat.
+      if (!/[a-zăâîșțşţ]{2}/i.test(loc)) continue;
       // Nu lăsăm resturi de zi rătăcite („marti" singur pe rând).
       if (ziDinText(loc) && neted(loc).length <= 9) continue;
       const cheie = `${ziCurenta}|${neted(loc)}`;

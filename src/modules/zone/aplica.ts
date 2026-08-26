@@ -1,5 +1,10 @@
 import { getDB } from "@/lib/db";
-import { orasulCartierului } from "./cartiere";
+import {
+  NUME_GENERALE,
+  PRESCURTARI,
+  pareZona,
+  orasulCartierului,
+} from "./cartiere";
 import { neted, parseZone, potriveste } from "./parse";
 
 /**
@@ -27,6 +32,11 @@ export interface ZonaGasita {
 export interface ZonaNegasita {
   scris: string;
   sugestii: string[];
+  /**
+   * E o zonă (un ținut), nu un sat scris greșit. Atunci nu are rost să-i
+   * propunem sate asemănătoare — trebuie să scrie el care sunt.
+   */
+  zona?: boolean;
 }
 export interface CititeZone {
   gasite: ZonaGasita[];
@@ -45,6 +55,12 @@ export async function localitatiCunoscute(
   numeAgenti: string[],
 ): Promise<string[]> {
   if (numeAgenti.length === 0) return [];
+  // DOUĂ IZVOARE, nu unul.
+  // Înainte luam doar satele unde avem deja o firmă în registru. Dar
+  // Tarnița, Palma, Poieni-Solca sunt sate ADEVĂRATE în care pur și
+  // simplu n-avem încă nicio firmă — și cădeau ca „negăsite", deși
+  // agentul trece prin ele în fiecare săptămână. Tabelul de localități le
+  // are pe toate, cu tot cu coordonate.
   const rows = await db<Array<{ localitate: string }>>`
     SELECT DISTINCT localitate FROM prospects
     WHERE localitate <> ''
@@ -52,13 +68,55 @@ export async function localitatiCunoscute(
         SELECT DISTINCT judet FROM prospects
         WHERE assigned_agent = ANY(${numeAgenti}) AND judet <> ''
       )
-    LIMIT 5000
+    LIMIT 20000
   `;
-  return rows.map((r) => r.localitate);
+  const sate = await db<Array<{ localitate: string }>>`
+    SELECT DISTINCT localitate FROM geo_localitati
+    WHERE localitate <> ''
+      AND judet IN (
+        SELECT DISTINCT judet FROM prospects
+        WHERE assigned_agent = ANY(${numeAgenti}) AND judet <> ''
+      )
+    LIMIT 20000
+  `;
+  const vazut = new Set<string>();
+  const toate: string[] = [];
+  for (const r of [...rows, ...sate]) {
+    const k = r.localitate.trim().toLowerCase();
+    if (k === "" || vazut.has(k)) continue;
+    vazut.add(k);
+    toate.push(r.localitate);
+  }
+  return toate;
 }
 
-/** Textul scris de om → ce am înțeles și ce n-am găsit. */
-export function citesteZone(text: string, cunoscute: string[]): CititeZone {
+/** Distanța dintre două locuri, în kilometri (formula haversine). */
+function km(
+  a: { lat: number; lng: number },
+  b: { lat: number; lng: number },
+): number {
+  const R = 6371;
+  const dLat = ((b.lat - a.lat) * Math.PI) / 180;
+  const dLng = ((b.lng - a.lng) * Math.PI) / 180;
+  const s =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos((a.lat * Math.PI) / 180) *
+      Math.cos((b.lat * Math.PI) / 180) *
+      Math.sin(dLng / 2) ** 2;
+  return 2 * R * Math.asin(Math.min(1, Math.sqrt(s)));
+}
+
+/**
+ * Textul scris de om → ce am înțeles și ce n-am găsit.
+ *
+ * `centre` sunt locurile satelor pe hartă. Fără ele merge tot, doar că
+ * ținuturile („Țara Dornelor") nu se pot desface în sate.
+ */
+export function citesteZone(
+  text: string,
+  cunoscute: string[],
+  centre?: Map<string, { lat: number; lng: number }>,
+): CititeZone {
   const gasite: ZonaGasita[] = [];
   const negasite: ZonaNegasita[] = [];
   const vazute = new Set<string>();
@@ -77,15 +135,55 @@ export function citesteZone(text: string, cunoscute: string[]): CititeZone {
       // amândouă, ca al doilea să nu se piardă din zona agentului.
       for (const parte of p.parti) adauga(c.zi, parte, c.localitate);
     } else {
-      // CARTIERELE. Agentul zice „luni fac Burdujeniul", dar la Finanțe
-      // firmele de acolo scriu „SUCEAVA" — cartierul nu apare niciodată
-      // în listele noastre. Îl traducem în oraș, ca ziua lui să nu rămână
-      // goală, și îi scriem pe ecran de ce vede Suceava în loc.
-      const oras = orasulCartierului(neted(c.localitate), neted);
-      const alOras =
-        oras === null
-          ? null
-          : cunoscute.find((k) => neted(k) === neted(oras)) ?? null;
+      const n = neted(c.localitate);
+      /** Numele oficial din registru pentru un nume știut de noi. */
+      const inRegistru = (nume: string) =>
+        cunoscute.find((k) => neted(k) === neted(nume)) ?? null;
+
+      // 1. PRESCURTĂRILE. „Cn-lung" e Câmpulung Moldovenesc. Nimeni nu
+      // scrie 22 de litere într-o listă de 40 de sate, pe telefon.
+      const intreg = PRESCURTARI[n];
+      const alPrescurtat = intreg ? inRegistru(intreg) : null;
+      if (alPrescurtat) {
+        adauga(c.zi, alPrescurtat, c.localitate, `${c.localitate} = ${alPrescurtat}`);
+        continue;
+      }
+
+      // 2. ZONELE NU LE GHICIM.
+      // „Țara Dornelor (toate locațiile)" e un ținut, nu un sat. Aș putea
+      // pune satele din jurul Vetrei Dornei pe o rază oarecare — dar raza
+      // aia ar fi scoasă din burtă, iar un sat băgat greșit în ziua unui
+      // agent înseamnă un drum degeaba și o cifră falsă în raport. Îi
+      // spunem ce e și-l rugăm să scrie satele: el le știe, noi nu.
+      if (pareZona(n)) {
+        negasite.push({
+          scris: c.localitate,
+          sugestii: [],
+          zona: true,
+        });
+        continue;
+      }
+
+      // 3. CARTIERELE. Agentul zice „luni fac Burdujeniul", dar la
+      // Finanțe firmele de acolo scriu „SUCEAVA" — cartierul nu apare
+      // niciodată în listele noastre. Îl traducem în oraș, ca ziua lui să
+      // nu rămână goală, și îi scriem pe ecran de ce vede Suceava în loc.
+      //
+      // „Centru" e prea general ca să însemne ceva singur: îl legăm DOAR
+      // dacă în aceeași zi omul a scris și alte cartiere ale aceluiași
+      // oraș („Obcini, George Enescu, Centru, Ițcani" — se știe care).
+      // Altfel îl lăsăm nelămurit: mai bine întrebăm decât să ghicim.
+      const oras = orasulCartierului(n, neted);
+      if (oras !== null && NUME_GENERALE.has(n)) {
+        const dinAceeasiZi = gasite.some(
+          (g) => g.zi === c.zi && neted(g.localitate) === neted(oras) && g.cum,
+        );
+        if (!dinAceeasiZi) {
+          negasite.push({ scris: c.localitate, sugestii: p.sugestii });
+          continue;
+        }
+      }
+      const alOras = oras === null ? null : inRegistru(oras);
       if (alOras) {
         adauga(
           c.zi,
