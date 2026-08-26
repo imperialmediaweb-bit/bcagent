@@ -35,6 +35,7 @@ interface Automat {
   totalPuncte: number;
   totalClienti: number;
   totalDinRegistru?: number;
+  clientiCuLoc?: number;
   sarite?: { faraLocPeHarta: number; inafara: number; liniiSiZone: number };
   nepotrivite: Rand[];
 }
@@ -262,6 +263,12 @@ export default function HartaImportPage() {
             ✅ Gata. Am pus locul exact la <b>{gata.scrise}</b> magazine, din{" "}
             <b>{gata.totalPuncte}</b> câte are harta.
           </p>
+          {gata.clientiCuLoc !== undefined && (
+            <p className="mt-1 break-words text-sm font-medium leading-snug text-emerald-800">
+              Dintre clienții tăi, <b>{gata.clientiCuLoc}</b> au acum locul
+              exact pe hartă.
+            </p>
+          )}
           <p className="mt-1 break-words text-xs leading-snug text-slate-500">
             Agenții le văd la următoarea deschidere a hărții. „Navighează" îi
             duce acum la ușă, nu în centrul satului.

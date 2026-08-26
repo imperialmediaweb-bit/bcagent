@@ -185,6 +185,17 @@ export async function POST(
       if (r.count > 0) scrise++;
     }
     const nesigure = potriviri.filter((p) => !p.client || p.scor < 0.9).length;
+    // CIFRA CARE CONTEAZĂ pentru manager: nu „câte pinuri am citit", ci
+    // câți dintre CLIENȚII LUI au acum locul exact. Restul hărții sunt
+    // firme din registru — bune de avut, dar nu despre ele întreabă el.
+    const [acoperire] = await db<[{ cu_loc: string }]>`
+      SELECT COUNT(*)::text AS cu_loc
+      FROM prospects p
+      JOIN org_agents oa ON oa.name = p.assigned_agent
+      JOIN geo_firme g ON g.cui = p.cui
+      WHERE oa.org_id = ${orgId}
+    `;
+    const clientiCuLoc = parseInt(acoperire.cu_loc, 10);
     await audit(auth.session.email, "harta.import", orgId, {
       scrise,
       magazine: raport.puncte.length,
@@ -197,6 +208,7 @@ export async function POST(
       totalClienti: clienti.length,
       totalDinRegistru: dinRegistru.length,
       nesigure,
+      clientiCuLoc,
       faraLocPeHarta: raport.faraLocPeHarta,
       inafara: raport.inafara,
     });
