@@ -138,6 +138,16 @@ export async function ensureSchema(): Promise<void> {
     -- Firma raportorului: administratorul/managerul firmei își vede
     -- rapoartele propriilor agenți în panoul lui, nu doar platforma.
     ALTER TABLE issues ADD COLUMN IF NOT EXISTS org_id TEXT NOT NULL DEFAULT '';
+    -- ÎNTREBARE sau PROBLEMĂ?
+    -- „Nu știu unde e butonul" și un bug adevărat ajungeau amestecate în
+    -- aceeași listă — iar bugul se pierdea între ele. Acum se deosebesc:
+    -- întrebarea se lămurește pe loc, problema ajunge la echipa
+    -- platformei.
+    ALTER TABLE issues ADD COLUMN IF NOT EXISTS fel TEXT NOT NULL DEFAULT '';
+    -- POZA. „Nu-mi apare cum trebuie" e greu de explicat în scris, în
+    -- mașină. O poză a ecranului spune tot dintr-o privire. Criptată, ca
+    -- pozele de facturi: poate prinde nume de clienți și cifre.
+    ALTER TABLE issues ADD COLUMN IF NOT EXISTS foto TEXT;
     CREATE INDEX IF NOT EXISTS issues_org ON issues(org_id, created_at DESC);
     -- Rutele agenților: șabloane pe zile (Luni — Rădăuți) cu opriri ordonate.
     CREATE TABLE IF NOT EXISTS routes (
