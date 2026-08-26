@@ -1,161 +1,212 @@
 /**
- * DICTAREA PE ANDROID — testul anti-păsărească.
+ * DICTAREA CARE NU SE BÂLBÂIE — probe pe note ADEVĂRATE din teren.
  *
- * Chrome pe telefon retrimite aceleași rezultate în versiuni tot mai
- * lungi și marchează „final" de mai multe ori. Bugul văzut LIVE la agent:
- * nota devenea „a a a zis a zis a zis că nu vrea a zis că nu vrea nimic...".
+ * Notele lui Robert Volanschi, 26.08.2026, așa cum s-au salvat:
+ *   „rău rău platnic"
+ *   „nu nu vrea nu vrea țigări"
+ *   „lucrează lucrează cu lucrează cu producătorii"
+ *   „lucrează lucrează la lucrează la facturare lucrează la facturare cu…"
+ *   „Shop Jetta plus Shop Jetta plus Shop Shop Jetta plus Shop todalex…"
  *
- * Simulăm AICI exact comportamentul ăla (dictare falsă, pilotată de test)
- * și verificăm că nota iese CURATĂ, fără nicio repetare.
- *
- * Rulare: BASE_URL=http://127.0.0.1:3131 npx tsx scripts/test-dictare.ts
+ * Aici jucăm exact ce trimite Chrome pe Android și verificăm că iese ce a
+ * spus omul, o singură dată. Fiecare probă e o notă care CHIAR a ieșit
+ * stricată — dacă vreuna cade, agentul iar scrie păsărește.
  */
-const PW =
-  process.env.PLAYWRIGHT_MODULE ??
-  "/opt/node22/lib/node_modules/playwright/node_modules/playwright-core/index.js";
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const pw = (await import(PW)) as any;
-const chromium = pw.chromium ?? pw.default?.chromium;
-const BASE = process.env.BASE_URL ?? "http://127.0.0.1:3131";
-const OUT = "/tmp/claude-0/-home-user/031b441a-03c6-579f-b39a-c38be2e63b8b/scratchpad";
 
-let ok = 0;
-let bad = 0;
-const check = (n: string, c: boolean, x = "") => {
-  if (c) {
-    ok++;
-    console.log("  ✓ " + n);
+import { ceEnou, cuvinte, felCuvant, textulSesiunii } from "../src/lib/dictare";
+
+let treceri = 0;
+let caderi = 0;
+function ok(nume: string, conditie: boolean, detaliu = "") {
+  if (conditie) {
+    treceri++;
   } else {
-    bad++;
-    console.log("  ✗ " + n + " " + x);
+    caderi++;
+    console.log(`  ✗ ${nume}${detaliu ? `\n      ${detaliu}` : ""}`);
   }
-};
+}
+function egal(nume: string, primit: string, asteptat: string) {
+  ok(nume, primit === asteptat, `primit:   „${primit}"\n      așteptat: „${asteptat}"`);
+}
 
-const b = await chromium.launch({ executablePath: "/opt/pw-browsers/chromium" });
-const ctx = await b.newContext({
-  viewport: { width: 393, height: 830 },
-  isMobile: true,
-  hasTouch: true,
-  deviceScaleFactor: 2,
-});
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const page: any = await ctx.newPage();
-
-// Dictare FALSĂ, pilotată de test — imită exact Chrome-ul de pe Android.
-// Injectată ca TEXT pur, ca nimic din compilare să nu o poată strica.
-await page.addInitScript(`
-  class FakeSR {
-    constructor() {
-      this.lang = ""; this.interimResults = false; this.continuous = false;
-      this.onresult = null; this.onend = null; this.onerror = null;
-    }
-    start() { window.__sr = this; }
-    stop() { if (this.onend) this.onend(); }
-    abort() { if (this.onend) this.onend(); }
+/**
+ * Joacă o sesiune de dictare așa cum o trimite browserul și întoarce nota
+ * cum ar arăta pe ecranul agentului.
+ *
+ * `evenimente` = ce conține `results` la fiecare `onresult`; fiecare
+ * bucată e o transcriere marcată FINALĂ.
+ */
+function nota(evenimente: string[][]): string {
+  let trimis: string[] = [];
+  let scris = "";
+  for (const ev of evenimente) {
+    const { nou, trimisAcum } = ceEnou(trimis, textulSesiunii(ev));
+    trimis = trimisAcum;
+    if (nou) scris = scris ? `${scris} ${nou}` : nou;
   }
-  Object.defineProperty(window, "SpeechRecognition", { value: FakeSR, configurable: true });
-  Object.defineProperty(window, "webkitSpeechRecognition", { value: FakeSR, configurable: true });
-`);
+  return scris;
+}
 
-await page.goto(`${BASE}/api/agentie/demo-login?rol=agent`, {
-  waitUntil: "domcontentloaded",
-});
-await page.waitForTimeout(4000);
-await page.locator("header button").first().click().catch(() => {});
-await page.waitForTimeout(400);
-await page.locator("aside button", { hasText: "Harta pieței" }).first().click();
-await page.waitForTimeout(3000);
-await page.locator("path.leaflet-interactive").first().click({ force: true });
-await page.waitForTimeout(2200);
-await page.locator('button:has-text("Am fost")').first().click();
-await page.waitForTimeout(1000);
+console.log("\n── NOTELE CARE AU IEȘIT STRICATE ÎN TEREN ──");
 
-// pornesc dictarea (apăs microfonul — butonul de lângă căsuța de dictare)
-const casuta = () => page.locator('textarea[placeholder*="dictezi"]').first();
-const butonMic = () =>
-  casuta().locator("xpath=ancestor::div[1]").locator("button").first();
-console.log(
-  "  SR injectat:",
-  await page.evaluate(
-    () => (window as unknown as { SpeechRecognition?: { name?: string } }).SpeechRecognition?.name,
-  ),
-);
-// click nativ, direct pe butonul din cutia textarea-ului (tap-ul Playwright
-// nimerea uneori marginea cutiei, nu butonul)
-await page.evaluate(() => {
-  const ta = document.querySelector('textarea[placeholder*="dictezi"]');
-  const btn = ta?.parentElement?.querySelector("button") as HTMLButtonElement | null;
-  btn?.click();
-});
-await page.waitForTimeout(600);
-console.log("  __sr există:", await page.evaluate(() => !!(window as unknown as { __sr?: unknown }).__sr));
-console.log("  eticheta:", await page.evaluate(() => (document.querySelector('textarea[placeholder*="dictezi"]')?.parentElement?.innerText || "").slice(0, 60)));
-check(
-  "ascultarea pornește (Te ascult...)",
-  /Te ascult/.test(await page.evaluate(() => document.body.innerText)),
+// „rău rău platnic" — Chrome a dat „rău", apoi a revizuit în „rău platnic".
+egal(
+  "rau platnic",
+  nota([["rău"], ["rău", "rău platnic"]]),
+  "rău platnic",
 );
 
-// EXACT tiparul Android: versiuni tot mai lungi, „final" repetat, repornire.
-const fire = (results: Array<[string, boolean]>) =>
-  page.evaluate((rs: Array<[string, boolean]>) => {
-    // @ts-expect-error canal de test
-    const sr = window.__sr;
-    const ev = {
-      resultIndex: 0,
-      results: rs.map(([t, f]) => {
-        const item = { 0: { transcript: t }, length: 1, isFinal: f };
-        return item;
-      }),
-    };
-    ev.results.length = rs.length;
-    sr?.onresult?.(ev);
-  }, results);
-
-await fire([["a", false]]);
-await fire([["a zis", false]]);
-await fire([["a zis că nu vrea", false]]);
-await fire([["a zis că nu vrea", true]]); // finalizat
-await fire([["a zis că nu vrea", true]]); // ANDROID: refinalizat identic — NU se adaugă iar
-await fire([["a zis că nu vrea", true], ["nimic", false]]);
-await fire([["a zis că nu vrea", true], ["nimic azi", true]]); // a doua bucată finalizată
-// repornirea automată (Android închide și redeschide singur ascultarea)
-await page.evaluate(() => {
-  // @ts-expect-error canal de test
-  window.__sr?.onend?.();
-});
-await page.waitForTimeout(300);
-await fire([["comandă marți", true]]); // sesiune nouă, index 0 din nou
-await page.waitForTimeout(500);
-
-const textNota = await casuta().inputValue();
-console.log("  nota rezultată:", JSON.stringify(textNota));
-check(
-  "nota e CURATĂ: fiecare frază o singură dată",
-  textNota === "a zis că nu vrea nimic azi comandă marți",
-  textNota,
-);
-check(
-  "nu conține repetări (păsăreasca de pe teren)",
-  !/a zis că nu vrea.*a zis că nu vrea/.test(textNota),
+// „nu nu vrea nu vrea țigări" — trei revizuiri ale aceleiași vorbe.
+egal(
+  "nu vrea tigari",
+  nota([["nu"], ["nu", "nu vrea"], ["nu", "nu vrea", "nu vrea țigări"]]),
+  "nu vrea țigări",
 );
 
-// opresc și salvez cu un rezultat
-await page.evaluate(() => {
-  const ta = document.querySelector('textarea[placeholder*="dictezi"]');
-  (ta?.parentElement?.querySelector("button") as HTMLButtonElement | null)?.click();
-});
-await page.waitForTimeout(400);
-await page.evaluate(() => {
-  const el = [...document.querySelectorAll("button")].find((x) =>
-    /Se mai gândește/.test(x.textContent || ""),
+// „lucrează lucrează cu lucrează cu producătorii"
+egal(
+  "lucreaza cu producatorii",
+  nota([
+    ["lucrează"],
+    ["lucrează", "lucrează cu"],
+    ["lucrează", "lucrează cu", "lucrează cu producătorii"],
+  ]),
+  "lucrează cu producătorii",
+);
+
+// „lucrează lucrează la lucrează la facturare lucrează la facturare cu…"
+egal(
+  "lucreaza la facturare cu producatorii",
+  nota([
+    ["lucrează"],
+    ["lucrează", "lucrează la"],
+    ["lucrează", "lucrează la", "lucrează la facturare"],
+    [
+      "lucrează",
+      "lucrează la",
+      "lucrează la facturare",
+      "lucrează la facturare cu producătorii",
+    ],
+  ]),
+  "lucrează la facturare cu producătorii",
+);
+
+// „Shop Jetta plus Shop Jetta plus Shop Shop Jetta plus Shop todalex șopeta"
+egal(
+  "Shop Jetta plus, apoi alt magazin",
+  nota([
+    ["Shop"],
+    ["Shop", "Shop Jetta"],
+    ["Shop", "Shop Jetta", "Shop Jetta plus"],
+    ["Shop", "Shop Jetta", "Shop Jetta plus", "todalex șopeta"],
+  ]),
+  "Shop Jetta plus todalex șopeta",
+);
+
+// „shopping shopping interbrands"
+egal(
+  "shopping interbrands",
+  nota([["shopping"], ["shopping", "shopping interbrands"]]),
+  "shopping interbrands",
+);
+
+console.log("\n── CAZURILE CARE TREBUIE SĂ MEARGĂ MAI DEPARTE ──");
+
+// Omul CHIAR repetă un cuvânt. Nu-i corectăm vorba — o scriem cum a zis-o.
+egal(
+  "repetitia adevarata a omului ramane",
+  nota([["nu nu vrea"]]),
+  "nu nu vrea",
+);
+egal(
+  "doua propozitii diferite raman amandoua",
+  nota([["nu vrea țigări"], ["nu vrea țigări", "vine marțea viitoare"]]),
+  "nu vrea țigări vine marțea viitoare",
+);
+egal(
+  "o singura bucata, o singura data",
+  nota([["rău platnic"]]),
+  "rău platnic",
+);
+egal("nimic dictat, nimic scris", nota([[]]), "");
+egal("bucata goala se sare", nota([["", "  ", "bună ziua"]]), "bună ziua");
+
+// Chrome trimite ACELAȘI eveniment de două ori (se întâmplă des).
+egal(
+  "acelasi eveniment de doua ori nu scrie de doua ori",
+  nota([["rău platnic"], ["rău platnic"], ["rău platnic"]]),
+  "rău platnic",
+);
+
+// Repornirea automată: browserul închide sesiunea, o redeschidem, iar
+// indexurile o iau de la zero. Ce era scris rămâne, ce vine se adaugă.
+{
+  let trimis: string[] = [];
+  let scris = "";
+  const pas = (ev: string[]) => {
+    const { nou, trimisAcum } = ceEnou(trimis, textulSesiunii(ev));
+    trimis = trimisAcum;
+    if (nou) scris = scris ? `${scris} ${nou}` : nou;
+  };
+  pas(["nu vrea"]);
+  pas(["nu vrea", "nu vrea țigări"]);
+  trimis = []; // ← repornire: browserul o ia de la capăt
+  pas(["dar vrea bere"]);
+  egal("dupa repornire, textul continua, nu se repeta", scris, "nu vrea țigări dar vrea bere");
+}
+
+console.log("\n── DIACRITICELE ──");
+// Telefonul scrie „țigări" într-o clipă și „tigari" în alta. E aceeași
+// vorbă, deci NU se scrie de două ori. Ce era deja în notă rămâne cum a
+// intrat: nota se completează, nu se rescrie — dacă am rescrie-o, i-am
+// șterge agentului de sub deget ce corectase el cu mâna. Rămâne prima
+// scriere, dar niciodată amândouă.
+egal(
+  "aceeasi vorba, cu si fara diacritice, nu se dubleaza",
+  nota([["nu vrea tigari"], ["nu vrea tigari", "nu vrea țigări acum"]]),
+  "nu vrea tigari acum",
+);
+egal(
+  "semnele de punctuatie nu fac vorba noua",
+  nota([["bună ziua"], ["bună ziua", "Bună ziua!"]]),
+  "bună ziua",
+);
+// Iar dacă agentul nu-i place cum a ieșit, scrie peste, cu mâna — de-aia
+// căsuța rămâne o căsuță de scris, nu un ecran care se schimbă singur.
+ok("felCuvant taie diacriticele", felCuvant("Țigări,") === "tigari", felCuvant("Țigări,"));
+ok("felCuvant taie semnele", felCuvant("plus!") === "plus");
+ok("cuvinte nu lasa goluri", cuvinte("  a   b  ").length === 2);
+
+console.log("\n── LUCRURI CARE NU TREBUIE SĂ CRAPE ──");
+egal("text gol", nota([[""]]), "");
+egal("doar spatii", nota([["   "]]), "");
+ok("lista goala de evenimente", nota([]) === "");
+ok("textulSesiunii pe gol", textulSesiunii([]).length === 0);
+ok(
+  "ceEnou nu da nimic cand nu e nimic nou",
+  ceEnou(["a", "b"], ["a", "b"]).nou === "",
+);
+ok(
+  "ceEnou nu da nimic cand textul s-a scurtat",
+  ceEnou(["a", "b", "c"], ["a"]).nou === "",
+);
+
+// O notă lungă, dictată în bucăți — cum vorbește agentul de fapt.
+{
+  const ev: string[][] = [];
+  const bucati = [
+    "clientul zice că",
+    "clientul zice că nu mai are loc",
+    "clientul zice că nu mai are loc în raft",
+  ];
+  for (let i = 0; i < bucati.length; i++) ev.push(bucati.slice(0, i + 1));
+  ev.push([...bucati, "revin joi cu marfă"]);
+  egal(
+    "o nota lunga, dictata pe bucati, iese intreaga si curata",
+    nota(ev),
+    "clientul zice că nu mai are loc în raft revin joi cu marfă",
   );
-  el?.click();
-});
-await page.waitForTimeout(1200);
-const dupa = await page.evaluate(() => document.body.innerText);
-check("salvarea merge (confirmare pe ecran)", /✓|salvat|gândește/i.test(dupa));
+}
 
-await page.screenshot({ path: `${OUT}/dictare-ok.png` });
-await b.close();
-console.log(bad === 0 ? `\n✅ ${ok} verificări, 0 eșuate` : `\n❌ ${bad} eșuate`);
-process.exit(bad === 0 ? 0 : 1);
+console.log(`\n${caderi === 0 ? "✅" : "❌"} ${treceri} verificări trecute, ${caderi} căzute\n`);
+process.exit(caderi === 0 ? 0 : 1);

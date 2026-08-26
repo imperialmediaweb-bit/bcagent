@@ -292,10 +292,13 @@ export default function HartaImportPage() {
             disabled={lucreaza}
             className="min-h-11 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-50"
           >
-            {lucreaza ? (pas || "Lucrez...") : "Adu locațiile (fă tot singur)"}
+            {/* Butonul își ține mărimea: dacă i-am pune textul de progres
+                înăuntru, s-ar lăți la fiecare județ și ar sări tot rândul
+                de butoane sub degetul omului. Progresul stă dedesubt. */}
+            {lucreaza ? "Lucrez..." : "Adu locațiile (fă tot singur)"}
           </button>
           <Button onClick={verifica} disabled={lucreaza || (!link.trim() && !kml.trim())}>
-            {lucreaza ? "Citesc harta..." : "Vreau să văd întâi lista"}
+            Vreau să văd întâi lista
           </Button>
           <button
             type="button"
@@ -306,6 +309,12 @@ export default function HartaImportPage() {
             Anulează ce am adus
           </button>
         </div>
+        {lucreaza && pas && (
+          <p className="mt-2 flex items-center gap-2 break-words text-sm font-medium leading-snug text-emerald-800">
+            <span className="inline-block h-3 w-3 shrink-0 animate-spin rounded-full border-2 border-emerald-600 border-t-transparent" />
+            {pas}
+          </p>
+        )}
         <p className="mt-2 break-words text-xs leading-snug text-slate-500">
           „Fă tot singur" pune locurile unde numele se potrivește exact —
           restul ți le arată, scurt. Merge și fără link: atunci aduce doar

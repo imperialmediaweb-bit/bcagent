@@ -302,7 +302,10 @@ export default function AgentieDashboard() {
                           )}
                         </span>
                         <span className="text-slate-500">
-                          {a.visitsWeek} vizite
+                          {/* „1 vizite" arată ca o aplicație făcută în
+                              genunchi. Omul se uită la ecranul ăsta în
+                              fiecare zi. */}
+                          {a.visitsWeek} {a.visitsWeek === 1 ? "vizită" : "vizite"}
                         </span>
                       </div>
                       <div className="mt-1 h-1.5 rounded-full bg-slate-100">

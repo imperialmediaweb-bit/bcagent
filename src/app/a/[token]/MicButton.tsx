@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Mic, MicOff } from "lucide-react";
+import { ceEnou, textulSesiunii } from "@/lib/dictare";
 
 /**
  * Buton de dictare refolosibil: agentul vorbește, textul se scrie singur
@@ -123,42 +124,37 @@ export default function MicButton({
     rec.lang = "ro-RO";
     rec.interimResults = live;
     rec.continuous = live;
-    // ANTI-REPETARE (Android). Chrome pe telefon retrimite aceleași
-    // rezultate iar și iar, în versiuni tot mai lungi („a" → „a zis" →
-    // „a zis că nu vrea"), uneori marcate „finale" de mai multe ori.
-    // Dacă adaugi fiecare versiune, nota devine păsărească: „a a a zis
-    // a zis că...". Ținem evidența pe INDEX: fiecare bucată finalizată
-    // intră în notă O SINGURĂ dată, iar la repornirea automată a
-    // ascultării evidența se golește (indexurile o iau de la zero).
-    const finalizate: (string | undefined)[] = [];
-    let ultimaAdaugata = "";
+    // ANTI-REPETARE (Android). Chrome pe telefon retrimite ACEEAȘI vorbă,
+    // tot mai lungă, pe INDEXURI DIFERITE, fiecare marcată „finală":
+    //   results[0] „nu" · results[1] „nu vrea" · results[2] „nu vrea țigări"
+    // Paza de dinainte ținea minte pe index — și cum indexul era altul de
+    // fiecare dată, le adăuga pe toate. Din teren, 26.08, notele lui Robert
+    // arătau așa: „nu nu vrea nu vrea țigări", „rău rău platnic".
+    //
+    // Acum curățăm revizuirile (vezi lib/dictare.ts) și trimitem mai
+    // departe DOAR partea nouă. `trimis` = cuvintele scrise deja în notă,
+    // în sesiunea asta; la repornirea automată o ia de la capăt, fiindcă
+    // și browserul o ia de la capăt cu indexurile.
+    let trimis: string[] = [];
     rec.onresult = (e) => {
       let interim = "";
-      let nou = "";
+      const finale: string[] = [];
       for (let i = 0; i < e.results.length; i++) {
         const r = e.results[i];
         const txt = (r[0]?.transcript ?? "").trim();
-        if (r.isFinal) {
-          if (txt && finalizate[i] === undefined) {
-            nou += (nou ? " " : "") + txt;
-          }
-          finalizate[i] = txt;
-        } else {
-          interim += txt;
-        }
+        if (r.isFinal) finale.push(txt);
+        else interim += txt;
       }
-      // plasă dublă: exact aceeași frază trimisă de două ori la rând se ignoră
-      if (nou && nou !== ultimaAdaugata) {
-        ultimaAdaugata = nou;
-        onText(nou);
-      }
+      const { nou, trimisAcum } = ceEnou(trimis, textulSesiunii(finale));
+      trimis = trimisAcum;
+      if (nou) onText(nou);
       if (live && onInterim) onInterim(interim);
     };
     rec.onend = () => {
       // Continuu: dacă agentul n-a apăsat stop, repornim.
       if (wantOn.current && live) {
         try {
-          finalizate.length = 0; // indexurile reîncep de la zero
+          trimis = []; // browserul reia indexurile de la zero, deci și noi
           rec.start();
           return;
         } catch {

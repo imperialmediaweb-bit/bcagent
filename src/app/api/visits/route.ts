@@ -178,10 +178,26 @@ export async function POST(req: Request) {
   if (!db) return Response.json({ enabled: false }, { status: 503 });
   try {
     await ensureSchema();
+    // O SINGURĂ VIZITĂ, chiar dacă apasă de două ori.
+    // Din teren, 26.08: COLER COM S.R.L. apare de două ori la 13:26, cu
+    // aceeași notă. Agentul n-a intrat de două ori în magazin — a apăsat
+    // a doua oară fiindcă telefonul mergea greu și nu s-a întâmplat nimic
+    // pe ecran. Aceeași vizită, la același client, cu aceeași notă, în
+    // aceeași clipă, e o singură vizită. Două minute e larg: nimeni nu
+    // intră de două ori în același magazin în două minute, dar orice
+    // apăsare nervoasă și orice retrimitere din rețea încap acolo.
     await db`
       INSERT INTO visits (agent_id, agent_name, cui, denumire, result, note)
-      VALUES (${payload.agentId}, ${payload.agentName}, ${cui},
-              ${String(body.denumire ?? "").slice(0, 200)}, ${result}, ${note})
+      SELECT ${payload.agentId}, ${payload.agentName}, ${cui},
+             ${String(body.denumire ?? "").slice(0, 200)}, ${result}, ${note}
+      WHERE NOT EXISTS (
+        SELECT 1 FROM visits v
+        WHERE v.agent_id = ${payload.agentId}
+          AND v.cui = ${cui}
+          AND v.result = ${result}
+          AND v.note = ${note}
+          AND v.visited_at > NOW() - INTERVAL '2 minutes'
+      )
     `;
     // IZOLARE (o singură dată, pentru toate scrierile de mai jos): pe
     // firmele altei agenții nu se atinge nimic. „Ai mei" = numele din

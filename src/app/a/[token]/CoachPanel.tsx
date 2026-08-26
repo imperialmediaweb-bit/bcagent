@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { marked } from "marked";
 import DOMPurify from "isomorphic-dompurify";
+import { ceEnou, textulSesiunii } from "@/lib/dictare";
 import {
   Camera,
   GraduationCap,
@@ -48,6 +49,7 @@ interface SpeechRecognitionLike {
   start: () => void;
   stop: () => void;
 }
+
 
 function getSpeechRecognition(): (new () => SpeechRecognitionLike) | null {
   if (typeof window === "undefined") return null;
@@ -169,12 +171,19 @@ export default function CoachPanel({
     const rec = new SR();
     rec.lang = "ro-RO";
     rec.interimResults = false;
+    // ACELAȘI NECAZ CA LA NOTELE DIN TEREN: Chrome pe Android retrimite
+    // aceeași vorbă, tot mai lungă, pe indexuri diferite. Lipite cap la
+    // cap, ieșea „nu nu vrea nu vrea țigări". Curățăm revizuirile și
+    // scriem doar ce e nou (vezi lib/dictare.ts).
+    let trimis: string[] = [];
     rec.onresult = (e) => {
-      const transcript = Array.from(
+      const finale = Array.from(
         { length: e.results.length },
-        (_, i) => e.results[i][0].transcript,
-      ).join(" ");
-      setInput((prev) => (prev ? `${prev} ${transcript}` : transcript));
+        (_, i) => e.results[i][0]?.transcript ?? "",
+      );
+      const { nou, trimisAcum } = ceEnou(trimis, textulSesiunii(finale));
+      trimis = trimisAcum;
+      if (nou) setInput((prev) => (prev ? `${prev} ${nou}` : nou));
     };
     rec.onend = () => setListening(false);
     rec.onerror = () => setListening(false);

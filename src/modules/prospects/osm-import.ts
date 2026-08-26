@@ -104,6 +104,19 @@ async function intreabaOverpass(
   throw ultimaEroare ?? new Error("Overpass nu raspunde");
 }
 
+/**
+ * Două puncte la mai puțin de ~50 m unul de altul sunt același loc.
+ * (0,0005 grade ≈ 55 m pe latitudine; pe longitudine, la noi, ≈ 37 m.)
+ */
+function aproapeDeTot(
+  lat1: number,
+  lng1: number,
+  lat2: number,
+  lng2: number,
+): boolean {
+  return Math.abs(lat1 - lat2) < 0.0005 && Math.abs(lng1 - lng2) < 0.0007;
+}
+
 /** Cheie de „e același magazin": numele + locul rotunjit la ~100 m. */
 function cheieApropiat(nume: string, lat: number, lng: number): string {
   return `${neted(nume)}@${lat.toFixed(3)},${lng.toFixed(3)}`;
@@ -275,25 +288,52 @@ export async function unJudetOSM(
     centre,
   );
 
-  // 1) Firmele recunoscute primesc LOCUL. Ce a pus agentul nu se atinge.
-  for (const p of potriviri) {
-    if (!p.client || p.scor < 0.9) continue;
-    const r = await db`
-      INSERT INTO geo_firme (cui, lat, lng, aprox, failed, sursa)
-      SELECT pr.cui, ${p.punct.lat}, ${p.punct.lng}, FALSE, FALSE, 'import'
-      FROM prospects pr
-      WHERE pr.cui = ${p.client.cui}
-        AND (COALESCE(pr.assigned_agent, '') = ''
-             OR pr.assigned_agent = ANY(${numeAg}))
-        AND NOT EXISTS (
-          SELECT 1 FROM geo_firme g
-          WHERE g.cui = pr.cui AND g.sursa IN ('deget', 'gps')
-        )
-      ON CONFLICT (cui) DO UPDATE
-        SET lat = EXCLUDED.lat, lng = EXCLUDED.lng,
-            aprox = FALSE, failed = FALSE, sursa = 'import', updated_at = NOW()
-    `;
-    if (r.count > 0) rez.locuriPuse++;
+  // 1) FIRMELE RECUNOSCUTE PRIMESC LOCUL.
+  //
+  // „Primesc" înseamnă chiar primesc: firma n-avea loc, sau îl avea doar
+  // ghicit (centrul satului), sau OSM îl știe în alt loc. Dacă are deja
+  // exact același punct, n-o atingem și n-o numărăm — altfel a doua
+  // apăsare ar raporta din nou aceleași zeci de firme „cu loc nou", iar
+  // omul ar crede că se schimbă ceva când nu se schimbă nimic.
+  //
+  // Și ce a pus agentul pe teren nu se atinge NICIODATĂ: el a fost acolo.
+  const candidati = potriviri.filter((p) => p.client && p.scor >= 0.9);
+  if (candidati.length > 0) {
+    const cuiuri = candidati.map((p) => p.client!.cui);
+    const acumAre = new Map(
+      (
+        await db<
+          Array<{ cui: string; lat: number; lng: number; aprox: boolean; sursa: string }>
+        >`
+          SELECT cui, lat, lng, aprox, sursa FROM geo_firme
+          WHERE cui = ANY(${cuiuri})
+        `
+      ).map((g) => [g.cui, g]),
+    );
+    for (const p of candidati) {
+      const are = acumAre.get(p.client!.cui);
+      // Pinul pus de om pe teren bate orice import.
+      if (are && (are.sursa === "deget" || are.sursa === "gps")) continue;
+      if (are && !are.aprox && aproapeDeTot(are.lat, are.lng, p.punct.lat, p.punct.lng)) {
+        continue; // îl avea deja, exact acolo — nimic de făcut
+      }
+      const r = await db`
+        INSERT INTO geo_firme (cui, lat, lng, aprox, failed, sursa)
+        SELECT pr.cui, ${p.punct.lat}, ${p.punct.lng}, FALSE, FALSE, 'import'
+        FROM prospects pr
+        WHERE pr.cui = ${p.client!.cui}
+          AND (COALESCE(pr.assigned_agent, '') = ''
+               OR pr.assigned_agent = ANY(${numeAg}))
+          AND NOT EXISTS (
+            SELECT 1 FROM geo_firme g
+            WHERE g.cui = pr.cui AND g.sursa IN ('deget', 'gps')
+          )
+        ON CONFLICT (cui) DO UPDATE
+          SET lat = EXCLUDED.lat, lng = EXCLUDED.lng,
+              aprox = FALSE, failed = FALSE, sursa = 'import', updated_at = NOW()
+      `;
+      if (r.count > 0) rez.locuriPuse++;
+    }
   }
 
   // 2) Restul devin puncte de prospectare, ca cele din harta veche.
