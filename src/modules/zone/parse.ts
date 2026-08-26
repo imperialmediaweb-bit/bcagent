@@ -35,15 +35,28 @@ export function neted(s: string): string {
     .trim();
 }
 
+/**
+ * Cum scriu oamenii zilele, adus la litere simple. LISTĂ ÎNCHISĂ, nu
+ * „începe cu": în România există sate care încep exact ca o zi — JOIȚA,
+ * VINERIA, MARTINEȘTI, LUNCA. Cu regula „prefixul e de-ajuns" satul
+ * dispărea din zonă, citit ca zi. Mai bine nu recunoaștem o formă
+ * ciudată de zi (omul o vede în confirmare) decât să pierdem un sat.
+ */
+const FORME_ZI: Record<string, Zi> = {
+  luni: "luni", lunea: "luni", lun: "luni",
+  marti: "marti", martii: "marti", martea: "marti", mart: "marti",
+  miercuri: "miercuri", miercurea: "miercuri", mierc: "miercuri", mircuri: "miercuri",
+  joi: "joi", joia: "joi",
+  vineri: "vineri", vinerea: "vineri", vin: "vineri", vineri1: "vineri",
+  sambata: "sambata", simbata: "sambata", sambat: "sambata", simbat: "sambata",
+  sambăta: "sambata", sam: "sambata", sb: "sambata",
+  duminica: "duminica", dumineca: "duminica", dum: "duminica", duminia: "duminica",
+};
+
 /** Ziua din capul rândului („Marți:", „marti -", „MARTI") sau null. */
 export function ziDinText(bucata: string): Zi | null {
   const n = neted(bucata).replace(/[^a-z]/g, "");
-  for (const z of ZILE) {
-    // „marti", „marţi", „martii" — prefixul e de-ajuns.
-    if (n === z || n.startsWith(z)) return z;
-  }
-  if (n.startsWith("sambat") || n.startsWith("simbat")) return "sambata";
-  return null;
+  return FORME_ZI[n] ?? null;
 }
 
 export interface ZonaLinie {
@@ -66,20 +79,18 @@ export function parseZone(text: string): ZonaLinie[] {
     let rand = randBrut.trim();
     if (!rand) continue;
 
-    // „luni - ..." / „Marți: ..." / „luni ..." — ziua din capul rândului.
-    const cuSeparator = rand.match(/^([A-Za-zĂÂÎȘȚăâîșț]+)\s*[-–:.]\s*(.*)$/);
-    if (cuSeparator) {
-      const z = ziDinText(cuSeparator[1]);
+    // Ziua din capul rândului, scrisă oricum: „luni - …", „Marți: …",
+    // „joi-ungureni" (fără spațiu), „miercuri hudesti".
+    // Luăm DOAR literele de la început: dacă satul e lipit de zi
+    // („marţi-Dorohoi"), altfel îl înghițeam odată cu ziua.
+    // Clasa include și ş/ţ cu sedilă (cele de pe tastatura veche și din
+    // Word), nu doar ș/ț cu virgulă — pe teren apar amândouă.
+    const cap = rand.match(/^[A-Za-zĂÂÎȘȚŞŢăâîșțşţ]+/);
+    if (cap) {
+      const z = ziDinText(cap[0]);
       if (z) {
         ziCurenta = z;
-        rand = cuSeparator[2];
-      }
-    } else {
-      const primulCuvant = rand.split(/[\s,;]+/)[0] ?? "";
-      const z = ziDinText(primulCuvant);
-      if (z) {
-        ziCurenta = z;
-        rand = rand.slice(primulCuvant.length);
+        rand = rand.slice(cap[0].length).replace(/^[\s\-–:.]+/, "");
       }
     }
 
@@ -119,10 +130,13 @@ export function potriveste(
   const exact = perechi.find((p) => p.n === n);
   if (exact) return { oficial: exact.c, sugestii: [] };
 
-  // „vf campului" ↔ „VIRFUL CAMPULUI": scoatem prescurtările uzuale.
+  // „vf. campului" ↔ „VIRFUL CAMPULUI": scoatem prescurtările uzuale.
+  // PUNCTUL PRIMUL: fără el, „vf." rămânea „virful." și nu mai semăna cu
+  // nimic — satul se pierdea din zonă în tăcere.
   const fara = n
-    .replace(/\bvf\.?\b/g, "virful")
-    .replace(/\bsat\b|\bcom\.?\b|\bmun\.?\b|\bors\.?\b|\boras\b/g, "")
+    .replace(/\./g, " ")
+    .replace(/\bvf\b/g, "virful")
+    .replace(/\b(sat|com|mun|municipiul|comuna|ors|oras|orasul)\b/g, "")
     .replace(/\s+/g, " ")
     .trim();
   const exact2 = perechi.find((p) => p.n === fara);
@@ -141,11 +155,49 @@ export function potriveste(
   if (incepe.length === 1) return { oficial: incepe[0].c, sugestii: [] };
   if (contine.length === 1) return { oficial: contine[0].c, sugestii: [] };
 
-  const sugestii = [...incepe, ...contine]
+  let sugestii = [...incepe, ...contine]
     .map((p) => p.c)
     .filter((v, i, a) => a.indexOf(v) === i)
     .slice(0, 5);
+
+  // SCRIS STRICAT RĂU („sendirceim" în loc de „Sendriceni"): niciun
+  // început și niciun cuprins nu se potrivesc. Atunci căutăm satele cu
+  // litere APROAPE la fel și le propunem — ca SUGESTIE, nu ca răspuns.
+  // Ghicitul automat aici ar duce agentul în alt sat; întrebarea, nu.
+  if (sugestii.length === 0 && fara.length >= 4) {
+    sugestii = perechi
+      .map((p) => ({ c: p.c, d: distanta(fara, p.n) }))
+      // Cel mult ~40% din nume greșit — peste atât nu mai e o scăpare de
+      // tastatură, e alt cuvânt, și n-are rost să-l propunem.
+      .filter((x) => x.d <= Math.max(1, Math.floor(fara.length * 0.4)))
+      .sort((a, b) => a.d - b.d)
+      .slice(0, 3)
+      .map((x) => x.c);
+  }
   return { oficial: null, sugestii };
+}
+
+/**
+ * Câte litere trebuie schimbate ca un cuvânt să devină celălalt
+ * (Levenshtein). Folosită DOAR ca să propunem variante omului, niciodată
+ * ca să alegem în locul lui.
+ */
+function distanta(a: string, b: string): number {
+  // Diferență mare de lungime → nici n-are rost să calculăm.
+  if (Math.abs(a.length - b.length) > 6) return 99;
+  let precedent = Array.from({ length: b.length + 1 }, (_, i) => i);
+  for (let i = 1; i <= a.length; i++) {
+    const curent = [i];
+    for (let j = 1; j <= b.length; j++) {
+      curent[j] = Math.min(
+        precedent[j] + 1, // ștergere
+        curent[j - 1] + 1, // inserare
+        precedent[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1), // schimbare
+      );
+    }
+    precedent = curent;
+  }
+  return precedent[b.length];
 }
 
 /** Sparge „sendriceni dorohoi" în [ȘENDRICENI, DOROHOI], dacă se poate
