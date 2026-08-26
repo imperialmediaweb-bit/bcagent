@@ -45,6 +45,8 @@ interface Automat {
   legate?: number;
   neatinse?: number;
   cuCuiNecunoscut?: number;
+  firmeNoi?: number;
+  cuiStricat?: number;
   sarite?: { faraLocPeHarta: number; inafara: number; liniiSiZone: number };
   nepotrivite: Rand[];
 }
@@ -391,14 +393,32 @@ export default function HartaImportPage() {
           {/* DE CE N-AU INTRAT RESTUL. Fără rândul ăsta, „1634 n-am putut
               lega" nu spune nimic: omul nu poate ști dacă e vina potrivirii
               sau pur și simplu firme pe care nu le avem în bază. */}
-          {(gata.cuCuiNecunoscut ?? 0) > 0 && (
+          {(gata.firmeNoi ?? 0) > 0 && (
+            <p className="mt-2 break-words rounded-lg bg-emerald-50 p-3 text-sm leading-snug text-emerald-900">
+              🏪 <b>{gata.firmeNoi}</b> firme din hartă <b>nu existau în bază</b>{" "}
+              — le-am adus: cu denumirea din acte, cu CUI-ul lor, cu adresa cu
+              număr de casă și cu locul exact de pe hartă. Sunt firme
+              adevărate, la ușa cărora agenții tăi au fost deja. Le găsești în
+              Clienți, ca prospecți — nealocate, până le dai tu cuiva.
+            </p>
+          )}
+          {(gata.cuiStricat ?? 0) > 0 && (
+            <p className="mt-1 break-words text-xs leading-snug text-slate-500">
+              {gata.cuiStricat} pinuri aveau ceva scris în locul CUI-ului, dar
+              nu era un CUI adevărat (cifra de control nu iese). Alea n-au
+              intrat în registru — au rămas doar puncte pe hartă. Registrul e
+              comun tuturor firmelor de pe platformă; un rând greșit acolo îl
+              vede toată lumea.
+            </p>
+          )}
+          {(gata.cuCuiNecunoscut ?? 0) > (gata.firmeNoi ?? 0) && (
             <p className="mt-2 break-words rounded-lg bg-amber-50 p-3 text-xs leading-snug text-amber-900">
-              <b>{gata.cuCuiNecunoscut}</b> pinuri au CUI, dar firmele alea{" "}
-              <b>nu există în baza noastră</b> — nu-i vina potrivirii, pur și
-              simplu nu le avem. Nu-s pierdute: le-am păstrat cu numele lor,
-              CUI-ul lor și adresa lor, iar agenții le văd pe hartă la
-              „Magazine de prospectat". Când unul dintre ele merită să devină
-              client, îl adaugi din listă.
+              Restul de{" "}
+              <b>{(gata.cuCuiNecunoscut ?? 0) - (gata.firmeNoi ?? 0)}</b> sunt
+              al doilea, al treilea… magazin al unor firme pe care le avem
+              deja. Firma ține un singur loc, deci celelalte magazine ale ei
+              rămân pe hartă ca puncte — cu numele și adresa lor. Așa agentul
+              știe că are șase opriri acolo, nu una.
             </p>
           )}
           <p className="mt-1 break-words text-xs leading-snug text-slate-500">

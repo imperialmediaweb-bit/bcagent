@@ -1,4 +1,6 @@
 import { getDB } from "@/lib/db";
+import { normalizeCounty } from "./caen";
+import { cuiValid, curataCui } from "./cui";
 import type { PunctKML } from "./kml";
 import { cheieMagazin, neted, potriveștePuncte } from "./potrivire";
 import type { Potrivire } from "./potrivire";
@@ -58,6 +60,13 @@ export interface RezultatHarta {
    * dacă e vina potrivirii sau pur și simplu firme pe care nu le avem.
    */
   cuCuiNecunoscut: number;
+  /**
+   * Firme ADUSE ÎN REGISTRU din hartă: aveau CUI valid, nume, adresă cu
+   * număr și loc exact, dar nu existau nicăieri la noi.
+   */
+  firmeNoi: number;
+  /** Aveau CUI, dar cifra de control zice că nu-i CUI: nu le-am băgat. */
+  cuiStricat: number;
   totalClienti: number;
   totalDinRegistru: number;
   /** Potrivirile, ca să le poată arăta ruta pe ecran. */
@@ -197,6 +206,8 @@ export async function aplicaHarta(
     ).length,
     adreseCuNumar: puncte.filter((p) => /\d/.test(String(p.adresa ?? ""))).length,
     clientiCuLoc: 0,
+    firmeNoi: 0,
+    cuiStricat: 0,
     totalClienti: clienti,
     totalDinRegistru: registru,
     cuCuiNecunoscut: puncte.filter((p) => {
@@ -284,11 +295,105 @@ export async function aplicaHarta(
     }
   }
 
+  // ── FIRMELE PE CARE NU LE AVEAM ──
+  //
+  // Din harta lui Bogdan, 1634 de pinuri au CUI-uri care nu-s nicăieri în
+  // registrul nostru. Nu-s greșeli: sunt firme adevărate, cu nume, cod
+  // fiscal, adresă cu număr și loc pus de mână de cineva care a fost
+  // acolo. Registrul de la Finanțe nu le-a adus (PFA-uri, firme din alte
+  // județe) — dar ele există și agenții lor au fost deja la ușa lor.
+  //
+  // Le aducem în registru ca PROSPECȚI, nealocate: registrul e comun, iar
+  // un CUI cu o denumire și o adresă e un FAPT, nu o informație
+  // comercială. Ce e al firmei — cine e clientul cui, ce s-a vorbit —
+  // rămâne mascat, ca la toate celelalte.
+  //
+  // Două paze, fiindcă un rând stricat aici îl vede toată platforma:
+  //   · CIFRA DE CONTROL a CUI-ului. Un telefon, un an, un cod intern —
+  //     niciunul nu trece. Ce nu trece rămâne doar punct pe hartă.
+  //   · `DO NOTHING` la conflict: nu atingem NICIODATĂ o firmă existentă.
+  const orfaneCuCui: Array<{ p: Potrivire; cui: string }> = [];
+  const cuiuriNoi = new Set<string>();
+  for (const p of potriviri) {
+    if (p.client) continue;
+    const k = p.punct as PunctKML;
+    const brut = String(k.cui ?? "");
+    if (curataCui(brut) === "") continue;
+    if (!cuiValid(brut)) {
+      rez.cuiStricat++;
+      continue;
+    }
+    const cui = curataCui(brut);
+    if (stiute.has(cui) || cuiuriNoi.has(cui)) continue;
+    cuiuriNoi.add(cui);
+    orfaneCuCui.push({ p, cui });
+  }
+
+  if (!doarVezi && orfaneCuCui.length > 0) {
+    const randuri = orfaneCuCui.slice(0, 20000).map(({ p, cui }) => {
+      const k = p.punct as PunctKML;
+      return {
+        cui,
+        // Denumirea din acte, dacă pinul o are; altfel numele de pe firmă.
+        denumire: (k.numeLegal || p.punct.nume).slice(0, 200),
+        adresa: String(k.adresa ?? "").slice(0, 300),
+        localitate: String(k.localitate ?? "").slice(0, 120),
+        judet: normalizeCounty(String(k.judet ?? "")).slice(0, 2),
+        status: "nou",
+      };
+    });
+    for (let i = 0; i < randuri.length; i += 500) {
+      const bucata = randuri.slice(i, i + 500);
+      const r = await db`
+        INSERT INTO prospects ${db(
+          bucata,
+          "cui", "denumire", "adresa", "localitate", "judet", "status",
+        )}
+        -- NICIODATĂ peste o firmă care există deja. Dacă a apărut între
+        -- timp, a ei e denumirea de la Finanțe, nu cea de pe hartă.
+        ON CONFLICT (cui) DO NOTHING
+      `;
+      rez.firmeNoi += r.count;
+    }
+    // Și LOCUL lor, care e tot ce le face folositoare: pus de mână, exact.
+    for (const { p, cui } of orfaneCuCui) {
+      await db`
+        INSERT INTO geo_firme (cui, lat, lng, aprox, failed, sursa)
+        SELECT pr.cui, ${p.punct.lat}, ${p.punct.lng}, FALSE, FALSE, 'import'
+        FROM prospects pr
+        WHERE pr.cui = ${cui}
+          -- NU SCRIEM PE FIRMELE ALTEI AGENȚII. Un CUI din harta noastră
+          -- poate fi clientul vecinului: firma lui nu se atinge, nici
+          -- măcar cu o coordonată. Testul a prins-o — fără rândul ăsta,
+          -- importul lui Bogdan muta locurile clienților altcuiva.
+          AND (COALESCE(pr.assigned_agent, '') = ''
+               OR pr.assigned_agent = ANY(${agenti}))
+          AND NOT EXISTS (
+            SELECT 1 FROM geo_firme g
+            WHERE g.cui = pr.cui AND g.sursa IN ('deget', 'gps')
+          )
+        ON CONFLICT (cui) DO UPDATE
+          SET lat = EXCLUDED.lat, lng = EXCLUDED.lng,
+              aprox = FALSE, failed = FALSE, sursa = 'import', updated_at = NOW()
+      `;
+    }
+  }
+
   // ── MAGAZINELE FĂRĂ PERECHE ──
   // Nu se aruncă: sunt magazine adevărate, cu locul pus de mână de cineva
   // care a fost acolo. Fără CUI n-au ce căuta în registrul comun, unde
   // le-ar vedea toate agențiile — stau ale firmei care le-a adus.
-  const orfane = potriviri.filter((p) => !p.client);
+  // PRIMUL pin al unei firme noi îi devine locul ei pe hartă — n-are rost
+  // să-l punem și ca punct mov alături: agentul ar vedea două lucruri
+  // pentru același magazin și n-ar ști la care să intre.
+  //
+  // AL DOILEA pin al ACELEIAȘI firme rămâne însă punct pe hartă, dinadins:
+  // e al doilea magazin al ei. Ovi Tacomax are șase, iar unul dintre
+  // clienții din harta lui Bogdan are treizeci. Firma ține un singur loc;
+  // restul magazinelor ar dispărea dacă nu le-am păstra aici — și agentul
+  // ar crede că are o oprire, când are șase.
+  const devenitFirma = new Set(orfaneCuCui.map((x) => x.p));
+  const orfane = potriviri.filter((p) => !p.client && !devenitFirma.has(p));
   if (!doarVezi && orfane.length > 0) {
     const randuri = orfane.slice(0, 20000).map((p) => {
       const k = p.punct as PunctKML;
