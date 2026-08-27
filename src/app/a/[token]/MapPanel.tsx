@@ -928,6 +928,7 @@ export default function MapPanel({
           const dinOSM = m.strat === "OpenStreetMap";
           const alClientului = m.eAlClientului === true;
           const bifat = magVizitat.includes(m.id);
+          const inRutaMag = basket.some((s) => s.magazinId === m.id);
           const culoare = alClientului ? "#059669" : "#7c3aed";
           const punct = L.circleMarker([m.lat, m.lng], {
             radius: alClientului ? 6 : 5,
@@ -960,6 +961,7 @@ export default function MapPanel({
                       : "magazin din harta veche — nimeni n-a trecut încă pe la el"
               }</div>
               <a href="${escHtml(gmapsDir(`${m.lat},${m.lng}`))}" target="_blank" rel="noopener" style="display:flex;align-items:center;justify-content:center;min-height:40px;margin-top:8px;font-size:13px;font-weight:700;color:#1d4ed8;text-decoration:none;background:#eff6ff;border-radius:8px">🧭 Navighează</a>
+              <button data-mag-ruta="${escHtml(m.id)}" style="display:block;width:100%;min-height:40px;margin-top:6px;font-size:13px;font-weight:700;color:${inRutaMag ? "#b91c1c" : "#4f46e5"};background:${inRutaMag ? "#fee2e2" : "#eef2ff"};border:none;border-radius:8px;cursor:pointer">${inRutaMag ? "− Scoate din rută" : "+ Pune în rută"}</button>
               ${
                 // LA MAGAZINUL UNUI CLIENT nu întrebi „există?" — știi că
                 // există, e clientul tău. Întrebarea e dacă ai trecut pe
@@ -981,6 +983,17 @@ export default function MapPanel({
           );
           // Butoanele din balonaș prind viață abia când se deschide.
           punct.on("popupopen", () => {
+            const bRuta = document.querySelector<HTMLButtonElement>(
+              `[data-mag-ruta="${CSS.escape(m.id)}"]`,
+            );
+            bRuta?.addEventListener(
+              "click",
+              () => {
+                toggleStopMagazin(m);
+                map.closePopup();
+              },
+              { once: true },
+            );
             const bVizita = document.querySelector<HTMLButtonElement>(
               `[data-mag-vizita="${CSS.escape(m.id)}"]`,
             );
@@ -1244,6 +1257,42 @@ export default function MapPanel({
   // randare — la 40 de opriri însemna 20 de linkuri construite degeaba).
   const planCos = useMemo(() => planRoute(basket, [], judet), [basket, judet]);
 
+  /**
+   * Magazinul de pe hartă intră în rută ca oprire de sine stătătoare.
+   * Cheia e MAGAZINUL (id-ul lui), nu CUI-ul: un client cu șase magazine
+   * poate avea trei în rută deodată, iar un magazin de prospectat fără
+   * CUI e o oprire la fel de bună — are loc exact și nume.
+   */
+  function toggleStopMagazin(m: {
+    id: string;
+    nume: string;
+    adresa: string;
+    lat: number;
+    lng: number;
+    cui?: string;
+    firma?: string;
+  }) {
+    setBasket((b) =>
+      b.some((s) => s.magazinId === m.id)
+        ? b.filter((s) => s.magazinId !== m.id)
+        : [
+            ...b,
+            {
+              cui: m.cui ?? "",
+              magazinId: m.id,
+              denumire: m.firma ? `${m.firma} · ${m.nume}` : m.nume,
+              adresa: m.adresa,
+              localitate: "",
+              judet,
+              telefon: "",
+              lat: m.lat,
+              lng: m.lng,
+            },
+          ].slice(0, 40),
+    );
+    setActiveRouteId(null);
+  }
+
   function toggleStop(f: Firm, pozitie?: { lat?: number; lng?: number }) {
     // Dacă firma are pin exact pe hartă, ducem coordonatele în oprire —
     // ruta se navighează pe ele, nu pe adresa de sat.
@@ -1252,8 +1301,10 @@ export default function MapPanel({
     const gasit = pins.find((p) => p.cui === f.cui && !p.aprox);
     const pin = pozitie ?? gasit;
     setBasket((b) =>
-      b.some((s) => s.cui === f.cui)
-        ? b.filter((s) => s.cui !== f.cui)
+      // Doar oprirea-FIRMĂ (fără magazin): magazinele aceleiași firme au
+      // fiecare rândul lor și nu se ating când scoți firma.
+      b.some((s) => s.cui === f.cui && !s.magazinId)
+        ? b.filter((s) => !(s.cui === f.cui && !s.magazinId))
         : [
             ...b,
             {
