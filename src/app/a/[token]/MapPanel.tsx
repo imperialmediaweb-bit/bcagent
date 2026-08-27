@@ -270,6 +270,20 @@ export default function MapPanel({
     }>
   >([]);
   const [aratMag, setAratMag] = useState(false);
+  // ADAUGĂ UN MAGAZIN DE PE TEREN. Ghidul promitea de ieri „apasă pe
+  // hartă și scrie-i numele" — API-ul era gata, butonul lipsea. Exact
+  // felul de gol care l-a trimis pe Costin să caute butoane inexistente.
+  // Modul stă și într-un ref: hartei i se leagă apăsarea O dată, la
+  // construire, și de-acolo citește valoarea de acum, nu pe cea veche.
+  const [adaugMagazin, setAdaugMagazin] = useState(false);
+  const adaugMagazinRef = useRef(false);
+  useEffect(() => {
+    adaugMagazinRef.current = adaugMagazin;
+  }, [adaugMagazin]);
+  /** Locul apăsat pe hartă + numele scris — până la salvare. */
+  const [magNou, setMagNou] = useState<{ lat: number; lng: number } | null>(null);
+  const [magNouNume, setMagNouNume] = useState("");
+  const [magNouSalvez, setMagNouSalvez] = useState(false);
   const [doarZona, setDoarZona] = useState(false);
   // CUI-urile bifate azi („Am fost") — o rută lungă se continuă a doua zi
   // exact de unde a rămas, fără opririle deja făcute.
@@ -445,6 +459,60 @@ export default function MapPanel({
     },
     [token],
   );
+
+  /** Salvează magazinul adăugat de pe teren, prin API-ul care exista deja. */
+  const salveazaMagazinNou = useCallback(async () => {
+    if (!magNou || magNouNume.trim().length < 2) {
+      setToast("Scrie numele magazinului — două litere măcar.");
+      setTimeout(() => setToast(null), 2500);
+      return;
+    }
+    setMagNouSalvez(true);
+    try {
+      const r = await fetch("/api/prospects/magazine-harta", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          token,
+          adauga: { nume: magNouNume.trim(), lat: magNou.lat, lng: magNou.lng },
+        }),
+      });
+      const d = (await r.json().catch(() => null)) as {
+        error?: string;
+        id?: string;
+      } | null;
+      if (!r.ok) {
+        setToast(d?.error ?? "N-am putut salva. Încearcă din nou.");
+        setTimeout(() => setToast(null), 3000);
+        return;
+      }
+      // Apare pe hartă PE LOC — altfel omul crede că n-a mers și-l pune
+      // a doua oară.
+      setMagHarta((l) => [
+        ...l,
+        {
+          id: d?.id ?? `nou:${magNou.lat}:${magNou.lng}`,
+          nume: magNouNume.trim(),
+          adresa: "",
+          lat: magNou.lat,
+          lng: magNou.lng,
+          strat: "pus de agent",
+          confirmat: true,
+        },
+      ]);
+      setAratMag(true);
+      setToast(`„${magNouNume.trim()}" e pe hartă. Mulțumesc!`);
+      setTimeout(() => setToast(null), 3000);
+      setMagNou(null);
+      setMagNouNume("");
+      setAdaugMagazin(false);
+    } catch {
+      setToast("Fără semnal — încearcă din nou când prinzi rețea.");
+      setTimeout(() => setToast(null), 3000);
+    } finally {
+      setMagNouSalvez(false);
+    }
+  }, [token, magNou, magNouNume]);
 
   /**
    * „AM FOST LA MAGAZINUL ĂSTA."
@@ -764,6 +832,13 @@ export default function MapPanel({
             '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
         }).addTo(map);
         leafletRef.current = { L, map, layer: L.layerGroup().addTo(map) };
+
+        // Apăsarea pe hartă, când modul „adaug magazin" e pornit: ținem
+        // minte locul și-i cerem omului doar numele.
+        map.on("click", (e: LType.LeafletMouseEvent) => {
+          if (!adaugMagazinRef.current) return;
+          setMagNou({ lat: e.latlng.lat, lng: e.latlng.lng });
+        });
 
         // Harta se construiește uneori cât timp secțiunea e ascunsă (agentul
         // e pe alt meniu) sau într-un chenar care abia apoi capătă lățime.
@@ -1361,6 +1436,25 @@ export default function MapPanel({
           >
             📍 {aratPins ? "Ascunde clienții de pe hartă" : "Arată clienții pe hartă"}
           </button>
+          {/* ADAUGĂ UN MAGAZIN DE PE TEREN. Fișierul firmei n-o să fie
+              complet niciodată — „Lunca magazin" și „Lunca bar" nu erau în
+              el, dar Bogdan le știa pe de rost. Agentul e acolo: pornește
+              modul, apasă pe hartă unde e magazinul, îi scrie numele. */}
+          <button
+            type="button"
+            onClick={() => {
+              setAdaugMagazin((v) => !v);
+              setMagNou(null);
+              setMagNouNume("");
+            }}
+            className={`inline-flex min-h-9 items-center gap-1.5 rounded-full px-3 py-2 text-xs font-semibold transition ${
+              adaugMagazin
+                ? "bg-emerald-600 text-white shadow-sm"
+                : "bg-emerald-50 text-emerald-700 hover:bg-emerald-100"
+            }`}
+          >
+            ➕ {adaugMagazin ? "Renunț la adăugare" : "Adaugă magazin"}
+          </button>
           {/* ZONA DE AZI: harta arată tot județul, dar agentul umblă azi în
               câteva sate. Butonul apare doar dacă are zonă pusă pe ziua
               curentă — altfel n-ar avea ce filtra. */}
@@ -1488,6 +1582,56 @@ export default function MapPanel({
         <div className="grid min-w-0 lg:grid-cols-5">
           <div className="relative min-w-0 lg:col-span-3">
             <div ref={mapRef} className="h-[420px] w-full" />
+            {/* Îndrumarea din modul de adăugare — omul trebuie să știe CE
+                urmează, altfel apasă pe hartă și „nu se întâmplă nimic". */}
+            {adaugMagazin && !magNou && (
+              <p className="border-t border-emerald-100 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-800">
+                Apasă pe hartă exact unde e magazinul. Apoi îi scrii numele.
+              </p>
+            )}
+            {adaugMagazin && magNou && (
+              <div className="border-t border-emerald-100 bg-emerald-50 p-4">
+                <label className="text-xs font-semibold text-emerald-900">
+                  Cum se cheamă magazinul de aici?
+                </label>
+                <div className="mt-2 flex flex-col gap-2 sm:flex-row">
+                  <input
+                    value={magNouNume}
+                    onChange={(e) => setMagNouNume(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") void salveazaMagazinNou();
+                    }}
+                    placeholder="ex: Magazin Mixt La Vasile"
+                    autoFocus
+                    className="min-h-11 w-full rounded-lg border border-emerald-200 bg-white px-3 py-2 text-sm focus:border-emerald-400 focus:outline-none"
+                  />
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => void salveazaMagazinNou()}
+                      disabled={magNouSalvez}
+                      className="min-h-11 shrink-0 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-bold text-white shadow-sm hover:bg-emerald-700 disabled:opacity-60"
+                    >
+                      {magNouSalvez ? "Se salvează…" : "✅ Salvează"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setMagNou(null);
+                        setMagNouNume("");
+                      }}
+                      className="min-h-11 shrink-0 rounded-lg border border-emerald-200 bg-white px-3 py-2 text-sm font-medium text-emerald-800"
+                    >
+                      Alt loc
+                    </button>
+                  </div>
+                </div>
+                <p className="mt-2 text-xs text-emerald-700">
+                  Locul ales: {magNou.lat.toFixed(5)}, {magNou.lng.toFixed(5)}.
+                  Dacă nu e bine, apasă „Alt loc" și apasă din nou pe hartă.
+                </p>
+              </div>
+            )}
             {(loading || geocoding > 0) && (
               <div className="pointer-events-none absolute right-3 top-3 z-[1000] flex items-center gap-2 rounded-full bg-white/95 px-3 py-1.5 text-xs font-medium text-slate-600 shadow">
                 <Loader2 className="h-3.5 w-3.5 animate-spin" />

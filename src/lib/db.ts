@@ -162,17 +162,26 @@ export async function ensureSchema(): Promise<void> {
     -- două firme au agenți cu același nume, nu se poate ști cine pe cine
     -- a alocat, iar o ghiceală ar muta clienți dintr-o firmă în alta.
     -- Alea rămân goale și se poartă ca înainte, până le atinge cineva.
-    UPDATE prospects p
-    SET assigned_org = x.org_id
-    FROM (
-      SELECT name, MIN(org_id) AS org_id
-      FROM org_agents
-      GROUP BY name
-      HAVING COUNT(DISTINCT org_id) = 1
-    ) x
-    WHERE p.assigned_org = ''
-      AND COALESCE(p.assigned_agent,'') <> ''
-      AND p.assigned_agent = x.name;
+    -- Pe o instalare NOUĂ tabelul agenților încă nu există (îl face
+    -- schema platformei, care rulează după asta) — iar fără paza de aici,
+    -- prima pornire a unui client proaspăt crăpa înainte să apuce să facă
+    -- orice. Testul de ecran a prins-o pe o bază goală.
+    DO $$
+    BEGIN
+      IF to_regclass('org_agents') IS NOT NULL THEN
+        UPDATE prospects p
+        SET assigned_org = x.org_id
+        FROM (
+          SELECT name, MIN(org_id) AS org_id
+          FROM org_agents
+          GROUP BY name
+          HAVING COUNT(DISTINCT org_id) = 1
+        ) x
+        WHERE p.assigned_org = ''
+          AND COALESCE(p.assigned_agent,'') <> ''
+          AND p.assigned_agent = x.name;
+      END IF;
+    END $$;
     -- Problemele raportate din platformă (de agenți/manageri sau automat),
     -- cu diagnosticul AI atașat — adminul le vede în /platform/probleme.
     CREATE TABLE IF NOT EXISTS issues (
