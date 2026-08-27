@@ -918,7 +918,39 @@ export default function MapPanel({
       // firme din registru, deci nu intră în bule și n-au buton de vizită —
       // sunt locuri de prospectat, cu drum gata știut.
       if (aratMag && magHarta.length > 0) {
+        // „DOAR ZONA DE AZI" TREBUIE SĂ ȚINĂ ȘI MAGAZINELE.
+        // Filtrul ascundea satele din alte zone, dar magazinele mov
+        // rămâneau din tot județul — fix pe dos: agentul vrea să vadă
+        // ce e de prospectat PE DRUMUL LUI de azi. Multe magazine n-au
+        // satul scris pe ele (cele de pe OpenStreetMap), așa că filtrăm
+        // după apropierea de satele zilei: ~4 km în jurul fiecăruia
+        // acoperă satul cu tot cu marginea lui.
+        const centreAzi =
+          doarZona && satAzi.size > 0
+            ? localities.filter(
+                (l) =>
+                  l.lat !== null &&
+                  l.lng !== null &&
+                  satAzi.has(normLoc(l.localitate)),
+              )
+            : [];
+        const inZonaAzi = (lat: number, lng: number): boolean => {
+          if (!doarZona || satAzi.size === 0) return true;
+          // 0,04° latitudine ≈ 4,4 km; la longitudine compensăm cosinusul.
+          return centreAzi.some(
+            (c) =>
+              Math.abs((c.lat as number) - lat) < 0.04 &&
+              Math.abs((c.lng as number) - lng) < 0.06,
+          );
+        };
         for (const m of magHarta) {
+          if (
+            !inZonaAzi(m.lat, m.lng) &&
+            // Ce e deja în ruta lui rămâne vizibil, oriunde ar fi.
+            !basket.some((s) => s.magazinId === m.id)
+          ) {
+            continue;
+          }
           // DOUĂ FELURI DE LOCURI, ȘI SE VĂD DIFERIT.
           //
           // Mov = de prospectat: n-am fost acolo, poate merită.
