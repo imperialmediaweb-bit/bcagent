@@ -58,6 +58,8 @@ interface Gasit {
 interface Negasit {
   scris: string;
   sugestii: string[];
+  /** Zilele în care apare — un răspuns le acoperă pe toate. */
+  zile?: string[];
   /** E o zonă (un ținut), nu un sat scris greșit. */
   zona?: boolean;
 }
@@ -304,6 +306,13 @@ export default function ZonePanel({
                 {negasite.map((n, i) => (
                   <li key={i} className="break-words text-sm leading-snug text-amber-900">
                     „{n.scris}"
+                    {(n.zile?.length ?? 0) > 1 && (
+                      <span className="text-amber-700">
+                        {" "}
+                        · apare {n.zile!.join(" și ")} — alegi o dată, intră
+                        în toate
+                      </span>
+                    )}
                     {n.zona ? (
                       <span className="text-amber-700">
                         {" "}

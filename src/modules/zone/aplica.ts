@@ -34,6 +34,13 @@ export interface ZonaNegasita {
   scris: string;
   sugestii: string[];
   /**
+   * ZILELE în care apare vorba asta în text. „Catamarasti" scris și
+   * luni, și joi e ACEEAȘI nedumerire — se arată o dată, iar alegerea
+   * omului se întinde pe toate zilele. Fără asta, alegerea se lipea de
+   * o singură zi, iar joi rămânea fără sat deși omul alesese deja.
+   */
+  zile: string[];
+  /**
    * E o zonă (un ținut), nu un sat scris greșit. Atunci nu are rost să-i
    * propunem sate asemănătoare — trebuie să scrie el care sunt.
    */
@@ -305,7 +312,28 @@ export function citesteZone(
   aliasuri?: Map<string, string>,
 ): CititeZone {
   const gasite: ZonaGasita[] = [];
-  const negasite: ZonaNegasita[] = [];
+  // Negăsitele, UNA per vorbă: aceeași scriere în zile diferite se
+  // strânge într-un singur rând, cu toate zilele pe el.
+  const negasiteM = new Map<string, ZonaNegasita>();
+  const nuGasit = (
+    zi: string,
+    scris: string,
+    sugestii: string[],
+    zona?: boolean,
+  ) => {
+    const k = neted(scris);
+    const are = negasiteM.get(k);
+    if (are) {
+      if (zi && !are.zile.includes(zi)) are.zile.push(zi);
+      return;
+    }
+    negasiteM.set(k, {
+      scris,
+      sugestii,
+      zile: zi ? [zi] : [],
+      ...(zona ? { zona: true } : {}),
+    });
+  };
   const vazute = new Set<string>();
   const adauga = (zi: string, oficial: string, scris: string, cum?: string) => {
     const cheie = `${zi}|${neted(oficial)}`;
@@ -360,11 +388,7 @@ export function citesteZone(
       // agent înseamnă un drum degeaba și o cifră falsă în raport. Îi
       // spunem ce e și-l rugăm să scrie satele: el le știe, noi nu.
       if (pareZona(n)) {
-        negasite.push({
-          scris: c.localitate,
-          sugestii: [],
-          zona: true,
-        });
+        nuGasit(c.zi, c.localitate, [], true);
         continue;
       }
 
@@ -383,7 +407,7 @@ export function citesteZone(
           (g) => g.zi === c.zi && neted(g.localitate) === neted(oras) && g.cum,
         );
         if (!dinAceeasiZi) {
-          negasite.push({ scris: c.localitate, sugestii: p.sugestii });
+          nuGasit(c.zi, c.localitate, p.sugestii);
           continue;
         }
       }
@@ -396,17 +420,38 @@ export function citesteZone(
           `${c.localitate} e cartier în ${alOras} — am pus tot orașul, ca să nu-ți lipsească niciun client de acolo`,
         );
       } else {
-        negasite.push({ scris: c.localitate, sugestii: p.sugestii });
+        nuGasit(c.zi, c.localitate, p.sugestii);
       }
     }
   }
-  return { gasite, negasite };
+  return { gasite, negasite: [...negasiteM.values()] };
 }
 
 /**
  * Scrie zona unui agent. ÎNLOCUIEȘTE tot ce avea (nu adună) — omul
  * retrimite lista întreagă când și-o schimbă, nu diferențe.
  */
+/**
+ * ÎNTINDE ALEGEREA OMULUI PE TOATE ZILELE UNDE A SCRIS ACEA VORBĂ.
+ *
+ * „Catamarasti" apare și luni, și joi; omul alege o dată
+ * Cătămărăști-Deal. Fără funcția asta, alegerea se lipea de o singură
+ * zi — iar joi rămânea fără sat, deși omul răspunsese deja. Aceeași
+ * vorbă, același răspuns, toate zilele ei.
+ *
+ * Întoarce zilele țintă pentru o alegere: cele de pe rândul negăsit cu
+ * aceeași scriere, sau ziua trimisă de ecran dacă nu-l găsim.
+ */
+export function zileleAlegerii(
+  negasite: ZonaNegasita[],
+  pentru: string,
+  ziDinEcran: string,
+): string[] {
+  const rand = negasite.find((n) => neted(n.scris) === neted(pentru));
+  if (rand && rand.zile.length > 0) return rand.zile;
+  return [ziDinEcran];
+}
+
 export async function salveazaZone(
   db: DB,
   orgId: string,

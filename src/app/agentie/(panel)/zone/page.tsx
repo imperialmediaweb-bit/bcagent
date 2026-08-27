@@ -37,7 +37,13 @@ interface AgentZone {
 }
 interface Verificare {
   gasite: Array<{ zi: string; localitate: string; scris: string }>;
-  negasite: Array<{ scris: string; sugestii: string[]; zona?: boolean }>;
+  negasite: Array<{
+    scris: string;
+    sugestii: string[];
+    /** Zilele în care apare — un răspuns le acoperă pe toate. */
+    zile?: string[];
+    zona?: boolean;
+  }>;
   salvate?: number;
 }
 
@@ -334,6 +340,13 @@ miercuri - Hudești, Alba, Nărănca, Darabani, Păltiniș`}
                 {rezultat.negasite.map((n, i) => (
                   <li key={i} className="break-words">
                     <strong>{n.scris}</strong>
+                    {(n.zile?.length ?? 0) > 1 && (
+                      <span className="text-slate-500">
+                        {" "}
+                        · apare {n.zile!.join(" și ")} — alegi o dată, intră
+                        în toate
+                      </span>
+                    )}
                     {n.zona ? (
                       <span className="text-amber-800">
                         {" "}

@@ -108,6 +108,7 @@ export async function POST(req: Request) {
       invataAlias,
       localitatiCunoscute,
       salveazaZone,
+      zileleAlegerii,
     } = await import("@/modules/zone/aplica");
     const { neted: nivelat } = await import("@/modules/zone/parse");
     const { orgAgentNamesForAgent, orgIdForAgent } = await import(
@@ -149,11 +150,17 @@ export async function POST(req: Request) {
       // primul magazin de pe hartă, se leagă singur.
       const oficial = stiute.get(nivelat(cerut)) ?? cerut;
       if (nivelat(oficial).length < 2) continue;
-      const zi = String(a.zi ?? "").trim();
-      if (gasite.some((g) => g.zi === zi && nivelat(g.localitate) === nivelat(oficial))) {
-        continue;
+      // ALEGEREA SE ÎNTINDE PE TOATE ZILELE unde a scris vorba aia.
+      // „Catamarasti" era și luni, și joi: un răspuns, ambele zile —
+      // altfel omul răspundea o dată și joi rămânea tot fără sat.
+      const pentruZile = String(a.pentru ?? "").trim();
+      const zile = zileleAlegerii(negasite, pentruZile, String(a.zi ?? "").trim());
+      for (const zi of zile) {
+        if (gasite.some((g) => g.zi === zi && nivelat(g.localitate) === nivelat(oficial))) {
+          continue;
+        }
+        gasite.push({ zi, localitate: oficial, scris: oficial, cum: "ales de tine din listă" });
       }
-      gasite.push({ zi, localitate: oficial, scris: oficial, cum: "ales de tine din listă" });
       // ÎNVAȚĂ. Data viitoare merge singur, fără să mai caute nimeni.
       const pentru = String(a.pentru ?? "").trim();
       if (pentru !== "" && !body.verificaDoar && orgId) {
