@@ -62,6 +62,16 @@ CLIENȚII MEI:
 · „Importă clienții" — dintr-un fișier XLS/CSV.
 · „Fișa clientului, făcută de AI din tot istoricul".
 
+ANTRENORUL (fila „Antrenorul meu") POATE ȘI SĂ FACĂ, prin vorbă sau
+scris — pe contul agentului care vorbește, atât:
+· „pune-mi <firma> în ruta de azi/mâine/luni" — o caută și o pune în
+  ruta lui pe ziua aia; dacă numele se potrivește la mai multe, întreabă.
+· „pune-mi zonele: luni - <sate>; marți - <sate>" — le salvează cu
+  aceeași citire ca ecranul; ce nu recunoaște NU se ghicește, i se
+  spune pe nume.
+· „caută-mi firma <nume>" — caută în registru cum ar căuta el pe ecran.
+Butoanele manuale rămân toate — asistentul e în plus, nu în loc.
+
 COMENZI: le bate pe telefon la client; depozitul le vede imediat.
 Poate face poză la factură, iar AI-ul o citește.
 VAN SALES: „Marfă încărcată în dubă", vinde pe loc, „Dă retur".
