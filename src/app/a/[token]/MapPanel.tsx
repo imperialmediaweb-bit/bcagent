@@ -1825,7 +1825,9 @@ export default function MapPanel({
             <ol className="mt-2 flex flex-wrap gap-1.5">
               {basket.map((s, i) => (
                 <li
-                  key={s.cui}
+                  // Cheia e OPRIREA: două magazine ale aceleiași firme au
+                  // același CUI, dar sunt rânduri diferite.
+                  key={s.magazinId || s.cui || `x${i}`}
                   className="inline-flex items-center gap-1 rounded-full bg-white px-2 py-1 text-xs text-slate-700 ring-1 ring-indigo-100"
                 >
                   <span className="font-semibold text-indigo-600">{i + 1}.</span>
@@ -1833,7 +1835,16 @@ export default function MapPanel({
                   <button
                     type="button"
                     onClick={() =>
-                      setBasket((b) => b.filter((x) => x.cui !== s.cui))
+                      // Scoate DOAR oprirea asta, nu toate cu același CUI.
+                      setBasket((b) =>
+                        b.filter(
+                          (x) =>
+                            !(
+                              (x.magazinId || "") === (s.magazinId || "") &&
+                              x.cui === s.cui
+                            ),
+                        ),
+                      )
                     }
                     className="text-slate-400 hover:text-rose-500"
                     aria-label="Scoate din rută"
