@@ -161,6 +161,8 @@ export async function POST(req: Request) {
     lng?: number;
     /** Precizia raportată de GPS, în metri. */
     acc?: number;
+    /** Poza de la fața locului (data-URL jpeg/png/webp) — se criptează. */
+    foto?: string;
   };
   try {
     body = await req.json();
@@ -178,6 +180,19 @@ export async function POST(req: Request) {
     return Response.json({ error: "rezultat invalid" }, { status: 400 });
   }
   const note = String(body.note ?? "").slice(0, 1000);
+  // Poza, criptată ca la facturi — poate prinde nume de firme și cifre.
+  let fotoCriptata = "";
+  const fotoBruta = String(body.foto ?? "");
+  if (fotoBruta !== "") {
+    if (!/^data:image\/(jpeg|png|webp);base64,/.test(fotoBruta)) {
+      return Response.json({ error: "Poza trebuie să fie JPEG/PNG/WebP" }, { status: 400 });
+    }
+    if (fotoBruta.length > 6_000_000) {
+      return Response.json({ error: "Poza e prea mare (max ~4MB)" }, { status: 400 });
+    }
+    const { encryptData } = await import("@/lib/crypto-data");
+    fotoCriptata = await encryptData(fotoBruta);
+  }
 
   const db = getDB();
   if (!db) return Response.json({ enabled: false }, { status: 503 });
@@ -192,10 +207,10 @@ export async function POST(req: Request) {
     // intră de două ori în același magazin în două minute, dar orice
     // apăsare nervoasă și orice retrimitere din rețea încap acolo.
     await db`
-      INSERT INTO visits (agent_id, agent_name, cui, denumire, result, note, magazin_id)
+      INSERT INTO visits (agent_id, agent_name, cui, denumire, result, note, magazin_id, foto)
       SELECT ${payload.agentId}, ${payload.agentName}, ${cui},
              ${String(body.denumire ?? "").slice(0, 200)}, ${result}, ${note},
-             ${String(body.magazinId ?? "").slice(0, 220)}
+             ${String(body.magazinId ?? "").slice(0, 220)}, ${fotoCriptata}
       WHERE NOT EXISTS (
         SELECT 1 FROM visits v
         WHERE v.agent_id = ${payload.agentId}

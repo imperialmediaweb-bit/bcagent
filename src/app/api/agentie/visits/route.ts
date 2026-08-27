@@ -32,6 +32,26 @@ export async function GET(req: Request) {
     // Filtrul de agent trebuie să fie DIN organizație — altfel ignorat.
     const scoped = agentId && ids.includes(agentId) ? [agentId] : ids;
 
+    // ?foto=<id vizită> → poza de la vizită, decriptată — DOAR dacă
+    // vizita e a unui agent al firmei ăsteia (aceeași pază ca la facturi).
+    const fotoId = url.searchParams.get("foto") ?? "";
+    if (fotoId !== "") {
+      const [fr] = await db<Array<{ foto: string }>>`
+        SELECT foto FROM visits
+        WHERE id::text = ${fotoId}
+          AND agent_id = ANY(${ids.length ? ids : [""]})
+          AND foto <> ''
+      `;
+      if (!fr) return Response.json({ error: "Poza nu există" }, { status: 404 });
+      const { decryptData } = await import("@/lib/crypto-data");
+      const dataUrl = await decryptData(fr.foto);
+      const m = dataUrl.match(/^data:(image\/[a-z]+);base64,(.+)$/s);
+      if (!m) return Response.json({ error: "Poza e stricată" }, { status: 500 });
+      return new Response(Buffer.from(m[2], "base64"), {
+        headers: { "Content-Type": m[1], "Cache-Control": "private, max-age=300" },
+      });
+    }
+
     const rows = await db<
       Array<{
         id: string;
@@ -42,9 +62,11 @@ export async function GET(req: Request) {
         result: string;
         note: string;
         visited_at: Date;
+        are_foto: boolean;
       }>
     >`
-      SELECT id::text, agent_id, agent_name, cui, denumire, result, note, visited_at
+      SELECT id::text, agent_id, agent_name, cui, denumire, result, note, visited_at,
+             (foto <> '') AS are_foto
       FROM visits
       WHERE agent_id = ANY(${scoped.length ? scoped : [""]})
         AND visited_at >= NOW() - (${days} || ' days')::interval
@@ -67,6 +89,7 @@ export async function GET(req: Request) {
         denumire: r.denumire,
         result: r.result,
         note: r.note,
+        areFoto: r.are_foto === true,
         visitedAt: r.visited_at.toISOString(),
       })),
     });

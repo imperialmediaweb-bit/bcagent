@@ -278,6 +278,30 @@ async function main() {
     );
     ok("fără poziție, magazinul NU se pune la nimereală", r8.includes("Adaugă magazin"), r8);
 
+    console.log("\n══ Chat: poza se lipește de vizită, criptată ══");
+    {
+      // Un JPEG minuscul, doar cât să fie adevărat ca formă.
+      const pixel =
+        "/9j/4AAQSkZJRgABAQEAAAAAAAD/2wBDAAgGBgcGBQgHBwcJCQgKDBQNDAsLDBkSEw8UHRofHh0aHBwgJC4nICIsIxwcKDcpLDAxNDQ0Hyc5PTgyPC4zNDL/wAALCAABAAEBAREA/8QAFAABAAAAAAAAAAAAAAAAAAAACf/EABQQAQAAAAAAAAAAAAAAAAAAAAD/2gAIAQEAAD8AVN//2Q==";
+      const rf = await ruleazaUnealtaChat(
+        JSON.stringify({ unealta: "am_fost", firma: "ovi tacomax", rezultat: "gandeste", nota: "poza de proba" }),
+        EU, token, pozitia, { data: pixel, mime: "image/jpeg" },
+      );
+      ok("vizita cu poză confirmă și poza", rf.includes("Poza e prinsă"), rf);
+      const [vf] = await db!<Array<{ foto: string }>>`
+        SELECT foto FROM visits WHERE cui = ${CUI_MEU} AND note = 'poza de proba'
+      `;
+      ok("poza e salvată pe vizită", (vf?.foto ?? "").length > 50);
+      ok(
+        "și e CRIPTATĂ, nu în clar",
+        !(vf?.foto ?? "").startsWith("data:image"),
+        (vf?.foto ?? "").slice(0, 20),
+      );
+      const { decryptData } = await import("../src/lib/crypto-data");
+      const inapoi = await decryptData(vf!.foto);
+      ok("decriptată, e chiar poza lui", inapoi === `data:image/jpeg;base64,${pixel}`);
+    }
+
     console.log("\n══ Chat: gunoiul nu strică nimic ══");
     const r9 = await ruleazaUnealtaChat("nu e json deloc", EU, token, undefined);
     ok("text stricat = rugat să repete, nu excepție", r9.includes("mai zi o dată"), r9);

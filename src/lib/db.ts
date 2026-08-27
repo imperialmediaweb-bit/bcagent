@@ -241,6 +241,9 @@ export async function ensureSchema(): Promise<void> {
     -- firmă. Fără coloana asta, cifrele mint în favoarea noastră, ceea ce
     -- e cel mai rău fel de a minți.
     ALTER TABLE visits ADD COLUMN IF NOT EXISTS magazin_id TEXT NOT NULL DEFAULT '';
+    -- POZA DE LA VIZITĂ: fața magazinului, raftul, ce a văzut agentul.
+    -- Criptată ca pozele de facturi (poate prinde nume și cifre).
+    ALTER TABLE visits ADD COLUMN IF NOT EXISTS foto TEXT NOT NULL DEFAULT '';
     CREATE INDEX IF NOT EXISTS visits_magazin
       ON visits(magazin_id, visited_at DESC) WHERE magazin_id <> '';
     -- Targeturi lunare per agent (setate de agenție; realizatul se

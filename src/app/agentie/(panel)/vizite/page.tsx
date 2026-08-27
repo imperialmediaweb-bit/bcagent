@@ -23,6 +23,8 @@ interface Visit {
   denumire: string;
   result: string;
   note: string;
+  /** Vizita are poză de la fața locului. */
+  areFoto?: boolean;
   visitedAt: string;
 }
 
@@ -147,6 +149,18 @@ export default function VizitePage() {
                       {v.agentName} · {formatDateTime(v.visitedAt)}
                       {v.note ? ` · „${v.note}"` : ""}
                     </p>
+                    {v.areFoto && (
+                      // Poza de la fața locului — se deschide decriptată,
+                      // doar pentru firma asta.
+                      <a
+                        href={`/api/agentie/visits?foto=${encodeURIComponent(v.id)}`}
+                        target="_blank"
+                        rel="noopener"
+                        className="mt-1 inline-block text-xs font-medium text-indigo-600 hover:underline"
+                      >
+                        📷 Vezi poza de la vizită
+                      </a>
+                    )}
                   </div>
                   <span
                     className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-medium ${badge.cls}`}

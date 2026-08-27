@@ -173,7 +173,42 @@ export async function POST(req: Request) {
   const readable = new ReadableStream({
     async start(controller) {
       try {
-        if (imageData) {
+        // POZĂ + „am fost la X" = poza se lipește de vizită, nu se
+        // analizează raftul. Vorbele hotărăsc: doar când omul chiar
+        // spune că a fost, poza intră în jurnal cu vizita; orice altă
+        // poză merge, ca până acum, la analiza de raft.
+        const ultimulText = String(messages[messages.length - 1]?.content ?? "");
+        const eVizitaCuPoza =
+          imageData !== null && /\bam fost\b/i.test(ultimulText);
+        if (eVizitaCuPoza) {
+          void (await import("@/modules/platform")).recordAiUsage({ kind: "coach", agentId: payload.agentId });
+          // O tură scurtă, doar pe text, ca modelul să scoată unealta.
+          let tampon = "";
+          await streamCompletion(
+            {
+              system: system + dataContext,
+              messages,
+              maxTokens: 300,
+              onText: (t) => {
+                tampon += t;
+              },
+            },
+            "coach",
+          );
+          const { ruleazaUnealtaChat } = await import(
+            "@/modules/crm/unealta-chat"
+          );
+          const rezultat = tampon.trimStart().startsWith("{")
+            ? await ruleazaUnealtaChat(
+                tampon,
+                payload,
+                String(body.token ?? ""),
+                body.pozitie,
+                body.image,
+              )
+            : "Zi-mi și ce s-a întâmplat la vizită (a comandat / se mai gândește / nu vrea / era închis) și scriu vizita cu poza cu tot.";
+          controller.enqueue(encoder.encode(rezultat));
+        } else if (imageData) {
           void (await import("@/modules/platform")).recordAiUsage({ kind: "coach", agentId: payload.agentId });
           const transcript = messages
             .slice(0, -1)

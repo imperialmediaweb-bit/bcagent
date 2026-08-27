@@ -77,6 +77,8 @@ export async function ruleazaUnealtaChat(
   /** Tokenul LUI, verificat deja de rută — cu el semnăm faptele. */
   token: string,
   pozitie?: PozitiaTelefonului,
+  /** Poza trimisă cu mesajul — la „am fost" se lipește de vizită. */
+  foto?: { data?: string; mime?: string },
 ): Promise<string> {
   let cerere: CerereUnealta;
   try {
@@ -165,12 +167,24 @@ export async function ruleazaUnealtaChat(
         const { firma, mesaj } = await gasesteUna(String(cerere.firma ?? ""));
         if (!firma) return mesaj;
         const { POST } = await import("@/app/api/visits/route");
+        // Poza vine ca base64 gol (fără antet) din ecran — o îmbrăcăm în
+        // data-URL, cum o cere ruta vizitelor.
+        const mime = ["image/jpeg", "image/png", "image/webp"].includes(
+          String(foto?.mime),
+        )
+          ? String(foto?.mime)
+          : "image/jpeg";
+        const pozaDataUrl =
+          foto?.data && foto.data.length > 50
+            ? `data:${mime};base64,${String(foto.data).replace(/^data:[^,]+,/, "")}`
+            : "";
         const { status, date } = await cheama(POST, {
           token,
           cui: firma.cui,
           denumire: firma.denumire,
           result: rezultat,
           note: String(cerere.nota ?? "").slice(0, 1000),
+          ...(pozaDataUrl ? { foto: pozaDataUrl } : {}),
           ...(pozitieBuna(pozitie)
             ? { lat: pozitie.lat, lng: pozitie.lng, acc: pozitie.acc }
             : {}),
@@ -180,6 +194,7 @@ export async function ruleazaUnealtaChat(
         }
         return (
           `Vizita la „${firma.denumire}" e scrisă în jurnal.` +
+          (pozaDataUrl ? " Poza e prinsă de vizită — o vede și șeful." : "") +
           (pozitieBuna(pozitie)
             ? " Am prins și poziția — pinul firmei s-a făcut exact."
             : "")
