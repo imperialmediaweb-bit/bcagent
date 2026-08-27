@@ -33,8 +33,16 @@ MÂINILE TALE — poți și să FACI, nu doar să explici. Când agentul îți C
 {"unealta":"pune_in_ruta","firma":"<numele zis de el>","zi":"azi|maine|luni|marti|miercuri|joi|vineri|sambata|duminica"}
 {"unealta":"pune_zonele","text":"<textul lui cu zilele și satele, cuvânt cu cuvânt>"}
 {"unealta":"cauta_firma","text":"<ce firmă caută>"}
-Exemple de cereri de acțiune: „pune-mi Ovi Tacomax în ruta de azi", „bagă-mi în rută magazinul X", „pune-mi zonele: luni Dorohoi și Broscăuți, marți Hudești", „caută-mi firma cutare".
-Reguli la unelte: NU inventa alte unelte. NU inventa nume de firme sau sate — folosește exact cuvintele lui. Dacă nu e o cerere de acțiune, răspunzi normal, ca până acum. După ce primești REZULTATUL UNELTEI, spune-i omului scurt ce s-a făcut, cu vorbele din rezultat — nu adăuga nimic din burtă.`;
+{"unealta":"am_fost","firma":"<firma>","rezultat":"client|gandeste|ne_suna|nu_vrea|inchis","nota":"<ce a povestit, dacă a povestit>"}
+{"unealta":"sunt_aici","firma":"<firma în fața căreia stă>"}
+{"unealta":"adauga_magazin","nume":"<numele magazinului nou>"}
+Exemple: „pune-mi Ovi Tacomax în ruta de azi", „pune-mi zonele: luni Dorohoi și Broscăuți", „am fost la Danisov, a comandat" (rezultat=client), „am fost la X, se mai gândește" (rezultat=gandeste), „era închis la Y" (rezultat=inchis), „sunt în fața la Z, pune-i locul", „adaugă magazinul La Ionel aici".
+Reguli la unelte:
+- NU inventa alte unelte. NU inventa nume de firme, sate sau rezultate — folosește exact cuvintele lui.
+- La „am fost" fără să spună CE s-a întâmplat, întreabă întâi: a comandat / se mai gândește / ne sună / nu vrea / era închis. NU presupune rezultatul.
+- Dacă zice că o firmă S-A DESFIINȚAT de tot, NU e unealtă: spune-i să apese „Nu mai există" pe fișa firmei — aia cere confirmare pe ecran, dinadins.
+- Dacă nu e o cerere de acțiune, răspunzi normal, ca până acum.
+- După ce primești REZULTATUL UNELTEI, spune-i omului scurt ce s-a făcut, cu vorbele din rezultat — nu adăuga nimic din burtă.`;
 
 const COACH_PLAN = `${COACH_BASE}
 
@@ -57,69 +65,6 @@ const COACH_SIM = `${COACH_BASE}
 MOD SIMULARE: joci rolul unui PATRON DE MAGAZIN dificil dintr-un sat din România (alege un profil: zgârcit / grăbit / fidel concurenței / negociator dur). Rămâi ÎN ROL, răspunzi scurt și realist cum ar vorbi patronul, cu obiecții autentice. NU dai sfaturi cât ești în rol.
 Când agentul scrie „STOP", ieși din rol și dă feedback: ce a făcut bine, ce a ratat, ce replică ar fi funcționat mai bine, notă de la 1 la 10.
 Începe prima replică direct în rol, salutând sec agentul care intră în magazin.`;
-
-/**
- * EXECUTĂ UNEALTA cerută de model — pe contul agentului din TOKEN, nu
- * pe ce pretinde AI-ul. Orice nu se recunoaște sau crapă se întoarce ca
- * text de spus omului, niciodată ca excepție care taie chatul.
- */
-async function ruleazaUnealta(
-  brut: string,
-  cine: { agentId: string; agentName: string },
-): Promise<string> {
-  let cerere: { unealta?: string; firma?: string; zi?: string; text?: string };
-  try {
-    // Modelul poate împacheta JSON-ul în ```json … ``` — despachetăm.
-    cerere = JSON.parse(
-      brut.trim().replace(/^```(?:json)?\s*/i, "").replace(/```\s*$/, ""),
-    );
-  } catch {
-    return "N-am înțeles cererea — mai zi o dată ce vrei să fac.";
-  }
-  const { getDB, ensureSchema } = await import("@/lib/db");
-  const db = getDB();
-  if (!db) return "Baza de date nu e disponibilă acum — încearcă mai târziu.";
-  await ensureSchema();
-  const unelte = await import("@/modules/crm/unelte-agent");
-  try {
-    switch (cerere.unealta) {
-      case "pune_in_ruta": {
-        const r = await unelte.puneInRuta(
-          db,
-          cine,
-          String(cerere.firma ?? ""),
-          String(cerere.zi ?? "azi"),
-        );
-        return r.variante?.length
-          ? `${r.mesaj}\n${r.variante
-              .map(
-                (v, i) =>
-                  `${i + 1}. ${v.denumire} — ${v.localitate}${v.aMea ? " (clientul lui)" : ""}`,
-              )
-              .join("\n")}`
-          : r.mesaj;
-      }
-      case "pune_zonele":
-        return (await unelte.puneZonele(db, cine, String(cerere.text ?? ""))).mesaj;
-      case "cauta_firma": {
-        const gasite = await unelte.cautaFirme(db, cine, String(cerere.text ?? ""));
-        if (gasite.length === 0)
-          return "Nicio firmă activă nu se potrivește. Încearcă 3-4 litere din numele din acte.";
-        return gasite
-          .map(
-            (g) =>
-              `${g.denumire} — ${g.localitate}, ${g.judet} · ${g.aMea ? "clientul LUI" : g.status}`,
-          )
-          .join("\n");
-      }
-      default:
-        return "Unealta aia nu există — pot: să pun o firmă în rută, să pun zonele pe zile, să caut o firmă.";
-    }
-  } catch (e) {
-    console.error("[coach unealta]", e);
-    return "N-a mers — încearcă din nou sau fă-o din buton.";
-  }
-}
 
 export async function POST(req: Request) {
   const ip = clientIP(req);
@@ -148,6 +93,9 @@ export async function POST(req: Request) {
     summary?: unknown;
     /** Poză de la raft/stand — base64 fără prefixul data:. */
     image?: { data?: string; mime?: string };
+    /** Poziția telefonului la trimitere — cu ea „sunt aici" și „adaugă
+     *  magazin" pun lucruri pe locul ADEVĂRAT, nu ghicit. */
+    pozitie?: { lat?: number; lng?: number; acc?: number };
   };
   try {
     body = await req.json();
@@ -284,7 +232,15 @@ Scurt, concret, în română.`,
             "coach",
           );
           if (eUnealta) {
-            const rezultat = await ruleazaUnealta(tampon, payload);
+            const { ruleazaUnealtaChat } = await import(
+              "@/modules/crm/unealta-chat"
+            );
+            const rezultat = await ruleazaUnealtaChat(
+              tampon,
+              payload,
+              String(body.token ?? ""),
+              body.pozitie,
+            );
             // A doua tură: modelul îi spune omului ce s-a făcut, cu
             // vorbele rezultatului — nu cu închipuiri.
             await streamCompletion(

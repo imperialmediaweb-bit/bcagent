@@ -118,6 +118,31 @@ export default function CoachPanel({
     setInput("");
     setBusy(true);
     try {
+      // POZIȚIA TELEFONULUI merge cu mesajul: „sunt în fața la X" și
+      // „adaugă magazinul Y aici" au nevoie de locul ADEVĂRAT al omului.
+      // 2,5 secunde și gata — fără poziție, mesajul pleacă oricum, iar
+      // uneltele care o cer îi spun cinstit că n-o au.
+      const pozitie = await new Promise<
+        { lat: number; lng: number; acc: number } | undefined
+      >((resolve) => {
+        if (!navigator.geolocation) return resolve(undefined);
+        const ceas = setTimeout(() => resolve(undefined), 2500);
+        navigator.geolocation.getCurrentPosition(
+          (p) => {
+            clearTimeout(ceas);
+            resolve({
+              lat: p.coords.latitude,
+              lng: p.coords.longitude,
+              acc: p.coords.accuracy,
+            });
+          },
+          () => {
+            clearTimeout(ceas);
+            resolve(undefined);
+          },
+          { enableHighAccuracy: true, timeout: 2300, maximumAge: 30_000 },
+        );
+      });
       const res = await fetch("/api/coach", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -126,6 +151,7 @@ export default function CoachPanel({
           mode: opts?.modeOverride ?? mode,
           summary,
           image: opts?.image,
+          pozitie,
           messages: [...messages, userMsg].map((m) => ({
             role: m.role,
             content: m.content,

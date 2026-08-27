@@ -50,6 +50,8 @@ const CUIURI = [CUI_MEU, CUI_STRAIN, CUI_LIBER];
 const EU = { agentId: AG, agentName: NUME };
 
 async function curata() {
+  await db!`DELETE FROM visits WHERE agent_id IN (${AG}, ${AG_STRAIN})`;
+  await db!`DELETE FROM magazin_harta WHERE org_id IN (${ORG_A}, ${ORG_B})`;
   await db!`DELETE FROM routes WHERE agent_id IN (${AG}, ${AG_STRAIN})`;
   await db!`DELETE FROM agent_zone WHERE org_id IN (${ORG_A}, ${ORG_B})`;
   await db!`DELETE FROM geo_firme WHERE cui = ANY(${CUIURI})`;
@@ -189,6 +191,101 @@ async function main() {
       !JSON.stringify(g).includes("secret"),
       JSON.stringify(g),
     );
+  }
+
+  /* ═══════════════════════════════════════════════════════════════════
+     UNELTELE DIN CHAT, cap-coadă: JSON-ul modelului → fapta, prin
+     ACELEAȘI rute ca butoanele, cu tokenul lui.
+     ═══════════════════════════════════════════════════════════════════ */
+  console.log("\n══ Chat: «am fost la Ovi, a comandat» ══");
+  {
+    const { ruleazaUnealtaChat } = await import(
+      "../src/modules/crm/unealta-chat"
+    );
+    const { signToken } = await import("../src/lib/signed-token");
+    const token = await signToken(
+      { agentId: AG, agentName: NUME, exp: Math.floor(Date.now() / 1000) + 3600 },
+      process.env.TOKEN_SECRET ?? "",
+    );
+    const pozitia = { lat: 47.905, lng: 26.505, acc: 18 };
+
+    const r = await ruleazaUnealtaChat(
+      JSON.stringify({ unealta: "am_fost", firma: "ovi tacomax", rezultat: "client" }),
+      EU, token, pozitia,
+    );
+    ok("vizita se scrie și confirmă", r.includes("scrisă în jurnal"), r);
+    const [v] = await db!<Array<{ agent_id: string; result: string }>>`
+      SELECT agent_id, result FROM visits WHERE cui = ${CUI_MEU}
+      ORDER BY visited_at DESC LIMIT 1
+    `;
+    ok("în jurnal, pe NUMELE LUI, nu al AI-ului", v?.agent_id === AG, JSON.stringify(v));
+    ok("cu rezultatul zis de om", v?.result === "client");
+
+    const r2 = await ruleazaUnealtaChat(
+      JSON.stringify({ unealta: "am_fost", firma: "ovi tacomax" }),
+      EU, token, pozitia,
+    );
+    ok(
+      "fără rezultat spus, ÎNTREABĂ — nu presupune",
+      r2.includes("Ce s-a întâmplat"),
+      r2,
+    );
+    const r3 = await ruleazaUnealtaChat(
+      JSON.stringify({ unealta: "am_fost", firma: "ovi tacomax", rezultat: "nu_mai_exista" }),
+      EU, token, pozitia,
+    );
+    ok(
+      "«nu mai există» NU merge din chat (rămâne pe buton, cu confirmare)",
+      r3.includes("Ce s-a întâmplat"),
+      r3,
+    );
+
+    console.log("\n══ Chat: «sunt în fața la Ovi» ══");
+    const r4 = await ruleazaUnealtaChat(
+      JSON.stringify({ unealta: "sunt_aici", firma: "ovi tacomax" }),
+      EU, token, { lat: 47.92, lng: 26.52, acc: 15 },
+    );
+    ok("pinul se pune și confirmă", r4.includes("e pus unde stai"), r4);
+    const [g] = await db!<Array<{ lat: number; sursa: string }>>`
+      SELECT lat, sursa FROM geo_firme WHERE cui = ${CUI_MEU}
+    `;
+    ok("chiar pe poziția telefonului, ca gps", Math.abs((g?.lat ?? 0) - 47.92) < 0.001 && g?.sursa === "gps", JSON.stringify(g));
+    const r5 = await ruleazaUnealtaChat(
+      JSON.stringify({ unealta: "sunt_aici", firma: "ovi tacomax" }),
+      EU, token, { lat: 47.92, lng: 26.52, acc: 900 },
+    );
+    ok("GPS prost (±900m) = spus cinstit, fără pin", r5.includes("poziție bună"), r5);
+    const r6 = await ruleazaUnealtaChat(
+      JSON.stringify({ unealta: "sunt_aici", firma: "ovi tacomax" }),
+      EU, token, undefined,
+    );
+    ok("fără poziție deloc = la fel", r6.includes("poziție bună"), r6);
+
+    console.log("\n══ Chat: «adaugă magazinul La Ionel aici» ══");
+    const r7 = await ruleazaUnealtaChat(
+      JSON.stringify({ unealta: "adauga_magazin", nume: "La Ionel Test Chat" }),
+      EU, token, { lat: 47.93, lng: 26.53, acc: 20 },
+    );
+    ok("magazinul intră pe hartă", r7.includes("e pe hartă"), r7);
+    const [m] = await db!<Array<{ org_id: string; adaugat_de: string }>>`
+      SELECT org_id, adaugat_de FROM magazin_harta WHERE nume = 'La Ionel Test Chat'
+    `;
+    ok("în firma LUI, cu numele lui pe el", m?.org_id === ORG_A && m?.adaugat_de === NUME, JSON.stringify(m));
+    await db!`DELETE FROM magazin_harta WHERE nume = 'La Ionel Test Chat'`;
+    const r8 = await ruleazaUnealtaChat(
+      JSON.stringify({ unealta: "adauga_magazin", nume: "Fara Pozitie" }),
+      EU, token, undefined,
+    );
+    ok("fără poziție, magazinul NU se pune la nimereală", r8.includes("Adaugă magazin"), r8);
+
+    console.log("\n══ Chat: gunoiul nu strică nimic ══");
+    const r9 = await ruleazaUnealtaChat("nu e json deloc", EU, token, undefined);
+    ok("text stricat = rugat să repete, nu excepție", r9.includes("mai zi o dată"), r9);
+    const r10 = await ruleazaUnealtaChat(
+      JSON.stringify({ unealta: "sterge_tot" }),
+      EU, token, undefined,
+    );
+    ok("unealtă inventată de model = refuzată", r10.includes("nu există"), r10);
   }
 
   console.log("\n══ Curățenie ══");

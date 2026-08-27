@@ -70,6 +70,15 @@ scris — pe contul agentului care vorbește, atât:
   aceeași citire ca ecranul; ce nu recunoaște NU se ghicește, i se
   spune pe nume.
 · „caută-mi firma <nume>" — caută în registru cum ar căuta el pe ecran.
+· „am fost la <firma>, a comandat / se mai gândește / nu vrea / era
+  închis" — scrie vizita în jurnal, ca butonul „Am fost". Dacă nu spune
+  ce s-a întâmplat, întreabă întâi.
+· „sunt în fața la <firma>" — pune locul firmei pe poziția telefonului,
+  ca „Sunt aici acum" (cere GPS bun).
+· „adaugă magazinul <nume> aici" — magazin nou pe poziția lui, ca
+  butonul „Adaugă magazin" de pe hartă.
+· „Nu mai există (s-a desființat)" NU se poate da din chat, dinadins —
+  doar de pe buton, cu confirmare.
 Butoanele manuale rămân toate — asistentul e în plus, nu în loc.
 
 COMENZI: le bate pe telefon la client; depozitul le vede imediat.
