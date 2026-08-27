@@ -54,11 +54,21 @@ function pozitieBuna(p?: PozitiaTelefonului): p is Required<PozitiaTelefonului> 
 async function cheama(
   handler: (req: Request) => Promise<Response>,
   body: unknown,
+  /**
+   * Adresa pentru limita de cereri. Rutele își țin limita pe IP, iar o
+   * cerere internă n-are IP: fără antetul ăsta, TOȚI agenții de pe
+   * platformă ar împărți o singură găleată („unknown") și și-ar bloca
+   * unii altora vizitele dictate.
+   */
+  cine: string,
 ): Promise<{ status: number; date: Record<string, unknown> }> {
   const res = await handler(
     new Request("http://intern/unealta", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        "x-forwarded-for": `chat:${cine}`,
+      },
       body: JSON.stringify(body),
     }),
   );
@@ -188,7 +198,7 @@ export async function ruleazaUnealtaChat(
           ...(pozitieBuna(pozitie)
             ? { lat: pozitie.lat, lng: pozitie.lng, acc: pozitie.acc }
             : {}),
-        });
+        }, cine.agentId);
         if (status !== 200) {
           return `N-am putut salva vizita (${String(date.error ?? "eroare")}). Încearcă din buton.`;
         }
@@ -217,7 +227,7 @@ export async function ruleazaUnealtaChat(
           lng: pozitie.lng,
           sursa: "gps",
           acc: pozitie.acc,
-        });
+        }, cine.agentId);
         if (status !== 200) {
           return `N-am putut pune locul (${String(date.error ?? "eroare")}). Încearcă din buton.`;
         }
@@ -236,7 +246,7 @@ export async function ruleazaUnealtaChat(
         const { status, date } = await cheama(POST, {
           token,
           adauga: { nume, lat: pozitie.lat, lng: pozitie.lng },
-        });
+        }, cine.agentId);
         if (status !== 200) {
           return `N-am putut adăuga magazinul (${String(date.error ?? "eroare")}). Pune-l de pe hartă.`;
         }

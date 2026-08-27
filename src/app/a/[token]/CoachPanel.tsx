@@ -118,11 +118,16 @@ export default function CoachPanel({
     setInput("");
     setBusy(true);
     try {
-      // POZIȚIA TELEFONULUI merge cu mesajul: „sunt în fața la X" și
-      // „adaugă magazinul Y aici" au nevoie de locul ADEVĂRAT al omului.
-      // 2,5 secunde și gata — fără poziție, mesajul pleacă oricum, iar
-      // uneltele care o cer îi spun cinstit că n-o au.
-      const pozitie = await new Promise<
+      // POZIȚIA TELEFONULUI merge cu mesajul — dar DOAR când vorbele o
+      // cer („sunt în fața la", „adaugă magazin", „am fost"). Altfel, o
+      // întrebare simplă de coaching ar fi deschis pop-up-ul de locație
+      // pe calculator și ar fi întârziat fiecare mesaj cu 2,5 secunde.
+      const ultimulText = userMsg.content;
+      const cereGps =
+        /\bam fost\b|\bsunt (aici|in fata|în fața)\b|adaug[ăa]?\S* magazin/i.test(
+          ultimulText,
+        ) || !!opts?.image;
+      const pozitie = !cereGps ? undefined : await new Promise<
         { lat: number; lng: number; acc: number } | undefined
       >((resolve) => {
         if (!navigator.geolocation) return resolve(undefined);

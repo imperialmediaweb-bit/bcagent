@@ -36,9 +36,14 @@ export async function GET(req: Request) {
     // vizita e a unui agent al firmei ăsteia (aceeași pază ca la facturi).
     const fotoId = url.searchParams.get("foto") ?? "";
     if (fotoId !== "") {
+      // Pe CHEIA PRIMARĂ, nu pe id::text: aia ar fi scanat tot tabelul
+      // de vizite al platformei la fiecare deschidere de poză.
+      if (!/^\d{1,18}$/.test(fotoId)) {
+        return Response.json({ error: "Poza nu există" }, { status: 404 });
+      }
       const [fr] = await db<Array<{ foto: string }>>`
         SELECT foto FROM visits
-        WHERE id::text = ${fotoId}
+        WHERE id = ${fotoId}::bigint
           AND agent_id = ANY(${ids.length ? ids : [""]})
           AND foto <> ''
       `;
