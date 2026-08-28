@@ -93,6 +93,10 @@ Probleme, Echipa, Setări.
 · „Adu locațiile" — lipești linkul hărții Google My Maps și aduce
   locurile magazinelor; tot de acolo se aduc și magazinele de pe
   OpenStreetMap. Se poate da înapoi cu „Anulează ce am adus".
+· „Acoperire teren" — vizitele fiecărui agent vs. tot ce ARE de
+  vizitat pe hartă (o firmă cu 6 magazine = 6 opriri), pe 7/30/90 de
+  zile, cu „Descarcă Excel" și „Descarcă PDF". Prospectarea se leagă de
+  satele zonelor lui — fără zone puse, coloana scrie „fără zone puse".
 · „Agenți" — aici se emit linkurile agenților și se vede „Munca de teren"
   (câte locuri a pus fiecare, câte magazine a confirmat).
 · „Zonele agenților" — managerul poate scrie zonele în locul agentului.

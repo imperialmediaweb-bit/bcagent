@@ -35,6 +35,7 @@ const NAV = [
   { href: "/agentie/targete", label: "Targeturi", icon: Target },
   { href: "/agentie/agenti", label: "Agenți", icon: UserRound },
   { href: "/agentie/vizite", label: "Vizite", icon: ClipboardList },
+  { href: "/agentie/acoperire", label: "Acoperire teren", icon: MapPinned },
   { href: "/agentie/harta", label: "Harta firmei", icon: Map },
   { href: "/agentie/zone", label: "Zonele agenților", icon: MapPinned },
   { href: "/agentie/harta-import", label: "Adu locațiile", icon: MapPin },
