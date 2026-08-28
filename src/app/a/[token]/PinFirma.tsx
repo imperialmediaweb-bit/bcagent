@@ -146,16 +146,19 @@ export default function PinFirma({
               cercEu?.setLatLng(unde);
               cercEu?.setRadius(Math.min(poz.coords.accuracy, 300));
             }
-            // O SINGURĂ dată: dacă nu se vede pe ecran, lărgim cadrul cât
-            // să încapă și el, și pinul. Apoi nu mai mișcăm harta —
-            // omul poate e în mijlocul trasului cu degetul.
-            if (!amCentratPeEl && !m.getBounds().contains(unde)) {
+            // DOAR LA PRIMA CITIRE, și doar dacă nu se vede: lărgim
+            // cadrul cât să încapă și el, și pinul. După prima citire
+            // harta NU se mai mișcă singură NICIODATĂ — o citire venită
+            // mai târziu (omul merge) ar smuci-o fix când trage pinul.
+            if (!amCentratPeEl) {
               amCentratPeEl = true;
-              const ll = p.getLatLng();
-              m.fitBounds(
-                L.latLngBounds([unde, [ll.lat, ll.lng]]).pad(0.3),
-                { maxZoom: 17 },
-              );
+              if (!m.getBounds().contains(unde)) {
+                const ll = p.getLatLng();
+                m.fitBounds(
+                  L.latLngBounds([unde, [ll.lat, ll.lng]]).pad(0.3),
+                  { maxZoom: 17 },
+                );
+              }
             }
           },
           () => {
@@ -187,7 +190,10 @@ export default function PinFirma({
     return () => {
       viu = false;
       // GPS-ul nu are voie să rămână pornit după închiderea ferestrei.
-      if (opresteGps.current) opresteGps.current();
+      if (opresteGps.current) {
+        opresteGps.current();
+        opresteGps.current = null;
+      }
       harta.current?.remove();
       harta.current = null;
       pin.current = null;
