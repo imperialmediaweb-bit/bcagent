@@ -58,6 +58,8 @@ export default function PinFirma({
   // depinderea de EL ar distruge și ar reface harta din te miri ce (un
   // toast, un buton apăsat) — chiar sub degetul care trage pinul. Ne legăm
   // de valori simple, care nu se schimbă degeaba.
+  /** Oprirea urmăririi GPS la închidere — pusă de efectul hărții. */
+  const opresteGps = useRef<(() => void) | null>(null);
   const cui = firma?.cui ?? "";
   const latStart = firma?.lat ?? null;
   const lngStart = firma?.lng ?? null;
@@ -102,6 +104,73 @@ export default function PinFirma({
         setMesaj(null);
       });
 
+      // „EU UNDE SUNT?" — punctul albastru, viu, din GPS.
+      // Costin, din teren (27.08): „atâta timp cât nu am o locație
+      // exactă cu locul unde mă aflu, nu pot pune locul magazinului cu
+      // exactitate." Avea dreptate: harta îi arăta pinul și drumul, dar
+      // NU pe el — trăgea pinul orbește. Fără reperul „eu sunt aici",
+      // toată fereastra asta e ghicit.
+      let punctEu: ReturnType<typeof L.circleMarker> | null = null;
+      let cercEu: ReturnType<typeof L.circle> | null = null;
+      let amCentratPeEl = false;
+      let ceasPozitie: number | null = null;
+      if (navigator.geolocation) {
+        ceasPozitie = navigator.geolocation.watchPosition(
+          (poz) => {
+            if (!viu || !harta.current) return;
+            const unde: [number, number] = [
+              poz.coords.latitude,
+              poz.coords.longitude,
+            ];
+            if (!punctEu) {
+              // Cercul de precizie întâi (sub punct), apoi punctul.
+              cercEu = L.circle(unde, {
+                radius: Math.min(poz.coords.accuracy, 300),
+                color: "#2563eb",
+                weight: 1,
+                fillColor: "#3b82f6",
+                fillOpacity: 0.12,
+                interactive: false,
+              }).addTo(m);
+              punctEu = L.circleMarker(unde, {
+                radius: 8,
+                color: "#ffffff",
+                weight: 3,
+                fillColor: "#2563eb",
+                fillOpacity: 1,
+                interactive: false,
+              }).addTo(m);
+              punctEu.bindTooltip("Tu ești aici", { direction: "top" });
+            } else {
+              punctEu.setLatLng(unde);
+              cercEu?.setLatLng(unde);
+              cercEu?.setRadius(Math.min(poz.coords.accuracy, 300));
+            }
+            // O SINGURĂ dată: dacă nu se vede pe ecran, lărgim cadrul cât
+            // să încapă și el, și pinul. Apoi nu mai mișcăm harta —
+            // omul poate e în mijlocul trasului cu degetul.
+            if (!amCentratPeEl && !m.getBounds().contains(unde)) {
+              amCentratPeEl = true;
+              const ll = p.getLatLng();
+              m.fitBounds(
+                L.latLngBounds([unde, [ll.lat, ll.lng]]).pad(0.3),
+                { maxZoom: 17 },
+              );
+            }
+          },
+          () => {
+            // Fără voie la locație sau fără semnal: harta merge ca până
+            // acum, doar fără punctul albastru. Nu stricăm nimic.
+          },
+          { enableHighAccuracy: true, maximumAge: 5_000, timeout: 15_000 },
+        );
+      }
+
+      opresteGps.current = () => {
+        if (ceasPozitie !== null) navigator.geolocation.clearWatch(ceasPozitie);
+        ceasPozitie = null;
+      };
+
       harta.current = m;
       pin.current = p;
       setPozitie(start);
@@ -117,6 +186,8 @@ export default function PinFirma({
 
     return () => {
       viu = false;
+      // GPS-ul nu are voie să rămână pornit după închiderea ferestrei.
+      if (opresteGps.current) opresteGps.current();
       harta.current?.remove();
       harta.current = null;
       pin.current = null;
