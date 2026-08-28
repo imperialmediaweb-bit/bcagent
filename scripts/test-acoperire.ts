@@ -169,6 +169,21 @@ async function main() {
   );
   ok("totalul firmei: 2/3 = 67%", r.total.procent === 67, `${r.total.procent}%`);
 
+  console.log("\n══ Toată harta, spusă pe față ══");
+  {
+    ok(
+      "totalul hărții numără TOATE movurile deschise: 2",
+      r.harta.prospecteTotal === 2,
+      `a ieșit ${r.harta.prospecteTotal}`,
+    );
+    ok("în zonele agenților: 1", r.harta.inZonele === 1, `${r.harta.inZonele}`);
+    ok(
+      "și spune câte nu-s în zona nimănui: 1 (Mov Aiurea)",
+      r.harta.faraStapan === 1,
+      `${r.harta.faraStapan}`,
+    );
+  }
+
   console.log("\n══ Ruta agentului: doar cifrele LUI ══");
   {
     const { signToken } = await import("../src/lib/signed-token");

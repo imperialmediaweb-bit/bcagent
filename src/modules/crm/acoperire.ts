@@ -47,6 +47,18 @@ export interface AcoperireAgent {
 export interface RaportAcoperire {
   zile: number;
   agenti: AcoperireAgent[];
+  /**
+   * TOATĂ HARTA, ca să nu rămână întrebarea „ăsta-i universul total?".
+   * Prima întrebare a lui Bogdan la vederea raportului (28.08) a fost
+   * exact asta. Răspunsul cinstit: universul pe agent e ce ARE el de
+   * vizitat; aici e restul — câte magazine de prospectat sunt pe toată
+   * harta firmei și câte din ele nu-s încă în zona nimănui.
+   */
+  harta: {
+    prospecteTotal: number;
+    inZonele: number;
+    faraStapan: number;
+  };
   total: {
     universClienti: number;
     vizitate: number;
@@ -179,6 +191,15 @@ export async function acoperireTeren(
     });
   }
 
+  // Toată harta firmei: câte movuri există în total, indiferent de zone.
+  const [toataHarta] = await db<[{ n: string }]>`
+    SELECT COUNT(*)::text AS n FROM magazin_harta m
+    WHERE m.org_id = ${orgId}
+      AND COALESCE(m.cui,'') = ''
+      AND m.stare <> 'inchis' AND m.fel <> 'sis'
+  `;
+  const prospecteTotal = parseInt(toataHarta.n, 10);
+
   const total = {
     universClienti: rezultate.reduce((s, r) => s + r.universClienti, 0),
     vizitate: rezultate.reduce((s, r) => s + r.vizitate, 0),
@@ -188,8 +209,20 @@ export async function acoperireTeren(
     procent: 0,
   };
   total.procent = procent(total.vizitate, total.universClienti);
+  const inZonele = total.universProspectare;
 
   // Cel mai bun sus — clasamentul e și el o unealtă de management.
   rezultate.sort((x, y) => y.procent - x.procent || y.vizitate - x.vizitate);
-  return { zile, agenti: rezultate, total };
+  return {
+    zile,
+    agenti: rezultate,
+    total,
+    harta: {
+      prospecteTotal,
+      inZonele,
+      // „Fără stăpân" poate fi negativ doar dacă zonele a doi agenți se
+      // suprapun pe același sat — atunci îl tăiem la zero, nu mințim.
+      faraStapan: Math.max(0, prospecteTotal - inZonele),
+    },
+  };
 }

@@ -29,6 +29,7 @@ interface Rand {
 interface Raport {
   zile: number;
   agenti: Rand[];
+  harta: { prospecteTotal: number; inZonele: number; faraStapan: number };
   total: {
     universClienti: number;
     vizitate: number;
@@ -210,7 +211,8 @@ export default function AcoperirePage() {
                 </span>
               </p>
               <p className="text-xs text-slate-500">
-                magazine noi atinse din zonele lor
+                magazine noi atinse din zonele lor · pe toată harta:{" "}
+                {raport.harta.prospecteTotal}
               </p>
             </Card>
           </div>
@@ -267,7 +269,17 @@ export default function AcoperirePage() {
             „De vizitat" = clienții lui + magazinele lor de pe hartă (fără
             cele tăiate pe teren și fără SIS-uri). „Prospectare" = magazinele
             mov din satele zonelor lui, atinse prin vizită sau confirmare.
-            Generat {new Date().toLocaleDateString("ro-RO")}, pe ultimele{" "}
+            <br />
+            <b>Universul total al hărții:</b> {raport.harta.prospecteTotal}{" "}
+            magazine de prospectat pe toată harta firmei — {raport.harta.inZonele}{" "}
+            sunt în zonele agenților
+            {raport.harta.faraStapan > 0 && (
+              <>
+                , iar <b>{raport.harta.faraStapan} nu-s încă în zona nimănui</b>
+                {" "}(intră în raport când un agent își ia satele alea în zone)
+              </>
+            )}
+            . Generat {new Date().toLocaleDateString("ro-RO")}, pe ultimele{" "}
             {raport.zile} de zile.
           </p>
         </>
