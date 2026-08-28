@@ -11,6 +11,7 @@ import {
   Target,
 } from "lucide-react";
 import { cheieOprire, planRoute } from "@/lib/route-nav";
+import AcoperireaMea from "./AcoperireaMea";
 
 /**
  * „Ziua mea" — cockpitul agentului: deschide telefonul dimineața și vede
@@ -411,6 +412,10 @@ export default function DayPanel({
           </div>
         )}
       </div>
+
+      {/* Acoperirea LUI: aceeași socoteală ca raportul șefului, doar
+          cifrele lui — să nu aștepte vineri ca să afle că-i în urmă. */}
+      <AcoperireaMea token={token} />
     </section>
   );
 }

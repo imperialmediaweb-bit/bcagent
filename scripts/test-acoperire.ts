@@ -169,6 +169,29 @@ async function main() {
   );
   ok("totalul firmei: 2/3 = 67%", r.total.procent === 67, `${r.total.procent}%`);
 
+  console.log("\n══ Ruta agentului: doar cifrele LUI ══");
+  {
+    const { signToken } = await import("../src/lib/signed-token");
+    const { GET } = await import("../src/app/api/acoperire/route");
+    const tok = await signToken(
+      { agentId: AG, agentName: NUME, exp: Math.floor(Date.now() / 1000) + 3600 },
+      process.env.TOKEN_SECRET ?? "",
+    );
+    const res = await GET(
+      new Request(`http://x/api/acoperire?token=${encodeURIComponent(tok)}&zile=30`),
+    );
+    const d = (await res.json()) as {
+      inOrg?: boolean;
+      eu?: { agent: string; procent: number; universClienti: number };
+    };
+    ok("ruta răspunde pe tokenul lui", res.status === 200 && d.inOrg === true);
+    ok("cu ACELEAȘI cifre ca raportul șefului", d.eu?.procent === 67 && d.eu?.universClienti === 3, JSON.stringify(d.eu));
+    ok("și doar cu ale lui — un singur agent în răspuns", d.eu?.agent === NUME);
+
+    const resFals = await GET(new Request("http://x/api/acoperire?token=stricat"));
+    ok("token stricat = refuzat", resFals.status === 401);
+  }
+
   console.log("\n══ Perioada taie corect ══");
   await db!`
     UPDATE visits SET visited_at = NOW() - INTERVAL '40 days'
