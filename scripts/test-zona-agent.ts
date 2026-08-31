@@ -78,6 +78,9 @@ interface Oprire {
   localitate: string;
   adresa: string;
   telefon: string;
+  judet: string;
+  lat: number | null;
+  lng: number | null;
 }
 interface RaspunsZona {
   zi?: string;
@@ -117,6 +120,13 @@ async function pregateste() {
               VALUES (${cui(i)}, ${den}, ${"Str. Test nr. " + (i + 1)}, ${sat}, 'SV',
                       '4711', ${status}, ${agent}, ${activ}, ${"07600000" + i})`;
   }
+  // OMONIMUL: altă firmă are un agent cu EXACT numele meu, cu clientul ei
+  // chiar în satul meu de azi. Garda pe assigned_org trebuie să-l țină
+  // afară din lista mea — pe nume singur ar intra.
+  await sql`INSERT INTO prospects (cui, denumire, adresa, localitate, judet, caen,
+                                   status, assigned_agent, assigned_org, activ, telefon)
+            VALUES (${cui(9)}, ${"CLIENT OMONIM " + SUS}, 'Str. Test nr. 10', ${S1},
+                    'SV', '4711', 'client', ${numeEu}, ${orgAlta}, TRUE, '0760000009')`;
   await sql`INSERT INTO geo_localitati (judet, localitate, lat, lng, failed)
             VALUES ('SV', ${S1}, 47.60, 26.20, FALSE),
                    ('SV', ${S2}, 47.62, 26.22, FALSE),
@@ -127,7 +137,7 @@ async function pregateste() {
 }
 
 async function curata() {
-  const cuis = Array.from({ length: 9 }, (_, i) => cui(i));
+  const cuis = Array.from({ length: 10 }, (_, i) => cui(i));
   await sql`DELETE FROM routes WHERE agent_id IN (${idEu}, ${idColeg}, ${idStrain})`.catch(() => {});
   await sql`DELETE FROM visits WHERE cui = ANY(${cuis})`.catch(() => {});
   await sql`DELETE FROM agent_zone WHERE org_id IN (${orgMea}, ${orgAlta})`;
@@ -196,6 +206,8 @@ async function main() {
     check("…toți patru, cu numele lor", [0, 1, 2, 3].every((i) => nume.some((n) => n.includes(`${SUS}`) && n.includes(["CLIENT UNU A", "CLIENT UNU B", "CLIENT DOI", "CLIENT TREI"][i]))), nume.join(","));
     check("clientul COLEGULUI nu intră în ruta mea", !nume.some((n) => n.includes("CLIENT COLEG")));
     check("clientul altei FIRME nu intră deloc", !nume.some((n) => n.includes("CLIENT STRAIN")));
+    check("clientul OMONIMULUI din altă firmă nu intră (garda pe assigned_org)",
+      !nume.some((n) => n.includes("CLIENT OMONIM")));
     check("clientul meu din satul de altă zi nu intră azi", !nume.some((n) => n.includes("CLIENT ALTAZI")));
     check("prospecții liberi nu intră în rută (nu-s clienți)", !nume.some((n) => n.includes("PROSPECT")));
     check("…dar sunt număraţi ca «mai ai unde bate»", (azi.d.alteFirme ?? 0) === 2, `alteFirme=${azi.d.alteFirme}`);
@@ -207,6 +219,31 @@ async function main() {
     const s0 = (azi.d.stops ?? [])[0];
     check("fiecare oprire vine cu adresa ei", !!s0?.adresa && s0.adresa.length > 3, s0?.adresa);
     check("…și cu telefonul clientului", !!s0?.telefon && s0.telefon.length >= 9, s0?.telefon);
+
+    sectiune("Contractul opririlor — pe el stă lista bifabilă din «Ziua mea»");
+    // Lista din prima pagină afișează exact câmpurile astea (nume, adresă,
+    // sat, Sună, Navighează). Dacă vreunul dispare din API, lista se
+    // strică în tăcere pe telefonul agentului — de-aia îl prindem aici.
+    const contract = (azi.d.stops ?? []).every(
+      (s) =>
+        typeof s.cui === "string" &&
+        typeof s.denumire === "string" &&
+        typeof s.adresa === "string" &&
+        typeof s.localitate === "string" &&
+        typeof s.judet === "string" &&
+        typeof s.telefon === "string",
+    );
+    check("fiecare oprire are câmpurile pe care le arată lista", contract,
+      JSON.stringify((azi.d.stops ?? [])[0]));
+    check("…iar lat/lng sunt număr sau gol, niciodată altceva",
+      (azi.d.stops ?? []).every(
+        (s) =>
+          (s.lat === null || typeof s.lat === "number") &&
+          (s.lng === null || typeof s.lng === "number"),
+      ),
+      `${s0?.lat},${s0?.lng}`);
+    check("…și fiecare oprire are CUI, altfel n-are cum să se bifeze",
+      (azi.d.stops ?? []).every((s) => s.cui.replace(/\D/g, "") !== ""));
 
     sectiune("Cine n-a mai fost vizitat de mult, primul");
     // Vizităm clientul UNU A acum: la reîncărcare trebuie să treacă DUPĂ

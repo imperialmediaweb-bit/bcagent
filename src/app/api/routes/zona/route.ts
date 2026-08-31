@@ -210,7 +210,7 @@ export async function GET(req: Request) {
   if (!db) return Response.json({ enabled: false }, { status: 503 });
   try {
     await ensureSchema();
-    const { orgIdForAgent } = await import("@/lib/org-scope");
+    const { orgIdForAgent, alAgentiei } = await import("@/lib/org-scope");
     const orgId = await orgIdForAgent(payload.agentId);
     if (!orgId) {
       // Link vechi, fără firmă în spate: n-are cine să-i pună zone.
@@ -251,7 +251,7 @@ export async function GET(req: Request) {
       FROM prospects p
       LEFT JOIN geo_firme g ON g.cui = p.cui
       WHERE p.status = 'client'
-        AND p.assigned_agent = ${payload.agentName}
+        AND ${alAgentiei(db, orgId, [payload.agentName])}
         -- Ce a închis agentul pe teren („e zid, nu mai există") nu-l mai
         -- trimitem acolo mâine.
         AND p.activ IS DISTINCT FROM FALSE

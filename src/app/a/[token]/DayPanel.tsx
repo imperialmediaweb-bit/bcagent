@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import {
   CalendarClock,
+  ChevronDown,
   ClipboardList,
   MapPinned,
   Navigation,
@@ -10,8 +11,11 @@ import {
   ShoppingCart,
   Target,
 } from "lucide-react";
-import { cheieOprire, planRoute } from "@/lib/route-nav";
+import { cheieOprire, navAddress, planRoute } from "@/lib/route-nav";
 import AcoperireaMea from "./AcoperireaMea";
+import OrderModal from "./OrderModal";
+import { VisitButtons, gmapsDir } from "./MapPanel";
+import { salveazaVizita } from "./salveaza-vizita";
 
 /**
  * „Ziua mea" — cockpitul agentului: deschide telefonul dimineața și vede
@@ -41,7 +45,12 @@ interface Stop {
   adresa: string;
   localitate: string;
   telefon: string;
+  lat?: number | null;
+  lng?: number | null;
 }
+
+/** CUI-ul adus la forma din cheile de vizită — doar cifrele. */
+const doarCifre = (cui: string) => String(cui).replace(/\D/g, "");
 
 export default function DayPanel({
   token,
@@ -73,6 +82,20 @@ export default function DayPanel({
   } | null>(null);
   const [facZona, setFacZona] = useState(false);
   const [eroareZona, setEroareZona] = useState<string | null>(null);
+  // LISTA CLIENȚILOR ZILEI, bifabilă — cerută de Răzvan: „să fie deja
+  // clienții pe prima pagină și eu să bifez ce am făcut la ele". Bifa e
+  // pe FIRMĂ (CUI), ca o vizită dată din popupul unui magazin pe hartă
+  // să bifeze tot rândul firmei de aici.
+  const [cuiVizitateAzi, setCuiVizitateAzi] = useState<Set<string>>(new Set());
+  const [visitFor, setVisitFor] = useState<string | null>(null);
+  const [orderFor, setOrderFor] = useState<Stop | null>(null);
+  const [listaDeschisa, setListaDeschisa] = useState(true);
+  const [toast, setToast] = useState<string | null>(null);
+
+  function showToast(msg: string) {
+    setToast(msg);
+    setTimeout(() => setToast(null), 2500);
+  }
 
   useEffect(() => {
     const q = (p: string) => `${p}token=${encodeURIComponent(token)}`;
@@ -99,10 +122,17 @@ export default function DayPanel({
           // CHEIA E MAGAZINUL, nu firma: o vizită la unul dintre cele
             // șase magazine ale lui Ovi Tacomax nu scoate din rută
             // celelalte cinci.
+            const deAzi = (d.visits ?? []).filter(
+              (v) => new Date(v.visitedAt) >= startOfDay,
+            );
             setDoneToday(
-              (d.visits ?? [])
-                .filter((v) => new Date(v.visitedAt) >= startOfDay)
-                .map((v) => cheieOprire({ cui: v.cui, magazinId: v.magazinId })),
+              deAzi.map((v) => cheieOprire({ cui: v.cui, magazinId: v.magazinId })),
+            );
+            // Pentru LISTA zilei (care e pe firme, nu pe magazine): orice
+            // vizită de azi la firma X — inclusiv la un magazin al ei —
+            // bifează rândul firmei.
+            setCuiVizitateAzi(
+              new Set(deAzi.map((v) => doarCifre(v.cui)).filter((c) => c !== "")),
             );
           },
         )
@@ -211,6 +241,43 @@ export default function DayPanel({
     }
   }
 
+  /**
+   * Bifarea unui client din lista zilei — ACELAȘI flux ca „Am fost" de pe
+   * hartă și din căutare (GPS + POST /api/visits), doar pornit de aici.
+   */
+  async function bifeaza(stop: Stop, result: string, note: string) {
+    // Singurul rezultat care șterge ceva pentru toată firma — se întreabă
+    // o dată, cu aceleași vorbe ca pe hartă.
+    if (
+      result === "nu_mai_exista" &&
+      !confirm(
+        `Scoți „${stop.denumire}” din listele firmei — nu mai apare pe hartă ` +
+          `nici ție, nici colegilor. Alege asta doar dacă firma chiar s-a ` +
+          `desființat. Dacă azi era doar închis, apasă „Închis azi”. Continui?`,
+      )
+    ) {
+      return;
+    }
+    const r = await salveazaVizita(token, stop, result, note);
+    if (!r.ok) {
+      showToast(r.error);
+      return;
+    }
+    setVisitFor(null);
+    showToast("Vizită salvată ✓");
+    // Optimist, ca bifa să apară pe loc; cifrele reale se reîncarcă
+    // oricum la revenirea în tab (listenerul de mai sus).
+    setCuiVizitateAzi((s) => new Set(s).add(doarCifre(stop.cui)));
+    setDoneToday((d) => [...d, cheieOprire(stop)]);
+    setVisitsToday((n) => (n ?? 0) + 1);
+    if (result === "nu_mai_exista") {
+      // Firma desființată nu mai are ce căuta în lista zilei.
+      setZona((z) =>
+        z ? { ...z, stops: z.stops.filter((s) => s.cui !== stop.cui) } : z,
+      );
+    }
+  }
+
   // Fără DB / fără nimic de arătat → nu ocupăm ecranul degeaba.
   const anything =
     visitsToday !== null ||
@@ -223,6 +290,20 @@ export default function DayPanel({
   // Ruta de azi: doar ce a rămas, în etape de 10 (limita Google Maps).
   const plan = planRoute(route?.stops ?? [], doneToday, "");
 
+  // Lista zilei, grupată pe sate în ordinea scrisă de manager (așa vin
+  // din API); Map-ul păstrează ordinea primei apariții, deci și firmele
+  // prinse doar pe adresă rămân sub satul lor, nu împrăștiate.
+  const grupuri = new Map<string, Stop[]>();
+  for (const s of zona?.stops ?? []) {
+    const sat = s.localitate || "fără sat în registru";
+    const ale = grupuri.get(sat);
+    if (ale) ale.push(s);
+    else grupuri.set(sat, [s]);
+  }
+  const bifate = (zona?.stops ?? []).filter((s) =>
+    cuiVizitateAzi.has(doarCifre(s.cui)),
+  ).length;
+
   const dayLabel = new Date().toLocaleDateString("ro-RO", {
     weekday: "long",
     day: "numeric",
@@ -231,7 +312,7 @@ export default function DayPanel({
 
   return (
     <section className="fade-in">
-      <div className="rounded-2xl border border-indigo-100 bg-gradient-to-br from-indigo-50/70 via-white to-emerald-50/50 p-5">
+      <div className="relative rounded-2xl border border-indigo-100 bg-gradient-to-br from-indigo-50/70 via-white to-emerald-50/50 p-5">
         <div className="flex flex-wrap items-baseline justify-between gap-2">
           <h2 className="text-base font-semibold capitalize text-slate-900">
             ☀️ {dayLabel}
@@ -311,10 +392,12 @@ export default function DayPanel({
           </a>
         </div>
 
-        {/* ZONA DE AZI — ce mi-a dat șeful pe ziua asta. Apare cât timp
-            n-am încă ruta făcută; după ce apăs butonul, locul ei îl ia
-            traseul de mai jos. */}
-        {zona && !route && (
+        {/* ZONA DE AZI — ce mi-a dat șeful pe ziua asta, cu CLIENȚII gata
+            listați, de bifat pe măsură ce-i faci (cererea lui Răzvan:
+            „să fie deja clienții pe prima pagină și eu să bifez"). Cardul
+            rămâne toată ziua — și după ce ruta e făcută, lista de bifat
+            e alta decât linkurile de navigare. */}
+        {zona && (
           <div className="mt-3 rounded-xl border border-indigo-200 bg-white p-3">
             <p className="flex items-center gap-1.5 text-xs font-medium text-slate-500">
               <MapPinned className="h-3.5 w-3.5" /> Zona ta de azi
@@ -324,23 +407,126 @@ export default function DayPanel({
             </p>
             {zona.stops.length > 0 ? (
               <>
-                <button
-                  type="button"
-                  onClick={faRutaDinZona}
-                  disabled={facZona}
-                  className="mt-2 inline-flex min-h-11 items-center gap-1.5 rounded-lg bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-700 disabled:opacity-60"
-                >
-                  <RouteIcon className="h-4 w-4" />
-                  {facZona
-                    ? "Fac ruta…"
-                    : `Fă-mi ruta de azi (${zona.stops.length} clienți)`}
-                </button>
+                {/* Butonul de rută are rost doar cât timp NU există rută
+                    pe azi — exact ca înainte. */}
+                {!route && (
+                  <button
+                    type="button"
+                    onClick={faRutaDinZona}
+                    disabled={facZona}
+                    className="mt-2 inline-flex min-h-11 items-center gap-1.5 rounded-lg bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-700 disabled:opacity-60"
+                  >
+                    <RouteIcon className="h-4 w-4" />
+                    {facZona
+                      ? "Fac ruta…"
+                      : `Fă-mi ruta de azi (${zona.stops.length} clienți)`}
+                  </button>
+                )}
                 {zona.alteFirme > 0 && (
                   <p className="mt-1.5 break-words text-xs leading-snug text-slate-500">
                     Mai sunt {zona.alteFirme} firme nevizitate în satele de azi —
                     le vezi pe hartă, dacă termini devreme.
                   </p>
                 )}
+
+                {/* LISTA ZILEI: sat cu sat, client cu client, cu aceleași
+                    butoane ca la căutare — bifezi fără să cauți nimic. */}
+                <div className="mt-3 border-t border-slate-100 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setListaDeschisa((d) => !d)}
+                    className="flex min-h-10 w-full items-center justify-between gap-2 py-1 text-left"
+                  >
+                    <span className="text-xs font-semibold text-slate-700">
+                      Clienții tăi de azi — {bifate} din {zona.stops.length} bifați
+                    </span>
+                    <ChevronDown
+                      className={`h-4 w-4 shrink-0 text-slate-400 transition-transform ${
+                        listaDeschisa ? "rotate-180" : ""
+                      }`}
+                    />
+                  </button>
+                  {listaDeschisa &&
+                    [...grupuri.entries()].map(([sat, ai]) => (
+                      <div key={sat}>
+                        <p className="mt-2 text-[11px] font-semibold uppercase tracking-wide text-indigo-500">
+                          📍 {sat}
+                        </p>
+                        <ul className="divide-y divide-slate-100">
+                          {ai.map((f) => {
+                            const cheie = cheieOprire(f);
+                            const bifat = cuiVizitateAzi.has(doarCifre(f.cui));
+                            return (
+                              <li
+                                key={cheie}
+                                className={`min-w-0 py-2.5 ${bifat ? "opacity-60" : ""}`}
+                              >
+                                <p className="flex flex-wrap items-center gap-1.5 text-sm font-medium text-slate-800">
+                                  <span className="min-w-0 break-words">
+                                    {f.denumire}
+                                  </span>
+                                  {bifat && (
+                                    <span className="shrink-0 rounded-full bg-emerald-50 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-700 ring-1 ring-inset ring-emerald-200">
+                                      ✓ azi
+                                    </span>
+                                  )}
+                                </p>
+                                <p className="break-words text-xs text-slate-500">
+                                  {[f.adresa, f.localitate]
+                                    .filter(Boolean)
+                                    .join(", ") || "fără adresă"}
+                                </p>
+                                <div className="mt-1.5 flex flex-wrap gap-1.5">
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      setVisitFor(visitFor === cheie ? null : cheie)
+                                    }
+                                    className="rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-indigo-700"
+                                  >
+                                    🎤 Am fost
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => setOrderFor(f)}
+                                    className="rounded-lg bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-700 ring-1 ring-inset ring-emerald-200 hover:bg-emerald-100"
+                                  >
+                                    🛒 Comandă
+                                  </button>
+                                  <a
+                                    href={gmapsDir(
+                                      f.lat != null && f.lng != null
+                                        ? `${f.lat},${f.lng}`
+                                        : navAddress(f),
+                                    )}
+                                    target="_blank"
+                                    rel="noopener"
+                                    className="rounded-lg bg-slate-100 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-200"
+                                  >
+                                    🧭 Navighează
+                                  </a>
+                                  {f.telefon && (
+                                    <a
+                                      href={`tel:${f.telefon}`}
+                                      className="rounded-lg bg-slate-100 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-200"
+                                    >
+                                      📞 Sună
+                                    </a>
+                                  )}
+                                </div>
+                                {visitFor === cheie && (
+                                  <VisitButtons
+                                    onPick={(result, note) => bifeaza(f, result, note)}
+                                    onCancel={() => setVisitFor(null)}
+                                  />
+                                )}
+                              </li>
+                            );
+                          })}
+                        </ul>
+                      </div>
+                    ))}
+                </div>
               </>
             ) : (
               <p className="mt-1.5 break-words text-xs leading-snug text-slate-500">
@@ -411,7 +597,26 @@ export default function DayPanel({
             </p>
           </div>
         )}
+
+        {toast && (
+          <div className="pointer-events-none absolute inset-x-0 -bottom-2 z-10 flex justify-center">
+            <span className="rounded-full bg-slate-900 px-4 py-1.5 text-xs font-semibold text-white shadow-lg">
+              {toast}
+            </span>
+          </div>
+        )}
       </div>
+
+      <OrderModal
+        token={token}
+        firm={orderFor}
+        onClose={() => setOrderFor(null)}
+        onSent={(msg) => {
+          setOrderFor(null);
+          showToast(msg);
+          setOrdersToday((n) => (n ?? 0) + 1);
+        }}
+      />
 
       {/* Acoperirea LUI: aceeași socoteală ca raportul șefului, doar
           cifrele lui — să nu aștepte vineri ca să afle că-i în urmă. */}
