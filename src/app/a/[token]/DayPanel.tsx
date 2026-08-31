@@ -482,14 +482,14 @@ export default function DayPanel({
                                     onClick={() =>
                                       setVisitFor(visitFor === cheie ? null : cheie)
                                     }
-                                    className="rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-indigo-700"
+                                    className="inline-flex min-h-10 items-center rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-indigo-700"
                                   >
                                     🎤 Am fost
                                   </button>
                                   <button
                                     type="button"
                                     onClick={() => setOrderFor(f)}
-                                    className="rounded-lg bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-700 ring-1 ring-inset ring-emerald-200 hover:bg-emerald-100"
+                                    className="inline-flex min-h-10 items-center rounded-lg bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-700 ring-1 ring-inset ring-emerald-200 hover:bg-emerald-100"
                                   >
                                     🛒 Comandă
                                   </button>
@@ -501,14 +501,14 @@ export default function DayPanel({
                                     )}
                                     target="_blank"
                                     rel="noopener"
-                                    className="rounded-lg bg-slate-100 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-200"
+                                    className="inline-flex min-h-10 items-center rounded-lg bg-slate-100 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-200"
                                   >
                                     🧭 Navighează
                                   </a>
                                   {f.telefon && (
                                     <a
                                       href={`tel:${f.telefon}`}
-                                      className="rounded-lg bg-slate-100 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-200"
+                                      className="inline-flex min-h-10 items-center rounded-lg bg-slate-100 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-200"
                                     >
                                       📞 Sună
                                     </a>
