@@ -215,7 +215,12 @@ async function main() {
       // Panoul pornește pe județul cu cele mai multe date (SV, unde stau
       // firmele demo). Îl mut pe județul MEU — altfel testul se uită la
       // firmele altei agenții și „descoperă" un refuz corect drept bug.
-      const alegJudet = page.locator("select").first();
+      // Selectorul de JUDEȚ, luat după ce are înăuntru — nu „primul select
+      // din pagină". De când „Ziua mea" are și ea o listă (7/30/90 zile la
+      // «Acoperirea mea»), primul select nu mai era al hărții: alegerea
+      // județului cădea în gol, harta rămânea pe SV, iar suita „descoperea"
+      // lipsa butoanelor dintr-un sat care nici nu era al ei.
+      const alegJudet = page.locator('select:has(option[value="IS"])').first();
       if ((await alegJudet.count()) > 0) {
         await alegJudet.selectOption("IS").catch(() => {});
         await page.waitForTimeout(4000);

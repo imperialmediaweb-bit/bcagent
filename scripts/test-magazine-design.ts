@@ -209,7 +209,10 @@ async function main() {
         .click()
         .catch(() => {});
       await page.waitForTimeout(4000);
-      const alegJudet = page.locator("select").first();
+      // Selectorul de JUDEȚ, luat după ce are înăuntru — „primul select din
+      // pagină" e acum lista de zile de la «Acoperirea mea», iar alegerea
+      // județului cădea în gol.
+      const alegJudet = page.locator('select:has(option[value="IS"])').first();
       if ((await alegJudet.count()) > 0) {
         await alegJudet.selectOption("IS").catch(() => {});
         await page.waitForTimeout(3500);

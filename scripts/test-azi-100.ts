@@ -565,7 +565,9 @@ async function caDesigner() {
         .click()
         .catch(() => {});
       await page.waitForTimeout(4000);
-      const alegJudet = page.locator("select").first();
+      // Județul, luat după conținut: primul select din pagină e al altei
+      // secțiuni („Acoperirea mea"), nu al hărții.
+      const alegJudet = page.locator('select:has(option[value="IS"])').first();
       if ((await alegJudet.count()) > 0) {
         await alegJudet.selectOption("IS").catch(() => {});
         await page.waitForTimeout(3500);
