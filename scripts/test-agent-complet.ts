@@ -48,6 +48,55 @@ function check(n: string, ok: boolean, x = "") {
   else { fail++; rele.push(`${n} ${x}`); console.log(`    ✗ ${n} ${x}`); }
 }
 
+/** Ziua de azi în cheile aplicației — aceleași ca în DayPanel. */
+const ZI_AZI = [
+  "duminica", "luni", "marti", "miercuri", "joi", "vineri", "sambata",
+][new Date().getDay()];
+
+/**
+ * ZONA DE AZI, pusă pe linkul agentului cu API-ul LUI — exact cum și-o
+ * scrie agentul de pe telefon (POST /api/routes/zona). Satul îl luăm din
+ * ruta pe care demo-ul o face oricum pe ziua curentă: aia e sigur un sat
+ * cu clienți de-ai lui, fără să inventăm date noi.
+ *
+ * Întoarce și dacă agentul ARE rută pe azi — de asta atârnă regresia
+ * „lista dispărea de pe prima pagină când exista rută".
+ */
+async function puneZonaDeAzi(
+  token: string,
+): Promise<{ sat: string; client: string; areRuta: boolean } | null> {
+  try {
+    const r = await fetch(`${BASE}/api/routes?token=${encodeURIComponent(token)}`);
+    if (!r.ok) return null;
+    const d = (await r.json()) as {
+      routes?: Array<{
+        day: string;
+        stops: Array<{ denumire?: string; localitate?: string }>;
+      }>;
+    };
+    const rutaAzi = (d.routes ?? []).find((x) => x.day === ZI_AZI);
+    const oprire = (rutaAzi?.stops ?? []).find(
+      (s) => (s.localitate ?? "") !== "" && (s.denumire ?? "") !== "",
+    );
+    if (!oprire) return null;
+    const w = await fetch(`${BASE}/api/routes/zona`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ token, text: `${ZI_AZI} - ${oprire.localitate}` }),
+    });
+    if (!w.ok) return null;
+    const dw = (await w.json()) as { salvate?: number };
+    if (!dw.salvate) return null;
+    return {
+      sat: String(oprire.localitate),
+      client: String(oprire.denumire),
+      areRuta: !!rutaAzi,
+    };
+  } catch {
+    return null;
+  }
+}
+
 const MENIURI = [
   ["Acasă", "acasa"], ["Harta pieței", "harta"], ["Prospecți", "prospecti"],
   ["Privire ansamblu", "overview"], ["AI Insights", "ai"], ["Analiză Smart", "smart"],
@@ -91,6 +140,73 @@ async function ruleaza(numeCaz: string, cuDictare: boolean, latime: number, font
     return (el.innerText || "").trim().length;
   }, id);
 
+  // ─ LISTA CLIENȚILOR ZILEI, de pe prima pagină ─
+  // Cererea lui Răzvan: intră dimineața și are deja clienții din satele
+  // de azi, grupați pe sat, de bifat direct — fără să-i caute pe hartă.
+  const token = (page.url().split("/a/")[1] ?? "").split(/[?#]/)[0];
+  const zona = token ? await puneZonaDeAzi(token) : null;
+  if (!zona) {
+    console.log("    · fără zonă/clienți de azi pentru agentul demo — sar peste lista zilei");
+  } else {
+    await page.goto(`${BASE}/a/${token}`, { waitUntil: "domcontentloaded", timeout: 60000 });
+    await page.waitForTimeout(4000);
+    if (font !== "normal") {
+      await page.evaluate((f: string) => { document.documentElement.style.fontSize = f; }, font);
+      await page.waitForTimeout(600);
+    }
+    const textPagina = async (): Promise<string> =>
+      page.evaluate(() => document.body.innerText);
+    const t0 = await textPagina();
+    check("cardul «Zona ta de azi» e pe prima pagină", t0.includes("Zona ta de azi"));
+    check(`satul zilei are capul lui de listă (📍 ${zona.sat})`,
+      t0.toUpperCase().includes(`📍 ${zona.sat.toUpperCase()}`), zona.sat);
+    check("lista are titlul ei", t0.includes("Clienții tăi de azi"));
+    check("…cu numărătoarea de bifați", /\d+\s+din\s+\d+\s+bifați/.test(t0),
+      t0.split("\n").find((l: string) => l.includes("Clienții tăi de azi")) ?? "");
+    check("lista încape pe ecran", (await overflow()) <= 2, `${await overflow()}px afară`);
+
+    // REGRESIE: până acum cardul era `zona && !route` — cu rută salvată pe
+    // ziua curentă (demo-ul face una), lista dispărea complet de pe prima
+    // pagină, exact în ziua în care agentul avea nevoie de ea.
+    if (zona.areRuta) {
+      check("REGRESIE: cu rută salvată pe azi, lista TOT se vede",
+        t0.includes("Zona ta de azi") && t0.includes("Clienții tăi de azi"));
+      check("…iar butonul de făcut ruta nu se mai arată (are deja rută)",
+        !/Fă-mi ruta de azi/.test(t0));
+    } else {
+      console.log("    · agentul demo n-are rută pe azi — regresia cu ruta nu se poate proba aici");
+    }
+
+    const rand = page.locator("li:visible").filter({ hasText: zona.client }).first();
+    check("clientul din sat e un rând în lista zilei", (await rand.count()) > 0, zona.client);
+    if ((await rand.count()) > 0) {
+      const eraBifat = /✓ azi/.test(await rand.innerText().catch(() => ""));
+      const amFost = rand.locator('button:has-text("Am fost")').first();
+      check("rândul are butonul de vizită", (await amFost.count()) > 0);
+      const comanda = rand.locator('button:has-text("Comandă")').first();
+      check("rândul are butonul de comandă", (await comanda.count()) > 0);
+      const navig = rand.locator('a:has-text("Navighează")').first();
+      check("rândul are linkul de navigare", (await navig.count()) > 0);
+      if ((await amFost.count()) > 0) {
+        const ba = await amFost.boundingBox();
+        check("butonul de vizită din listă e ÎN ecran",
+          !!ba && ba.x >= -1 && ba.x + ba.width <= latime + 2, JSON.stringify(ba));
+        await amFost.click();
+        await page.waitForTimeout(1200);
+        const rezultat = rand.locator("button", { hasText: "Se mai gândește" }).first();
+        check("se deschid rezultatele vizitei sub rând", (await rezultat.count()) > 0);
+        if ((await rezultat.count()) > 0) {
+          await rezultat.click();
+          // GPS-ul are 3 secunde, apoi pleacă POST-ul pe /api/visits.
+          await page.waitForTimeout(5000);
+          const dupa = await rand.innerText().catch(() => "");
+          check("rândul se bifează cu ✓ azi", /✓ azi/.test(dupa),
+            eraBifat ? "(era bifat și înainte de click)" : dupa.replace(/\n/g, " ").slice(0, 90));
+        }
+      }
+    }
+  }
+
   // ─ fiecare meniu ─
   for (const [eticheta, id] of MENIURI) {
     await page.locator("header button").first().click().catch(() => {});
@@ -127,7 +243,10 @@ async function ruleaza(numeCaz: string, cuDictare: boolean, latime: number, font
   if (bule > 0) {
     await page.locator("path.leaflet-interactive").first().click({ force: true });
     await page.waitForTimeout(2500);
-    const btnVizita = page.locator('button:has-text("Am fost")').first();
+    // Doar butoanele VĂZUTE acum: de când „Ziua mea" are și ea lista de
+    // clienți cu «Am fost», primul buton din pagină e al ei — ascuns cât
+    // timp ești pe hartă, deci fără poziție pe ecran.
+    const btnVizita = page.locator('button:visible:has-text("Am fost")').first();
     check("butonul de vizită apare la firmă", (await btnVizita.count()) > 0);
     if ((await btnVizita.count()) > 0) {
       const bv = await btnVizita.boundingBox();

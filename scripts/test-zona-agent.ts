@@ -245,6 +245,76 @@ async function main() {
     check("…și fiecare oprire are CUI, altfel n-are cum să se bifeze",
       (azi.d.stops ?? []).every((s) => s.cui.replace(/\D/g, "") !== ""));
 
+    sectiune("Temelia bifei din listă: vizita de azi, citită înapoi");
+    // Bifa din «Ziua mea» nu se ține în telefon: la fiecare deschidere,
+    // panoul cere GET /api/visits, păstrează vizitele cu visitedAt din
+    // ziua de azi și bifează rândul după CUI (doar cifrele). Dacă unul
+    // din cele trei lucruri se schimbă — CUI-ul, ora, sau faptul că
+    // vizita apare deloc în listă — vizita se salvează, dar rândul rămâne
+    // nebifat, iar agentul intră a doua oară la același client.
+    const cuiBifat = cui(2);
+    const postBifa = await fetch(`${BASE}/api/visits`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        token: tokEu,
+        cui: cuiBifat,
+        denumire: `CLIENT DOI ${SUS}`,
+        // Rezultat NEUTRU dinadins: «nu mai există» ar scoate firma din
+        // liste, deci n-ar mai rămâne niciun rând pe care să se vadă bifa.
+        result: "gandeste",
+        note: "bifat din lista zilei",
+      }),
+    });
+    check("vizita dată din lista zilei se salvează", postBifa.status === 200, `status ${postBifa.status}`);
+
+    const listaVizite = await fetch(`${BASE}/api/visits?token=${tokEu}&limit=100`);
+    const dVizite = (await listaVizite.json()) as {
+      today?: number;
+      visits?: Array<{ cui: string; magazinId?: string; visitedAt: string }>;
+    };
+    check("vizitele se citesc cu linkul agentului", listaVizite.status === 200, `status ${listaVizite.status}`);
+    const vizite = dVizite.visits ?? [];
+    const aMea = vizite.find(
+      (v) => String(v.cui).replace(/\D/g, "") === cuiBifat.replace(/\D/g, ""),
+    );
+    check("vizita apare în lista pe care o citește panoul", !!aMea,
+      vizite.map((v) => v.cui).join(","));
+    check("…cu CUI-ul trimis, după normalizarea pe cifre (așa se caută rândul)",
+      String(aMea?.cui ?? "").replace(/\D/g, "") === cuiBifat.replace(/\D/g, ""),
+      `${aMea?.cui} vs ${cuiBifat}`);
+    check("…cu visitedAt parsabil, nu text oarecare",
+      !!aMea && !Number.isNaN(Date.parse(aMea.visitedAt)), aMea?.visitedAt);
+    const inceputZi = new Date();
+    inceputZi.setHours(0, 0, 0, 0);
+    check("…și din ziua de azi (numai vizitele de azi bifează)",
+      !!aMea && Date.parse(aMea.visitedAt) >= inceputZi.getTime(),
+      `${aMea?.visitedAt} vs ${inceputZi.toISOString()}`);
+    // magazinId: la o vizită pe firmă e gol, dar CÂMPUL trebuie să existe
+    // în răspuns — panoul face din el cheia de oprire (m:<magazin> sau
+    // c:<cui>). Dacă dispare din payload, ruta zilei nu mai bifează pe
+    // magazin, deși lista de firme pare că merge.
+    check("răspunsul are câmpul magazinId (gol la vizita pe firmă, nu lipsă)",
+      !!aMea && "magazinId" in aMea, JSON.stringify(aMea));
+    check("…iar magazinId e text sau nimic, ca să iasă cheia de oprire",
+      aMea?.magazinId === undefined || typeof aMea?.magazinId === "string",
+      `${typeof aMea?.magazinId}`);
+    // Legătura efectivă: CUI-ul din vizită prinde chiar rândul firmei din
+    // lista de azi — asta e tot ce face bifa.
+    const cuiDeAzi = new Set(
+      vizite
+        .filter((v) => Date.parse(v.visitedAt) >= inceputZi.getTime())
+        .map((v) => String(v.cui).replace(/\D/g, "")),
+    );
+    check("CUI-ul vizitat prinde un rând din zona de azi",
+      (azi.d.stops ?? []).some(
+        (s) => s.cui.replace(/\D/g, "") === cuiBifat.replace(/\D/g, "") &&
+          cuiDeAzi.has(s.cui.replace(/\D/g, "")),
+      ),
+      [...cuiDeAzi].join(","));
+    check("numărătoarea «X din N bifați» are de unde porni",
+      (dVizite.today ?? 0) >= 1, `today=${dVizite.today}`);
+
     sectiune("Cine n-a mai fost vizitat de mult, primul");
     // Vizităm clientul UNU A acum: la reîncărcare trebuie să treacă DUPĂ
     // UNU B, care n-a fost vizitat niciodată.
