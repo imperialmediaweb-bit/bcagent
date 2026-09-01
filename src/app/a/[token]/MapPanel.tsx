@@ -198,7 +198,13 @@ export default function MapPanel({
   agentName?: string;
 }) {
   const [judet, setJudet] = useState("SV");
-  const [preset, setPreset] = useState("fmcg");
+  // HARTA PORNEȘTE CU TOT, nu doar cu alimentarele.
+  // Domeniul din acte nu spune ce vinde magazinul: „Ava Syntax SRL" ține
+  // «Magazin MIXT AVA», „Mirdak Design SRL" ține magazin de sat. Pornind
+  // filtrat pe alimentare, agentul nu-și găsea clienți adevărați și
+  // credea că lipsesc din aplicație — Costin a raportat cinci într-o
+  // dimineață, din sate diferite. Filtrul rămâne, dar se pune cu mâna.
+  const [preset, setPreset] = useState("");
   const [localities, setLocalities] = useState<Locality[]>([]);
   const [matches, setMatches] = useState<MatchInfo[]>([]);
   const [loading, setLoading] = useState(false);
@@ -1486,6 +1492,17 @@ export default function MapPanel({
               </option>
             ))}
           </select>
+          {/* Când filtrul e pus, spunem pe față că ascunde ceva: altfel
+              agentul crede că firma lipsește din aplicație. */}
+          {preset !== "" && (
+            <button
+              type="button"
+              onClick={() => setPreset("")}
+              className="rounded-lg bg-amber-50 px-2.5 py-1.5 text-xs font-medium text-amber-800 ring-1 ring-inset ring-amber-200 hover:bg-amber-100"
+            >
+              Filtrul ascunde magazinele de alt domeniu — arată-le pe toate
+            </button>
+          )}
           <div className="ml-auto flex items-center gap-3 text-xs text-slate-500">
             {visitsToday > 0 && (
               <span className="inline-flex items-center gap-1 rounded-full bg-indigo-50 px-2 py-1 font-medium text-indigo-700">
