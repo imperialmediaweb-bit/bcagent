@@ -138,7 +138,16 @@ export async function GET(req: Request) {
           WHERE pi.cui = p.cui AND pi.org_id = ${orgIdMeu}
         )
         AND (((p.activ IS DISTINCT FROM FALSE)
-              AND (${caenPatterns.length === 0} OR p.caen LIKE ANY(${caenPatterns})))
+              AND (${caenPatterns.length === 0}
+                   OR p.caen LIKE ANY(${caenPatterns})
+                   -- DOMENIU NECUNOSCUT NU ÎNSEAMNĂ „ALT DOMENIU". Fișierul
+                   -- de la Finanțe n-are coloană CAEN, deci mii de firme
+                   -- intră cu domeniul gol. Filtrul le tăia pe toate, în
+                   -- toate satele: Costin raporta clienți reali care „nu-s
+                   -- pe hartă". A le ascunde e o afirmație pe care n-o
+                   -- putem susține — le arătăm, și spunem pe ecran câte
+                   -- sunt fără domeniu știut.
+                   OR COALESCE(p.caen, '') = ''))
              OR (p.status = 'client' AND p.assigned_agent = ${payload.agentName}))
       GROUP BY p.localitate, g.lat, g.lng, g.failed
       ORDER BY COUNT(*) FILTER (WHERE p.status = 'client' AND p.assigned_agent = ${payload.agentName}) DESC,

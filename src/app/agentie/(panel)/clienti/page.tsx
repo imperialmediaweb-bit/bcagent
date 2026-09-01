@@ -113,6 +113,10 @@ export default function ClientiPage() {
 
       <ImportUniversCard onDone={load} agents={agents} />
 
+      {/* CLIENȚII PE CARE REGISTRUL NU-I ȘTIE. Vin din importul de clienți:
+          firme adevărate, doar că lipsă din copia noastră de registru. */}
+      <ClientiLipsaCard />
+
       {/* SCOASE DE PE TEREN.
           Un agent a apăsat „Nu mai există" și firma a ieșit din listele
           întregii agenții. Dacă a greșit — ori firma s-a redeschis —
@@ -591,10 +595,126 @@ function ImportUniversCard({
                 registrul firmelor active
               </summary>
               <p className="mt-1">{result.unmatched.slice(0, 100).join(" · ")}</p>
+              {/* Nu se mai pierd la refresh: sunt scriși în bază și pot fi
+                  aduși în registru din „Clienți lipsă din registru". */}
+              <p className="mt-1.5 font-medium text-amber-700">
+                I-am păstrat. Îi aduci în registru din secțiunea de mai jos —
+                cei care au CUI în fișier intră cu un buton.
+              </p>
             </details>
           )}
         </div>
       )}
+    </Card>
+  );
+}
+
+/**
+ * CLIENȚI LIPSĂ DIN REGISTRU — ce n-a găsit importul.
+ *
+ * Costin a raportat trei clienți ai lui care „nu-s pe hartă"
+ * (AndroCament, Turism Premier Laur, I.I. Plugariu). Toți trei căzuseră
+ * aici, la import, iar lista se ștergea la primul refresh. Acum rămâne,
+ * și se poate goli cu un buton: firmele cu CUI intră în registru și se
+ * alocă agentului din fișier.
+ */
+function ClientiLipsaCard() {
+  const [lista, setLista] = useState<
+    Array<{
+      id: string;
+      denumire: string;
+      cui: string;
+      adresa: string;
+      localitate: string;
+      agent: string;
+    }>
+  >([]);
+  const [cuCui, setCuCui] = useState(0);
+  const [lucrez, setLucrez] = useState(false);
+  const [mesaj, setMesaj] = useState<string | null>(null);
+
+  const load = useCallback(async () => {
+    try {
+      const d = await api<{
+        clienti?: Array<{
+          id: string;
+          denumire: string;
+          cui: string;
+          adresa: string;
+          localitate: string;
+          agent: string;
+        }>;
+        cuCui?: number;
+      }>("/api/agentie/clienti-lipsa");
+      setLista(d.clienti ?? []);
+      setCuCui(d.cuCui ?? 0);
+    } catch {
+      // fără listă nu stricăm pagina
+    }
+  }, []);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  async function adu() {
+    setLucrez(true);
+    setMesaj(null);
+    try {
+      const d = await api<{ create?: number; alocate?: number }>(
+        "/api/agentie/clienti-lipsa",
+        { method: "POST", body: JSON.stringify({}) },
+      );
+      setMesaj(
+        `Am adus ${d.create ?? 0} firme în registru și am alocat ${d.alocate ?? 0}. ` +
+          "Apar pe hartă și în rutele agenților.",
+      );
+      await load();
+    } catch (e) {
+      setMesaj(e instanceof Error ? e.message : "Nu am putut aduce firmele.");
+    } finally {
+      setLucrez(false);
+    }
+  }
+
+  if (lista.length === 0) return null;
+  const faraCui = lista.length - cuCui;
+
+  return (
+    <Card className="border-amber-200 p-4">
+      <h2 className="text-sm font-semibold text-slate-800">
+        Clienți lipsă din registru ({lista.length})
+      </h2>
+      <p className="mt-1 text-xs text-slate-500">
+        Firme din fișierul tău de clienți pe care registrul nostru nu le are.
+        Sunt firme adevărate — copia noastră de registru nu e completă. Până
+        nu intră, agentul nu le vede pe hartă.
+      </p>
+      <p className="mt-2 text-xs text-slate-600">
+        {lista
+          .slice(0, 40)
+          .map((c) => c.denumire + (c.localitate ? ` (${c.localitate})` : ""))
+          .join(" · ")}
+        {lista.length > 40 ? ` · +${lista.length - 40}` : ""}
+      </p>
+      {faraCui > 0 && (
+        <p className="mt-1.5 text-xs text-amber-700">
+          {faraCui} dintre ele n-au CUI în fișier — pe alea nu le putem crea
+          (registrul se ține pe CUI). Pune CUI-ul în fișier și reia importul,
+          sau lasă-l pe agent să le adauge din teren ca magazin.
+        </p>
+      )}
+      <div className="mt-3 flex flex-wrap items-center gap-2">
+        <button
+          type="button"
+          onClick={adu}
+          disabled={lucrez || cuCui === 0}
+          className="inline-flex min-h-10 items-center gap-1.5 rounded-lg bg-indigo-600 px-3 py-2 text-sm font-semibold text-white hover:bg-indigo-700 disabled:opacity-50"
+        >
+          {lucrez ? "Le aduc…" : `Adu-le în registru (${cuCui})`}
+        </button>
+        {mesaj && <span className="text-xs text-slate-600">{mesaj}</span>}
+      </div>
     </Card>
   );
 }

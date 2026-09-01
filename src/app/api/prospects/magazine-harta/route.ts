@@ -72,6 +72,9 @@ export async function POST(req: Request) {
       lat?: number;
       lng?: number;
       telefon?: string;
+      /** Satul și județul, când firma trebuie adusă în registru. */
+      localitate?: string;
+      judet?: string;
     };
   };
   try {
@@ -122,7 +125,34 @@ export async function POST(req: Request) {
           AND (COALESCE(assigned_agent, '') = ''
                OR ${alAgentiei(db0, orgId, aiMei.length ? aiMei : [payload.agentName])})
       `;
-      if (f) cui = f.cui;
+      if (f) {
+        cui = f.cui;
+      } else {
+        // FIRMA NU E ÎN REGISTRU. Copia noastră de registru nu e completă
+        // (1634 din cele 2450 de pinuri ale hărții aveau CUI-uri
+        // necunoscute nouă), iar agentul stă în fața magazinului cu CUI-ul
+        // în mână: îl credem și aducem firma la noi, marcată cu cine a
+        // adus-o. Dacă CUI-ul e al altei agenții, aduFirmeLipsa n-o
+        // alocă — magazinul rămâne fără firmă, ca înainte.
+        const [ocupata] = await db0<Array<{ cui: string }>>`
+          SELECT cui FROM prospects WHERE cui = ${cuiCerut}
+        `;
+        if (!ocupata) {
+          const { aduFirmeLipsa } = await import("@/modules/prospects");
+          const rez = await aduFirmeLipsa(
+            db0,
+            orgId,
+            [{
+              cui: cuiCerut,
+              denumire: nume,
+              localitate: String(body.adauga.localitate ?? ""),
+              judet: String(body.adauga.judet ?? ""),
+            }],
+            payload.agentName,
+          );
+          if (rez.create > 0 && rez.alocate > 0) cui = cuiCerut;
+        }
+      }
     }
     const { cheieMagazin } = await import("@/modules/prospects/potrivire");
     const id = `${orgId}:teren:${cheieMagazin(nume, lat, lng)}`.slice(0, 220);

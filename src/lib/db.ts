@@ -504,6 +504,28 @@ export async function ensureSchema(): Promise<void> {
     CREATE INDEX IF NOT EXISTS osm_sweep_coada
       ON osm_sweep(org_id, stare, rang);
 
+    -- CLIENȚII DIN FIȘIER PE CARE REGISTRUL NU-I ȘTIE.
+    -- Importul de clienți doar POTRIVEȘTE firme; ce nu găsea se arăta o
+    -- dată pe ecran și se pierdea la primul refresh. Așa au dispărut
+    -- clienți adevărați ai lui Costin (AndroCament, Turism Premier Laur,
+    -- I.I. Plugariu) — nimeni nu mai știa că lipsesc, până le-a spus el
+    -- pe WhatsApp. Aici rămân scriși, până când cineva îi aduce în
+    -- registru sau îi lasă deoparte cu bună știință.
+    CREATE TABLE IF NOT EXISTS clienti_nepotriviti (
+      id BIGSERIAL PRIMARY KEY,
+      org_id TEXT NOT NULL,
+      denumire TEXT NOT NULL,
+      cui TEXT NOT NULL DEFAULT '',
+      adresa TEXT NOT NULL DEFAULT '',
+      localitate TEXT NOT NULL DEFAULT '',
+      agent TEXT NOT NULL DEFAULT '',
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      rezolvat_la TIMESTAMPTZ,
+      rezolvat_cum TEXT NOT NULL DEFAULT ''
+    );
+    CREATE INDEX IF NOT EXISTS clienti_nepotriviti_org
+      ON clienti_nepotriviti(org_id) WHERE rezolvat_la IS NULL;
+
     CREATE TABLE IF NOT EXISTS geo_localitati (
       judet TEXT NOT NULL,
       localitate TEXT NOT NULL,

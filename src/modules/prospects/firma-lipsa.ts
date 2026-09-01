@@ -1,0 +1,165 @@
+import { getDB } from "@/lib/db";
+import { normalizeCounty } from "./caen";
+
+/**
+ * FIRMA CARE NU E ÎN REGISTRU, ADUSĂ ÎN SISTEM.
+ *
+ * Copia noastră de registru nu e completă — o știm cu cifre: dintre cele
+ * 2450 de pinuri din harta lui Bogdan, 1634 aveau CUI-uri necunoscute
+ * nouă. Firme adevărate, doar că lipsă la noi. Costin a dat peste aceeași
+ * gaură din teren: „SC AndroCament nu-l am pe hartă", „turism premier
+ * laur, în Broscăuți, nu este pe hartă", „i.i. plugariu — nu este pe
+ * hartă".
+ *
+ * Până acum, singurul loc care știa să creeze o firmă lipsă era importul
+ * de hartă (harta-aplica). Importul de clienți al managerului doar
+ * POTRIVEA — ce nu găsea se arăta o dată pe ecran și se pierdea; iar
+ * agentul din teren primea refuz. Aici e aceeași facere, într-un singur
+ * loc, ca s-o poată folosi și managerul, și agentul.
+ *
+ * Reguli care nu se negociază:
+ *   · nu inventăm nimic — doar ce a scris omul (nume, sat, adresă);
+ *   · `adus_de_org` spune CINE a adus-o, ca să se știe de ce n-are CAEN;
+ *   · niciodată peste o firmă care există deja (ON CONFLICT DO NOTHING) —
+ *     a ei e denumirea de la Finanțe, nu cea scrisă de noi;
+ *   · alocarea la un agent se face doar dacă firma chiar e a agenției
+ *     noastre, cu aceeași pază ca peste tot (assigned_org).
+ */
+
+type DB = NonNullable<ReturnType<typeof getDB>>;
+
+export interface FirmaDeAdus {
+  cui: string;
+  denumire: string;
+  adresa?: string;
+  localitate?: string;
+  judet?: string;
+}
+
+export interface RezultatAducere {
+  /** Câte rânduri noi au intrat în registru. */
+  create: number;
+  /** Câte existau deja (nu le-am atins). */
+  existau: number;
+  /** Câte au fost alocate agentului cerut (dacă s-a cerut). */
+  alocate: number;
+  /** CUI-urile care au rămas pe dinafară, cu motivul. */
+  sarite: Array<{ cui: string; motiv: string }>;
+}
+
+/** CUI valid = doar cifre, 2-10 caractere. Fără el nu creăm firmă. */
+export function cuiCurat(brut: string): string {
+  return String(brut ?? "").replace(/\D/g, "").slice(0, 10);
+}
+
+/**
+ * Aduce în registru firmele care lipsesc și, opțional, le alocă unui agent
+ * al firmei ca CLIENȚI. Firmele care există deja rămân neatinse.
+ */
+export async function aduFirmeLipsa(
+  db: DB,
+  orgId: string,
+  firme: FirmaDeAdus[],
+  /** Numele agentului căruia i se alocă drept clienți. Gol = doar creare. */
+  agentName = "",
+): Promise<RezultatAducere> {
+  const rez: RezultatAducere = { create: 0, existau: 0, alocate: 0, sarite: [] };
+  if (!orgId) {
+    return { ...rez, sarite: firme.map((f) => ({ cui: f.cui, motiv: "fără firmă" })) };
+  }
+
+  // Curățare + eliminarea dublurilor din același fișier.
+  const vazute = new Set<string>();
+  const bune: Array<Required<FirmaDeAdus>> = [];
+  for (const f of firme) {
+    const cui = cuiCurat(f.cui);
+    const denumire = String(f.denumire ?? "").trim();
+    if (cui.length < 2) {
+      rez.sarite.push({ cui: f.cui ?? "", motiv: "fără CUI" });
+      continue;
+    }
+    if (denumire === "") {
+      rez.sarite.push({ cui, motiv: "fără denumire" });
+      continue;
+    }
+    if (vazute.has(cui)) continue;
+    vazute.add(cui);
+    bune.push({
+      cui,
+      denumire: denumire.slice(0, 200),
+      adresa: String(f.adresa ?? "").trim().slice(0, 300),
+      localitate: String(f.localitate ?? "").trim().slice(0, 120),
+      judet: normalizeCounty(String(f.judet ?? "")).slice(0, 2),
+    });
+  }
+  if (bune.length === 0) return rez;
+
+  // JUDEȚUL, LUAT DIN SATUL DEJA CUNOSCUT (nu ghicit).
+  // Fișierul de clienți are satul, rar și județul. Fără județ, firma nou
+  // creată nu apare pe harta agentului — care e filtrată pe județ — și
+  // omul rămâne exact cu problema de la care am plecat. Dacă satul e în
+  // geo_localitati într-un SINGUR județ, ăla e; dacă e în mai multe
+  // (sate cu același nume), nu alegem noi — rămâne gol.
+  const fataJudet = bune.filter((f) => f.judet === "" && f.localitate !== "");
+  if (fataJudet.length > 0) {
+    const sate = [...new Set(fataJudet.map((f) => f.localitate))];
+    const gasite = await db<Array<{ localitate: string; judet: string; cate: string }>>`
+      SELECT localitate, MIN(judet) AS judet, COUNT(DISTINCT judet)::text AS cate
+      FROM geo_localitati
+      WHERE localitate = ANY(${sate})
+      GROUP BY localitate
+    `;
+    const peSat = new Map<string, string>();
+    for (const g of gasite) {
+      if (g.cate === "1") peSat.set(g.localitate, g.judet);
+    }
+    for (const f of fataJudet) {
+      const j = peSat.get(f.localitate);
+      if (j) f.judet = j;
+    }
+  }
+
+  const cuiuri = bune.map((f) => f.cui);
+  const inainte = await db<Array<{ cui: string }>>`
+    SELECT cui FROM prospects WHERE cui = ANY(${cuiuri})
+  `;
+  const existente = new Set(inainte.map((r) => r.cui));
+  rez.existau = existente.size;
+
+  const noi = bune.filter((f) => !existente.has(f.cui));
+  for (let i = 0; i < noi.length; i += 500) {
+    const bucata = noi.slice(i, i + 500).map((f) => ({ ...f, status: "nou", adus_de_org: orgId }));
+    const r = await db`
+      INSERT INTO prospects ${db(
+        bucata,
+        "cui", "denumire", "adresa", "localitate", "judet", "status", "adus_de_org",
+      )}
+      ON CONFLICT (cui) DO NOTHING
+    `;
+    rez.create += r.count;
+  }
+
+  if (agentName !== "") {
+    // Alocăm DOAR ce n-are deja stăpân în altă agenție. Firma vecinului nu
+    // se atinge nici măcar cu o alocare.
+    const alocate = await db<Array<{ cui: string }>>`
+      UPDATE prospects SET
+        status = 'client',
+        assigned_agent = ${agentName},
+        assigned_org = ${orgId},
+        updated_at = NOW()
+      WHERE cui = ANY(${cuiuri})
+        AND (COALESCE(assigned_agent, '') = ''
+             OR COALESCE(assigned_org, '') IN ('', ${orgId}))
+      RETURNING cui
+    `;
+    rez.alocate = alocate.length;
+    const alocateSet = new Set(alocate.map((r) => r.cui));
+    for (const f of bune) {
+      if (!alocateSet.has(f.cui)) {
+        rez.sarite.push({ cui: f.cui, motiv: "e alocată altei agenții" });
+      }
+    }
+  }
+  return rez;
+}

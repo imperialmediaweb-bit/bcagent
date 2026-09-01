@@ -42,3 +42,5 @@ export type {
   StreamDiagnostic,
 } from "./stream";
 export { splitDelimited } from "./parse";
+export { aduFirmeLipsa, cuiCurat } from "./firma-lipsa";
+export type { FirmaDeAdus, RezultatAducere } from "./firma-lipsa";

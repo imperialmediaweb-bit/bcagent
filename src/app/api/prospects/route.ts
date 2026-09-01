@@ -180,10 +180,16 @@ export async function GET(req: Request) {
         -- Nu pretindem că sunt alimentare: pretindem doar că sunt
         -- magazinele de pe harta ACESTEI firme, ceea ce e un fapt. Ale
         -- altor agenții rămân ascunse, ca până acum.
+        -- FIRMELE FĂRĂ DOMENIU ȘTIUT TREC PRIN FILTRU. Fișierul de la
+        -- Finanțe n-are coloană CAEN: firmele intră cu domeniul gol, iar
+        -- filtrul „Alimentare" le ascundea pe toate, în toate satele.
+        -- Până acum treceau doar cele aduse de firma noastră din hartă;
+        -- restul registrului rămânea nevăzut, deși erau clienți reali
+        -- (Costin: „SC AndroCament nu-l am pe hartă").
         AND (${caenPattern} = '' OR caen LIKE ${caenPattern}
-             OR (COALESCE(caen,'') = '' AND adus_de_org = ${orgId || "-"}))
+             OR COALESCE(caen,'') = '')
         AND (${caenInPatterns.length === 0} OR caen LIKE ANY(${caenInPatterns})
-             OR (COALESCE(caen,'') = '' AND adus_de_org = ${orgId || "-"}))
+             OR COALESCE(caen,'') = '')
         AND (${status} = ''
              -- Ramura asta folosește indexul pe status (1,3M firme).
              OR (status = ${status}

@@ -251,9 +251,14 @@ export async function POST(req: Request) {
       });
       matchedKeys.add(`${c.cui}|${clientName.toUpperCase()}`);
     }
-    const unmatched = clients
-      .filter((c) => !matchedKeys.has(`${c.cui}|${c.name.toUpperCase()}`))
-      .map((c) => c.name || `CUI ${c.cui}`);
+    // NEPOTRIVIȚII, PĂSTRAȚI ÎNTREGI. Până acum plecau de aici doar ca
+    // nume, se arătau o dată pe ecran și se pierdeau la primul refresh —
+    // așa au dispărut clienți adevărați ai lui Costin. Acum ținem tot ce
+    // scria în fișier, ca să-i putem aduce în registru cu un buton.
+    const nepotrivitiIntregi = clients.filter(
+      (c) => !matchedKeys.has(`${c.cui}|${c.name.toUpperCase()}`),
+    );
+    const unmatched = nepotrivitiIntregi.map((c) => c.name || `CUI ${c.cui}`);
 
     // Scriem: status client + distribuția pe agenți (fișierul e autoritar
     // când are agent; fără agent nu stricăm alocarea existentă).
@@ -285,6 +290,30 @@ export async function POST(req: Request) {
         matched: matched.length,
         unmatched: unmatched.length,
       });
+    }
+
+    // Lista de nepotriviți se scrie și în bază, la fiecare import real:
+    // altfel managerul o vede o dată și gata. Rescriem de la zero lista
+    // nerezolvată a firmei — fișierul de acum e adevărul de acum.
+    if (!body.dryRun) {
+      await db`DELETE FROM clienti_nepotriviti
+               WHERE org_id = ${auth.session.orgId} AND rezolvat_la IS NULL`;
+      const deScris = nepotrivitiIntregi.slice(0, 5000).map((c) => ({
+        org_id: auth.session.orgId,
+        denumire: String(c.name ?? "").slice(0, 200),
+        cui: String(c.cui ?? "").replace(/\D/g, "").slice(0, 10),
+        adresa: String(c.adresa ?? "").slice(0, 300),
+        localitate: String(c.localitate ?? "").slice(0, 120),
+        agent: resolveAgent(c.agent),
+      }));
+      for (let i = 0; i < deScris.length; i += 500) {
+        await db`
+          INSERT INTO clienti_nepotriviti ${db(
+            deScris.slice(i, i + 500),
+            "org_id", "denumire", "cui", "adresa", "localitate", "agent",
+          )}
+        `;
+      }
     }
 
     return Response.json({
