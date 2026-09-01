@@ -1,5 +1,5 @@
 import { ensureSchema, getDB, isDBEnabled } from "@/lib/db";
-import { aduFirmeLipsa } from "@/modules/prospects";
+import { aduFirmeLipsa } from "@/modules/prospects/firma-lipsa";
 import { audit, requireOrgUser } from "@/modules/platform";
 
 export const runtime = "nodejs";
@@ -95,18 +95,27 @@ export async function POST(req: Request) {
     let create = 0;
     let alocate = 0;
     const sarite: Array<{ cui: string; motiv: string }> = [];
+    // Doar CUI-urile chiar rezolvate ies din listă. Marcând tot, cele
+    // sărite (CUI greșit, firma altei agenții) dispăreau de pe ecran fără
+    // să fi fost rezolvate — și nimeni nu mai afla de ele.
+    const reusite = new Set<string>();
     for (const [agent, ale] of peAgent) {
       const rez = await aduFirmeLipsa(db, auth.session.orgId, ale, agent);
       create += rez.create;
       alocate += rez.alocate;
       sarite.push(...rez.sarite);
+      const bune = new Set(rez.reusite);
+      for (const r of ale) if (bune.has(r.cui)) reusite.add(r.id);
     }
-    await db`
-      UPDATE clienti_nepotriviti
-      SET rezolvat_la = NOW(), rezolvat_cum = 'aduse in registru'
-      WHERE org_id = ${auth.session.orgId}
-        AND id::text = ANY(${rows.map((r) => r.id)})
-    `;
+    const deInchis = rows.filter((r) => reusite.has(r.id)).map((r) => r.id);
+    if (deInchis.length > 0) {
+      await db`
+        UPDATE clienti_nepotriviti
+        SET rezolvat_la = NOW(), rezolvat_cum = 'aduse in registru'
+        WHERE org_id = ${auth.session.orgId}
+          AND id::text = ANY(${deInchis})
+      `;
+    }
     await audit(auth.session.email, "clients.missing.create", auth.session.orgId, {
       create,
       alocate,

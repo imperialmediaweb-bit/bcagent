@@ -49,8 +49,23 @@ const idStrain = `ag-${RUN}-strain`;
 const numeEu = `Lipsa Eu ${RUN}`;
 const numeStrain = `Lipsa Strain ${RUN}`;
 const email = `${RUN}@lipsa.test`;
-const baza = Date.now().toString().slice(-7);
-const cui = (i: number) => `55${baza}${i}`;
+/**
+ * CUI-uri cu cifră de control ADEVĂRATĂ. De când aducerea firmelor
+ * verifică cifra de control (registrul e comun: un rând stricat îl vede
+ * toată lumea), un CUI inventat n-ar mai trece nicăieri — și testul ar
+ * verifica refuzul, nu drumul.
+ */
+const CHEIE_CUI = [7, 5, 3, 2, 1, 7, 5, 3, 2];
+function faCuiValid(baza: string): string {
+  const cifre = baza.split("").map(Number);
+  const cheie = CHEIE_CUI.slice(CHEIE_CUI.length - cifre.length);
+  let suma = 0;
+  for (let i = 0; i < cifre.length; i++) suma += cifre[i] * cheie[i];
+  const rest = (suma * 10) % 11;
+  return baza + String(rest === 10 ? 0 : rest);
+}
+const baza = Date.now().toString().slice(-6);
+const cui = (i: number) => faCuiValid(`9${baza}${i}`.slice(0, 9));
 const SAT = `LSAT UNU ${SUS}`;
 
 /** Firma fără CAEN, exact ca cele venite din fișierul de la Finanțe. */

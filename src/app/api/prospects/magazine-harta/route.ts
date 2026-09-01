@@ -138,7 +138,7 @@ export async function POST(req: Request) {
           SELECT cui FROM prospects WHERE cui = ${cuiCerut}
         `;
         if (!ocupata) {
-          const { aduFirmeLipsa } = await import("@/modules/prospects");
+          const { aduFirmeLipsa } = await import("@/modules/prospects/firma-lipsa");
           const rez = await aduFirmeLipsa(
             db0,
             orgId,

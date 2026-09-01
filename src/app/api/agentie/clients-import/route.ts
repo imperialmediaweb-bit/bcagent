@@ -293,11 +293,21 @@ export async function POST(req: Request) {
     }
 
     // Lista de nepotriviți se scrie și în bază, la fiecare import real:
-    // altfel managerul o vede o dată și gata. Rescriem de la zero lista
-    // nerezolvată a firmei — fișierul de acum e adevărul de acum.
+    // altfel managerul o vede o dată și gata.
+    //
+    // NU ștergem toată lista: managerul importă des agent cu agent, iar
+    // un „DELETE tot" ar fi șters nepotrivițiii celorlalți agenți la
+    // fiecare fișier. Ștergem doar rândurile care se referă la firmele
+    // din fișierul ăsta (aceleași denumiri), ca să nu se dubleze.
     if (!body.dryRun) {
-      await db`DELETE FROM clienti_nepotriviti
-               WHERE org_id = ${auth.session.orgId} AND rezolvat_la IS NULL`;
+      const numeAcum = clients
+        .map((c) => String(c.name ?? "").slice(0, 200))
+        .filter((n) => n !== "");
+      if (numeAcum.length > 0) {
+        await db`DELETE FROM clienti_nepotriviti
+                 WHERE org_id = ${auth.session.orgId} AND rezolvat_la IS NULL
+                   AND denumire = ANY(${numeAcum})`;
+      }
       const deScris = nepotrivitiIntregi.slice(0, 5000).map((c) => ({
         org_id: auth.session.orgId,
         denumire: String(c.name ?? "").slice(0, 200),

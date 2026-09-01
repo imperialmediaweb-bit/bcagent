@@ -145,9 +145,11 @@ export async function GET(req: Request) {
                    -- intră cu domeniul gol. Filtrul le tăia pe toate, în
                    -- toate satele: Costin raporta clienți reali care „nu-s
                    -- pe hartă". A le ascunde e o afirmație pe care n-o
-                   -- putem susține — le arătăm, și spunem pe ecran câte
-                   -- sunt fără domeniu știut.
-                   OR COALESCE(p.caen, '') = ''))
+                   -- putem susține.
+                   -- Numai registrul PUBLIC și ce-am adus noi: firmele
+                   -- aduse privat de altă agenție rămân ale ei.
+                   OR (COALESCE(p.caen, '') = ''
+                       AND COALESCE(p.adus_de_org,'') IN ('', ${orgIdMeu}))))
              OR (p.status = 'client' AND p.assigned_agent = ${payload.agentName}))
       GROUP BY p.localitate, g.lat, g.lng, g.failed
       ORDER BY COUNT(*) FILTER (WHERE p.status = 'client' AND p.assigned_agent = ${payload.agentName}) DESC,

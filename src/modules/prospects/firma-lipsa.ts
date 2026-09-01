@@ -1,5 +1,7 @@
 import { getDB } from "@/lib/db";
+import { alAgentiei } from "@/lib/org-scope";
 import { normalizeCounty } from "./caen";
+import { cuiValid, curataCui } from "./cui";
 
 /**
  * FIRMA CARE NU E ÎN REGISTRU, ADUSĂ ÎN SISTEM.
@@ -45,11 +47,23 @@ export interface RezultatAducere {
   alocate: number;
   /** CUI-urile care au rămas pe dinafară, cu motivul. */
   sarite: Array<{ cui: string; motiv: string }>;
+  /**
+   * CUI-urile chiar rezolvate (create și/sau alocate nouă), exact așa cum
+   * au venit la intrare. Cine cheamă nu trebuie să ghicească potrivind
+   * șiruri: CUI-ul curățat poate diferi de cel scris (zerouri în față).
+   */
+  reusite: string[];
 }
 
-/** CUI valid = doar cifre, 2-10 caractere. Fără el nu creăm firmă. */
+/**
+ * CUI curat ȘI ADEVĂRAT. Nu-i destul să fie cifre: registrul e COMUN
+ * tuturor agențiilor, iar un rând stricat îl vede toată lumea și nu-l mai
+ * scoate nimeni. Cifra de control taie greșelile de tastare din fața
+ * magazinului (un telefon, un an, un cod intern — niciunul nu trece).
+ */
 export function cuiCurat(brut: string): string {
-  return String(brut ?? "").replace(/\D/g, "").slice(0, 10);
+  const c = curataCui(brut);
+  return cuiValid(c) ? c : "";
 }
 
 /**
@@ -63,19 +77,25 @@ export async function aduFirmeLipsa(
   /** Numele agentului căruia i se alocă drept clienți. Gol = doar creare. */
   agentName = "",
 ): Promise<RezultatAducere> {
-  const rez: RezultatAducere = { create: 0, existau: 0, alocate: 0, sarite: [] };
+  const rez: RezultatAducere = { create: 0, existau: 0, alocate: 0, sarite: [], reusite: [] };
   if (!orgId) {
     return { ...rez, sarite: firme.map((f) => ({ cui: f.cui, motiv: "fără firmă" })) };
   }
 
   // Curățare + eliminarea dublurilor din același fișier.
   const vazute = new Set<string>();
+  /** CUI curățat → cum l-a scris omul, ca să raportăm în limba lui. */
+  const cumAFostScris = new Map<string, string>();
   const bune: Array<Required<FirmaDeAdus>> = [];
   for (const f of firme) {
     const cui = cuiCurat(f.cui);
     const denumire = String(f.denumire ?? "").trim();
-    if (cui.length < 2) {
-      rez.sarite.push({ cui: f.cui ?? "", motiv: "fără CUI" });
+    if (cui === "") {
+      const brut = String(f.cui ?? "").trim();
+      rez.sarite.push({
+        cui: brut,
+        motiv: brut === "" ? "fără CUI" : "CUI greșit (nu trece cifra de control)",
+      });
       continue;
     }
     if (denumire === "") {
@@ -84,6 +104,7 @@ export async function aduFirmeLipsa(
     }
     if (vazute.has(cui)) continue;
     vazute.add(cui);
+    cumAFostScris.set(cui, String(f.cui ?? "").trim());
     bune.push({
       cui,
       denumire: denumire.slice(0, 200),
@@ -140,8 +161,19 @@ export async function aduFirmeLipsa(
   }
 
   if (agentName !== "") {
-    // Alocăm DOAR ce n-are deja stăpân în altă agenție. Firma vecinului nu
-    // se atinge nici măcar cu o alocare.
+    // Alocăm DOAR ce n-are stăpân sau e deja al AGENȚIEI NOASTRE.
+    // Varianta „assigned_org gol înseamnă liber" era o gaură: alocările
+    // vechi (dinainte de coloana assigned_org) ale unui agent de la altă
+    // firmă treceau prin ea și le luam clienții. Aceeași gardă ca peste
+    // tot în platformă — pe nume ȘI pe firmă.
+    // Numele tuturor agenților firmei: alocările vechi se judecă după
+    // nume, ca peste tot, dar numai pentru numele NOASTRE.
+    const colegi = await db<Array<{ name: string }>>`
+      SELECT name FROM org_agents WHERE org_id = ${orgId} AND active
+    `;
+    const numeleNoastre = [
+      ...new Set([agentName, ...colegi.map((c) => c.name)].filter((n) => n !== "")),
+    ];
     const alocate = await db<Array<{ cui: string }>>`
       UPDATE prospects SET
         status = 'client',
@@ -150,16 +182,24 @@ export async function aduFirmeLipsa(
         updated_at = NOW()
       WHERE cui = ANY(${cuiuri})
         AND (COALESCE(assigned_agent, '') = ''
-             OR COALESCE(assigned_org, '') IN ('', ${orgId}))
+             OR ${alAgentiei(db, orgId, numeleNoastre)})
       RETURNING cui
     `;
     rez.alocate = alocate.length;
     const alocateSet = new Set(alocate.map((r) => r.cui));
     for (const f of bune) {
-      if (!alocateSet.has(f.cui)) {
-        rez.sarite.push({ cui: f.cui, motiv: "e alocată altei agenții" });
+      if (alocateSet.has(f.cui)) {
+        rez.reusite.push(cumAFostScris.get(f.cui) ?? f.cui);
+      } else {
+        rez.sarite.push({
+          cui: cumAFostScris.get(f.cui) ?? f.cui,
+          motiv: "e alocată altei agenții",
+        });
       }
     }
+  } else {
+    // Fără alocare cerută: reușită = firma e în registru după trecerea asta.
+    for (const f of bune) rez.reusite.push(cumAFostScris.get(f.cui) ?? f.cui);
   }
   return rez;
 }

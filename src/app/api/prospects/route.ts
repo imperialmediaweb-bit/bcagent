@@ -182,14 +182,18 @@ export async function GET(req: Request) {
         -- altor agenții rămân ascunse, ca până acum.
         -- FIRMELE FĂRĂ DOMENIU ȘTIUT TREC PRIN FILTRU. Fișierul de la
         -- Finanțe n-are coloană CAEN: firmele intră cu domeniul gol, iar
-        -- filtrul „Alimentare" le ascundea pe toate, în toate satele.
-        -- Până acum treceau doar cele aduse de firma noastră din hartă;
-        -- restul registrului rămânea nevăzut, deși erau clienți reali
+        -- filtrul „Alimentare" le ascundea pe toate, în toate satele
         -- (Costin: „SC AndroCament nu-l am pe hartă").
+        -- DAR NUMAI CELE DIN REGISTRUL PUBLIC (adus_de_org gol) ȘI ALE
+        -- NOASTRE. Ce a adus privat altă agenție în registru — din harta
+        -- sau din lista ei de clienți — rămâne al ei: aia e lista de
+        -- magazine a concurentului, nu registru public.
         AND (${caenPattern} = '' OR caen LIKE ${caenPattern}
-             OR COALESCE(caen,'') = '')
+             OR (COALESCE(caen,'') = ''
+                 AND COALESCE(adus_de_org,'') IN ('', ${orgId || "-"})))
         AND (${caenInPatterns.length === 0} OR caen LIKE ANY(${caenInPatterns})
-             OR COALESCE(caen,'') = '')
+             OR (COALESCE(caen,'') = ''
+                 AND COALESCE(adus_de_org,'') IN ('', ${orgId || "-"})))
         AND (${status} = ''
              -- Ramura asta folosește indexul pe status (1,3M firme).
              OR (status = ${status}
@@ -215,7 +219,11 @@ export async function GET(req: Request) {
         OR (${aiMei}
             AND status = 'client'
             AND assigned_agent = ${auth.agentName}
-            AND (${judet} = '' OR judet = ${judet})
+            -- Județ necunoscut nu-i motiv să-i ascundem omului clientul.
+            -- Firmele aduse din lista de clienți pot rămâne fără județ
+            -- (satul lor nu-i încă geocodat); ascunse, ele reproduceau
+            -- exact problema de la care am plecat: „nu-l am pe hartă".
+            AND (${judet} = '' OR judet = ${judet} OR COALESCE(judet,'') = '')
             AND (${localitate} = ''
                  -- satul de înregistrare din registru...
                  OR localitate ILIKE ${"%" + localitate + "%"}

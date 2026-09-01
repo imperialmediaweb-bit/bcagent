@@ -42,5 +42,7 @@ export type {
   StreamDiagnostic,
 } from "./stream";
 export { splitDelimited } from "./parse";
-export { aduFirmeLipsa, cuiCurat } from "./firma-lipsa";
-export type { FirmaDeAdus, RezultatAducere } from "./firma-lipsa";
+// `firma-lipsa` NU se exportă de aici: barrel-ul ăsta e importat și de
+// componente de browser (admin/ProspectsImport), iar helperul aduce cu el
+// org-scope → db → postgres, care n-au ce căuta în bundle-ul clientului.
+// Se importă direct din "@/modules/prospects/firma-lipsa", din server.
