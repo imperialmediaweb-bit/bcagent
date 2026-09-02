@@ -160,6 +160,35 @@ export async function aduFirmeLipsa(
     rez.create += r.count;
   }
 
+  // ── DATELE OFICIALE, LUATE DE LA ANAF ──
+  // Omul ne dă CUI-ul (de pe certificat, din poză). Numele, adresa,
+  // domeniul și telefonul le luăm de la sursă, nu de la cine tastează:
+  // așa firma nouă intră în registru cu date adevărate, nu cu „magazinul
+  // de la Vasile". Dacă ANAF nu răspunde, păstrăm ce-a scris omul și
+  // măturătorul de noapte le completează mai târziu.
+  if (noi.length > 0) {
+    try {
+      const { queryAnafBatch } = await import("./anaf");
+      const gasite = await queryAnafBatch(noi.slice(0, 100).map((f) => f.cui));
+      for (const [cuiAnaf, info] of gasite) {
+        await db`
+          UPDATE prospects SET
+            denumire = CASE WHEN ${info.denumire ?? ""} <> '' THEN ${info.denumire ?? ""} ELSE denumire END,
+            adresa = CASE WHEN ${info.adresa ?? ""} <> '' THEN ${info.adresa ?? ""} ELSE adresa END,
+            caen = CASE WHEN ${info.caen ?? ""} <> '' THEN ${info.caen ?? ""} ELSE caen END,
+            telefon = CASE WHEN ${info.telefon ?? ""} <> '' THEN ${info.telefon ?? ""} ELSE telefon END,
+            activ = ${info.activ},
+            tva = ${info.tva},
+            updated_at = NOW()
+          WHERE cui = ${cuiAnaf} AND adus_de_org = ${orgId}
+        `;
+      }
+    } catch {
+      // ANAF pică des și nu-i treaba agentului din teren: firma rămâne
+      // cu ce s-a scris, verificarea automată o completează ulterior.
+    }
+  }
+
   if (agentName !== "") {
     // Alocăm DOAR ce n-are stăpân sau e deja al AGENȚIEI NOASTRE.
     // Varianta „assigned_org gol înseamnă liber" era o gaură: alocările

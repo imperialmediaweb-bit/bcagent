@@ -289,6 +289,10 @@ export default function MapPanel({
   /** Locul apăsat pe hartă + numele scris — până la salvare. */
   const [magNou, setMagNou] = useState<{ lat: number; lng: number } | null>(null);
   const [magNouNume, setMagNouNume] = useState("");
+  /** CUI-ul firmei, citit din poza certificatului (sau scris de mână). */
+  const [magNouCui, setMagNouCui] = useState("");
+  const [magNouScanez, setMagNouScanez] = useState(false);
+  const [magNouMesaj, setMagNouMesaj] = useState("");
   const [magNouSalvez, setMagNouSalvez] = useState(false);
   const [doarZona, setDoarZona] = useState(false);
   // CUI-urile bifate azi („Am fost") — o rută lungă se continuă a doua zi
@@ -480,7 +484,16 @@ export default function MapPanel({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           token,
-          adauga: { nume: magNouNume.trim(), lat: magNou.lat, lng: magNou.lng },
+          adauga: {
+            nume: magNouNume.trim(),
+            lat: magNou.lat,
+            lng: magNou.lng,
+            // Cu CUI, firma intră și în registru, nu rămâne doar un punct
+            // pe hartă — de-aia merită poza la certificat.
+            cui: magNouCui.trim(),
+            localitate: selectedLoc ?? "",
+            judet,
+          },
         }),
       });
       const d = (await r.json().catch(() => null)) as {
@@ -518,7 +531,59 @@ export default function MapPanel({
     } finally {
       setMagNouSalvez(false);
     }
-  }, [token, magNou, magNouNume]);
+  }, [token, magNou, magNouNume, magNouCui, selectedLoc, judet]);
+
+  /**
+   * POZĂ LA CERTIFICAT → CUI. Agentul e în magazin, certificatul e pe
+   * perete: o poză și codul se completează singur. Dacă nu se citește
+   * limpede (cifră de control greșită), spunem asta — nu punem un cod
+   * inventat în registrul comun.
+   */
+  const citesteCertificatul = useCallback(
+    async (file: File) => {
+      setMagNouScanez(true);
+      setMagNouMesaj("");
+      try {
+        const data = await new Promise<string>((resolve, reject) => {
+          const fr = new FileReader();
+          fr.onload = () => resolve(String(fr.result ?? ""));
+          fr.onerror = () => reject(new Error("citire"));
+          fr.readAsDataURL(file);
+        });
+        const virgula = data.indexOf(",");
+        const r = await fetch("/api/firma-scan", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            token,
+            image: { data: data.slice(virgula + 1), mime: file.type || "image/jpeg" },
+          }),
+        });
+        const d = (await r.json().catch(() => null)) as {
+          cui?: string;
+          denumire?: string;
+          mesaj?: string;
+          error?: string;
+        } | null;
+        if (!r.ok) {
+          setMagNouMesaj(d?.error ?? "N-am putut citi poza.");
+          return;
+        }
+        if (d?.cui) setMagNouCui(d.cui);
+        if (d?.denumire && magNouNume.trim() === "") setMagNouNume(d.denumire);
+        setMagNouMesaj(
+          d?.cui
+            ? `Am citit CUI ${d.cui}${d.denumire ? ` — ${d.denumire}` : ""}. Verifică și salvează.`
+            : (d?.mesaj ?? "N-am găsit codul în poză."),
+        );
+      } catch {
+        setMagNouMesaj("N-am putut citi poza. Încearcă din nou.");
+      } finally {
+        setMagNouScanez(false);
+      }
+    },
+    [token, magNouNume],
+  );
 
   /**
    * „AM FOST LA MAGAZINUL ĂSTA."
@@ -1726,6 +1791,36 @@ export default function MapPanel({
                     </button>
                   </div>
                 </div>
+                {/* POZĂ LA CERTIFICAT: cu CUI, firma intră și în registru
+                    — fără el rămâne doar un punct pe hartă. */}
+                <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-center">
+                  <label className="inline-flex min-h-11 cursor-pointer items-center gap-1.5 rounded-lg border border-emerald-300 bg-white px-3 py-2 text-sm font-semibold text-emerald-800 hover:bg-emerald-50">
+                    <input
+                      type="file"
+                      accept="image/*"
+                      capture="environment"
+                      className="hidden"
+                      onChange={(e) => {
+                        const f = e.target.files?.[0];
+                        if (f) void citesteCertificatul(f);
+                        e.target.value = "";
+                      }}
+                    />
+                    {magNouScanez ? "📷 Citesc…" : "📷 Poză la certificat (CUI)"}
+                  </label>
+                  <input
+                    value={magNouCui}
+                    onChange={(e) => setMagNouCui(e.target.value.replace(/\D/g, "").slice(0, 10))}
+                    inputMode="numeric"
+                    placeholder="CUI (dacă îl știi)"
+                    className="min-h-11 w-full rounded-lg border border-emerald-200 bg-white px-3 py-2 text-sm focus:border-emerald-400 focus:outline-none sm:w-48"
+                  />
+                </div>
+                {magNouMesaj && (
+                  <p className="mt-1.5 break-words text-xs font-medium text-emerald-800">
+                    {magNouMesaj}
+                  </p>
+                )}
                 <p className="mt-2 text-xs text-emerald-700">
                   Locul ales: {magNou.lat.toFixed(5)}, {magNou.lng.toFixed(5)}.
                   Dacă nu e bine, apasă „Alt loc" și apasă din nou pe hartă.
