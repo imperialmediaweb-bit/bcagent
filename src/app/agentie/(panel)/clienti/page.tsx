@@ -104,7 +104,9 @@ export default function ClientiPage() {
     <div className="space-y-5">
       <header>
         <h1 className="text-2xl font-semibold tracking-tight text-slate-900">
-          Clienții firmei ({formatNumber(total)})
+          {search.trim() !== "" || agent !== ""
+            ? `Rezultate: ${formatNumber(total)}`
+            : `Clienții firmei (${formatNumber(total)})`}
         </h1>
         <p className="text-sm text-slate-500">
           Toate firmele convertite, cu agentul responsabil și ultima vizită.
@@ -193,7 +195,20 @@ export default function ClientiPage() {
       {loading ? (
         <div className="h-40 animate-pulse rounded-2xl bg-slate-200/60" />
       ) : clients.length === 0 ? (
-        <EmptyState text="Niciun client încă — agenții îi convertesc din teren, sau folosește importul din vânzări." />
+        /* CU CĂUTARE PORNITĂ, „niciun client încă" e o minciună care duce
+           la concluzii greșite: firma poate avea sute de clienți, doar că
+           niciunul nu se potrivește cu ce s-a scris în căsuță. */
+        search.trim() !== "" || agent !== "" ? (
+          <EmptyState
+            text={
+              search.trim() !== ""
+                ? `Niciun client nu se potrivește cu „${search.trim()}". Șterge căutarea ca să-i vezi pe toți.`
+                : "Agentul ăsta n-are încă niciun client alocat."
+            }
+          />
+        ) : (
+          <EmptyState text="Niciun client încă — agenții îi convertesc din teren, sau folosește importul din vânzări." />
+        )
       ) : (
         <Card className="overflow-x-auto p-0">
           <table className="w-full min-w-[640px] text-sm">
