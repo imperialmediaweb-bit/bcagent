@@ -99,6 +99,17 @@ export async function POST(req: Request) {
         { status: 400 },
       );
     }
+    // Dreptunghiul de mai sus cuprinde și Republica Moldova. Un pin pus
+    // cu degetul pe harta micșorată, la 300 km de județul firmei, muta
+    // tot satul peste Prut (bula din Moldova raportată de Gavrileț).
+    // Locul trebuie să fie plauzibil pentru județul firmei.
+    {
+      const { locPlauzibil } = await import("@/modules/prospects/loc-plauzibil");
+      const [pj] = await db<Array<{ judet: string }>>`
+        SELECT COALESCE(judet,'') AS judet FROM prospects WHERE cui = ${cui}`;
+      const verdict = await locPlauzibil(db, pj?.judet ?? "", lat, lng);
+      if (!verdict.ok) return Response.json({ error: verdict.motiv }, { status: 400 });
+    }
     const sursa = body.sursa === "gps" ? "gps" : "deget";
     if (sursa === "gps") {
       // De la GPS acceptăm doar un fix bun: altfel „exact" ar fi o minciună

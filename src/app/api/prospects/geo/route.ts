@@ -1,6 +1,7 @@
 import { verifyFieldToken } from "@/lib/agent-guard";
 import { ensureSchema, getDB, isDBEnabled } from "@/lib/db";
 import { clientIP, rateLimit } from "@/lib/rate-limit";
+import { locPlauzibil, reparaJudetul } from "@/modules/prospects/loc-plauzibil";
 import { countyName } from "@/modules/prospects";
 import { variantePentruGeocodare } from "@/modules/prospects/localitati";
 
@@ -121,6 +122,16 @@ export async function GET(req: Request) {
     // agentul întreba „unde-s restul de clienți?".
     const { orgIdForAgent } = await import("@/lib/org-scope");
     const orgIdMeu = (await orgIdForAgent(payload.agentId)) || "-";
+    // ÎNTÂI REPARĂM CE E STRICAT ÎN JUDEȚ: un sat cu centrul în Moldova
+    // (raportat de Gavrileț) trimitea agentul la 300 km. Ieftin, idempotent.
+    const reparate = await reparaJudetul(db, judet).catch(() => ({
+      localitati: 0, pini: 0, centru: null,
+    }));
+    if (reparate.localitati > 0 || reparate.pini > 0) {
+      console.warn(
+        `[geo] ${judet}: ${reparate.localitati} sate și ${reparate.pini} pini erau la peste 120 km de județ — resetate`,
+      );
+    }
     const rows = await db<LocalityRow[]>`
       SELECT p.localitate,
              COUNT(*)::text AS count,
@@ -167,17 +178,28 @@ export async function GET(req: Request) {
       const dinPini = await db<
         Array<{ localitate: string; lat: number; lng: number }>
       >`
-        SELECT p.localitate, AVG(g.lat)::float8 AS lat, AVG(g.lng)::float8 AS lng
+        -- MEDIANĂ, nu medie: un singur pin pus greșit (deget tremurat pe
+        -- harta micșorată) muta tot satul cu el. Mediana nu se clintește.
+        SELECT p.localitate,
+               percentile_cont(0.5) WITHIN GROUP (ORDER BY g.lat)::float8 AS lat,
+               percentile_cont(0.5) WITHIN GROUP (ORDER BY g.lng)::float8 AS lng
         FROM prospects p
         JOIN geo_firme g ON g.cui = p.cui
         WHERE p.judet = ${judet}
           AND p.localitate = ANY(${faraPozitie})
-          AND g.aprox = FALSE
+          AND g.aprox = FALSE AND g.lat IS NOT NULL AND g.lng IS NOT NULL
         GROUP BY p.localitate
       `;
       for (const d of dinPini) {
         const r = rows.find((x) => x.localitate === d.localitate);
         if (!r) continue;
+        // Și mediana poate fi greșită când satul are UN singur pin, pus
+        // aiurea. Nu scriem un centru pe care nu-l putem susține.
+        const verdict = await locPlauzibil(db, judet, d.lat, d.lng);
+        if (!verdict.ok) {
+          console.warn(`[geo] ${judet}/${d.localitate}: centrul din pini refuzat — ${verdict.motiv}`);
+          continue;
+        }
         r.lat = d.lat;
         r.lng = d.lng;
         r.failed = false;
@@ -252,6 +274,7 @@ export async function GET(req: Request) {
       pendingGeocode,
       geocoded,
       faraLoc,
+      reparate: { localitati: reparate.localitati, pini: reparate.pini },
     });
   } catch (e) {
     console.error("[prospects geo]", e);

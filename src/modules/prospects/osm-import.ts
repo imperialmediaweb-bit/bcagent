@@ -78,12 +78,17 @@ export async function judeteVecine(
   aleLor: string[],
 ): Promise<string[]> {
   if (aleLor.length === 0) return [];
+  // MEDIANĂ, nu medie: un sat geocodat greșit (în Moldova) trăgea mijlocul
+  // județului spre el, iar „vecinii" ieșeau la sute de kilometri — de-aia
+  // Gavrileț vedea magazine din Galați și Tulcea pe harta din Botoșani.
   const mijloc = await db<Array<{ judet: string; lat: number; lng: number }>>`
-    SELECT judet, AVG(lat)::float8 AS lat, AVG(lng)::float8 AS lng
+    SELECT judet,
+           percentile_cont(0.5) WITHIN GROUP (ORDER BY lat)::float8 AS lat,
+           percentile_cont(0.5) WITHIN GROUP (ORDER BY lng)::float8 AS lng
     FROM geo_localitati
     WHERE lat IS NOT NULL AND lng IS NOT NULL AND judet <> ''
     GROUP BY judet
-    HAVING COUNT(*) >= 5
+    HAVING COUNT(*) >= 10
   `;
   const dupaJudet = new Map(mijloc.map((m) => [m.judet, m]));
   const ale = aleLor.map((j) => dupaJudet.get(j)).filter((x) => x !== undefined);
@@ -423,7 +428,21 @@ export async function unJudetOSM(
   }
   // Aceeași rulare poate scoate două rânduri cu același id (același nume în
   // același punct) — Postgres refuză să atingă rândul de două ori.
-  const unice = Array.from(new Map(randuri.map((r) => [r.id, r])).values());
+  // NUMAI CE E PLAUZIBIL PENTRU JUDEȚUL ĂSTA. Overpass caută ariile în
+  // toată lumea; ce cade la sute de kilometri de județ (Moldova) nu-i
+  // magazin de prospectat, e greșeală de date — nu-l punem pe hartă.
+  const { locPlauzibil } = await import("./loc-plauzibil");
+  const toate = Array.from(new Map(randuri.map((r) => [r.id, r])).values());
+  const unice: typeof toate = [];
+  let aruncate = 0;
+  for (const r of toate) {
+    const v = await locPlauzibil(db, judet, Number(r.lat), Number(r.lng));
+    if (v.ok) unice.push(r);
+    else aruncate++;
+  }
+  if (aruncate > 0) {
+    console.warn(`[osm] ${judet}: ${aruncate} magazine la peste 120 km de județ — neadăugate`);
+  }
   for (let k = 0; k < unice.length; k += 500) {
     const bucata = unice.slice(k, k + 500);
     const r = await db`

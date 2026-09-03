@@ -2,6 +2,7 @@ import { getDB } from "@/lib/db";
 import { alAgentiei } from "@/lib/org-scope";
 import { normalizeCounty } from "./caen";
 import { cuiValid, curataCui } from "./cui";
+import { locPlauzibil } from "./loc-plauzibil";
 import type { PunctKML } from "./kml";
 import { cheieMagazin, neted, potriveștePuncte } from "./potrivire";
 import type { Potrivire } from "./potrivire";
@@ -242,6 +243,12 @@ export async function aplicaHarta(
         rez.neatinse++;
         continue;
       }
+      // Un pin din hartă aflat la 300 km de județul firmei nu-i „locul
+      // exact", e o greșeală de pe hartă — nu mută firma acolo.
+      if (!(await pinPlauzibilPentru(db, g.client!.cui, g.punct.lat, g.punct.lng))) {
+        rez.neatinse++;
+        continue;
+      }
       const r = await db`
         INSERT INTO geo_firme (cui, lat, lng, aprox, failed, sursa)
         SELECT p.cui, ${g.punct.lat}, ${g.punct.lng}, FALSE, FALSE, 'import'
@@ -362,6 +369,7 @@ export async function aplicaHarta(
     }
     // Și LOCUL lor, care e tot ce le face folositoare: pus de mână, exact.
     for (const { p, cui } of orfaneCuCui) {
+      if (!(await pinPlauzibilPentru(db, cui, p.punct.lat, p.punct.lng))) continue;
       await db`
         INSERT INTO geo_firme (cui, lat, lng, aprox, failed, sursa)
         SELECT pr.cui, ${p.punct.lat}, ${p.punct.lng}, FALSE, FALSE, 'import'
@@ -530,4 +538,21 @@ export async function anuleazaImportul(
     pastrate: parseInt(p.n, 10),
     firmeRamase: parseInt(f.n, 10),
   };
+}
+
+/**
+ * Pinul e plauzibil pentru județul firmei? Firma fără județ (sau județ
+ * fără destule sate cunoscute) trece — garda tace când n-are pe ce se
+ * sprijini, nu inventează un refuz.
+ */
+async function pinPlauzibilPentru(
+  db: Parameters<typeof locPlauzibil>[0],
+  cui: string,
+  lat: number,
+  lng: number,
+): Promise<boolean> {
+  const [r] = await db<Array<{ judet: string }>>`
+    SELECT COALESCE(judet,'') AS judet FROM prospects WHERE cui = ${cui}`;
+  const verdict = await locPlauzibil(db, r?.judet ?? "", lat, lng);
+  return verdict.ok;
 }

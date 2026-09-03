@@ -318,10 +318,24 @@ export async function POST(req: Request) {
     const lat = Number(body.lat);
     const lng = Number(body.lng);
     const acc = Number(body.acc ?? 9999);
-    const fixBun =
+    let fixBun =
       Number.isFinite(lat) && Number.isFinite(lng) &&
       lat >= 43.3 && lat <= 48.4 && lng >= 20.1 && lng <= 30.0 &&
       Number.isFinite(acc) && acc > 0 && acc <= 250;
+    // Dreptunghiul de mai sus cuprinde și Republica Moldova. Un GPS care
+    // dă un fix „bun" la 300 km de județul firmei (telefon cu poziție
+    // veche, GPS păcălit) ar muta firma — și satul — peste Prut. Vizita
+    // se salvează oricum; doar pinul nu.
+    if (fixBun) {
+      const { locPlauzibil } = await import("@/modules/prospects/loc-plauzibil");
+      const [pj] = await db<Array<{ judet: string }>>`
+        SELECT COALESCE(judet,'') AS judet FROM prospects WHERE cui = ${cui}`;
+      const verdict = await locPlauzibil(db, pj?.judet ?? "", lat, lng);
+      if (!verdict.ok) {
+        console.warn(`[visits] pin GPS refuzat pentru ${cui}: ${verdict.motiv}`);
+        fixBun = false;
+      }
+    }
     let pinScris = false;
     if (fixBun) {
       const scris = await db`

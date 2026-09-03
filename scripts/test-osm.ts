@@ -46,7 +46,10 @@ console.log("\n── ÎNTREBAREA PENTRU OVERPASS ──");
   ok("caută alimentare", q.includes("convenience"));
   ok("caută baruri", q.includes("bar"));
   ok("caută și noduri, și clădiri", q.includes("node[") && q.includes("way["));
-  ok("are cale de rezervă pe ref", q.includes('"ref"="SV"'));
+  // `ref` e generic (raioane, oblasturi din alte țări îl poartă) și
+  // Overpass caută ariile în toată lumea: prin el au intrat magazine din
+  // Moldova pe harta din Botoșani. Rezerva a fost scoasă dinadins.
+  ok("NU mai are cale de rezervă pe ref (aducea străini)", !q.includes('"ref"='));
 }
 
 // Județul poate fi scris în baza noastră în orice fel — a intrat din

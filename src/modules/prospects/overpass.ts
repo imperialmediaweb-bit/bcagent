@@ -48,14 +48,15 @@ export function intrebareJudet(codJudet: string, timeoutSec = 180): string {
     .slice(0, 2);
   const shop = MAGAZINE.join("|");
   const amenity = LOCALURI.join("|");
-  // Două căi spre granița județului: eticheta ISO (calea curată) și `ref`
-  // (pusă de cartografii români). Dacă una lipsește, cealaltă salvează
-  // cererea. Ce cade în afara României e aruncat oricum la citire.
+  // DOAR eticheta ISO a județului. Înainte era și `area["ref"="BT"]`,
+  // „ca rezervă" — dar `ref` e o etichetă generică, purtată și de regiuni
+  // din alte țări (raioane, oblasturi), iar Overpass caută ariile în
+  // TOATĂ lumea. Așa au ajuns magazine din Republica Moldova pe harta din
+  // Botoșani (Gavrileț, 03.09), trecând apoi de un „filtru România" care
+  // era de fapt un dreptunghi cu Moldova în el. Toate județele României
+  // au ISO3166-2 în OSM; nu ne trebuie rezervă care aduce străini.
   return `[out:json][timeout:${timeoutSec}];
-(
-  area["ISO3166-2"="RO-${jud}"][admin_level=4];
-  area["ref"="${jud}"][admin_level=4]["boundary"="administrative"];
-)->.j;
+area["ISO3166-2"="RO-${jud}"][admin_level=4]->.j;
 (
   node["shop"~"^(${shop})$"](area.j);
   way["shop"~"^(${shop})$"](area.j);

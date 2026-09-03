@@ -112,6 +112,16 @@ export async function POST(req: Request) {
         { status: 400 },
       );
     }
+    // Dreptunghiul cuprinde și Moldova. Dacă agentul a spus în ce județ e
+    // (sau lucrează într-unul), locul trebuie să fie în județul ăla.
+    {
+      const { locPlauzibil } = await import("@/modules/prospects/loc-plauzibil");
+      const judetCerut = String(body.adauga.judet ?? "").trim().toUpperCase();
+      if (judetCerut !== "") {
+        const verdict = await locPlauzibil(db0, judetCerut, lat, lng);
+        if (!verdict.ok) return Response.json({ error: verdict.motiv }, { status: 400 });
+      }
+    }
     // CUI-ul e al firmei doar dacă e o firmă pe care agenția o poate
     // atinge. Altfel îl lăsăm gol: magazinul rămâne al lui, fără firmă.
     const cuiCerut = String(body.adauga.cui ?? "").replace(/\D/g, "").slice(0, 12);
@@ -258,6 +268,17 @@ export async function GET(req: Request) {
     const v = nr(url.searchParams.get("v"));
     const e = nr(url.searchParams.get("e"));
     const areChenar = s !== null && n !== null && v !== null && e !== null;
+    // JUDEȚUL ALES PE HARTĂ. Fără el, agentul din Botoșani primea toate
+    // magazinele firmei — și din județele vecine măturate de OSM, și
+    // rătăciții din Moldova. Costin: „ai câțiva prin sud — îi legi cumva?".
+    const judetCerut = (url.searchParams.get("judet") ?? "").toUpperCase().slice(0, 2);
+    // ÎNTÂI REPARĂM: magazinele scrise la județul greșit se mută la cel
+    // adevărat, cele din afara oricărui județ se ascund. Ieftin, idempotent.
+    const { reparaMagazinele } = await import("@/modules/prospects/loc-plauzibil");
+    const reparate = await reparaMagazinele(db, orgId).catch(() => ({ mutate: 0, ascunse: 0 }));
+    if (reparate.mutate > 0 || reparate.ascunse > 0) {
+      console.warn(`[magazine] ${orgId}: ${reparate.mutate} mutate la județul corect, ${reparate.ascunse} ascunse (în afara județelor)`);
+    }
 
     // UN CLIENT = UN MAGAZIN.
     // Dacă magazinul are CUI-ul unei firme care e CLIENTUL agenției, nu e
@@ -277,6 +298,9 @@ export async function GET(req: Request) {
       WHERE m.org_id = ${orgId}
         -- Ce a găsit agentul închis nu-l mai trimitem pe nimeni acolo.
         AND m.stare <> 'inchis'
+        -- Ce s-a dovedit în afara oricărui județ (Moldova) nu se arată.
+        AND m.stare <> 'in_afara'
+        AND (${judetCerut === ""} OR m.judet = ${judetCerut})
         AND (${!areChenar}
              OR (m.lat BETWEEN ${s ?? -90} AND ${n ?? 90}
                  AND m.lng BETWEEN ${v ?? -180} AND ${e ?? 180}))
@@ -284,6 +308,7 @@ export async function GET(req: Request) {
       LIMIT 1500
     `;
     return Response.json({
+      reparate,
       magazine: randuri.map((r) => ({
         id: r.id,
         nume: r.nume,

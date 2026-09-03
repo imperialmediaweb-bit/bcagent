@@ -326,7 +326,13 @@ export default function MapPanel({
   // atârnă comutatorul „doar zona de azi".
   useEffect(() => {
     let viu = true;
-    fetch(`/api/prospects/magazine-harta?token=${encodeURIComponent(token)}`)
+    // PE JUDEȚUL ALES. Fără el, agentul primea toate magazinele firmei —
+    // și din județele vecine, și rătăciții din Moldova — și le vedea pe
+    // toate deodată („ai câțiva prin sud, îi legi cumva?").
+    setMagHarta([]);
+    fetch(
+      `/api/prospects/magazine-harta?token=${encodeURIComponent(token)}&judet=${encodeURIComponent(judet)}`,
+    )
       .then((r) => (r.ok ? r.json() : null))
       .then(
         (
@@ -359,7 +365,7 @@ export default function MapPanel({
     return () => {
       viu = false;
     };
-  }, [token]);
+  }, [token, judet]);
 
   useEffect(() => {
     try {
