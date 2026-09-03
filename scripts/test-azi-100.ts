@@ -117,7 +117,12 @@ function caCodeReview() {
     const osm = citeste("src/modules/prospects/osm-import.ts");
     check("lista fixa de judete Moldova e scoasa", !/MOLDOVA\s*=/.test(osm));
     check("județele vecine se CALCULEAZĂ", osm.includes("judeteVecine"));
-    check("...din mijlocul geografic al județelor", osm.includes("AVG(lat)"));
+    // Mijlocul e MEDIANA, nu media: un sat geocodat greșit (în Moldova)
+    // trăgea media spre el și „vecinii" ieșeau la sute de kilometri.
+    check(
+      "...din mijlocul geografic al județelor (mediană)",
+      osm.includes("percentile_cont(0.5) WITHIN GROUP (ORDER BY lat)"),
+    );
     const cart = citeste("src/modules/zone/cartiere.ts");
     check("raza inventată de 30 km e scoasă", !/km:\s*30/.test(cart));
     check("nu mai e nicio listă de sate scrisă de mine", !cart.includes("DORNA CANDRENILOR"));

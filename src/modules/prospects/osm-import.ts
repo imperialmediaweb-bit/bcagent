@@ -88,7 +88,9 @@ export async function judeteVecine(
     FROM geo_localitati
     WHERE lat IS NOT NULL AND lng IS NOT NULL AND judet <> ''
     GROUP BY judet
-    HAVING COUNT(*) >= 10
+    -- Pragul rămâne 5, ca înainte: aici doar alegem ce județe MĂTURĂM
+    -- (miză mică); garda de plauzibilitate, cu miză mare, are pragul ei.
+    HAVING COUNT(*) >= 5
   `;
   const dupaJudet = new Map(mijloc.map((m) => [m.judet, m]));
   const ale = aleLor.map((j) => dupaJudet.get(j)).filter((x) => x !== undefined);

@@ -169,11 +169,13 @@ export async function POST(req: Request) {
     await db0`
       INSERT INTO magazin_harta
         (id, org_id, nume, cui, lat, lng, strat, stare, confirmat_de,
-         confirmat_la, adaugat_de, telefon)
+         confirmat_la, adaugat_de, telefon, judet, localitate)
       VALUES (${id}, ${orgId}, ${nume}, ${cui}, ${lat}, ${lng},
               'pus de agent', 'exista', ${payload.agentName}, NOW(),
               ${payload.agentName},
-              ${String(body.adauga.telefon ?? "").replace(/[^\d+ ]/g, "").slice(0, 30)})
+              ${String(body.adauga.telefon ?? "").replace(/[^\d+ ]/g, "").slice(0, 30)},
+              ${String(body.adauga.judet ?? "").trim().toUpperCase().slice(0, 2)},
+              ${String(body.adauga.localitate ?? "").trim().slice(0, 120)})
       ON CONFLICT (id) DO UPDATE
         SET nume = EXCLUDED.nume, cui = EXCLUDED.cui,
             stare = 'exista', confirmat_de = EXCLUDED.confirmat_de,
@@ -274,8 +276,15 @@ export async function GET(req: Request) {
     const judetCerut = (url.searchParams.get("judet") ?? "").toUpperCase().slice(0, 2);
     // ÎNTÂI REPARĂM: magazinele scrise la județul greșit se mută la cel
     // adevărat, cele din afara oricărui județ se ascund. Ieftin, idempotent.
-    const { reparaMagazinele } = await import("@/modules/prospects/loc-plauzibil");
+    const { reparaMagazinele, centrulJudetului, LIMITA_KM } = await import(
+      "@/modules/prospects/loc-plauzibil"
+    );
     const reparate = await reparaMagazinele(db, orgId).catch(() => ({ mutate: 0, ascunse: 0 }));
+    // Magazinele FĂRĂ județ scris (puse de agent, aduse din hartă înainte
+    // să existe coloana) nu se ascund: se judecă geometric, după mijlocul
+    // județului cerut. Fără mijloc cunoscut, se arată — nu inventăm refuz.
+    const centru = judetCerut ? await centrulJudetului(db, judetCerut).catch(() => null) : null;
+    const cosLat = centru ? Math.cos((centru.lat * Math.PI) / 180) : 1;
     if (reparate.mutate > 0 || reparate.ascunse > 0) {
       console.warn(`[magazine] ${orgId}: ${reparate.mutate} mutate la județul corect, ${reparate.ascunse} ascunse (în afara județelor)`);
     }
@@ -300,7 +309,12 @@ export async function GET(req: Request) {
         AND m.stare <> 'inchis'
         -- Ce s-a dovedit în afara oricărui județ (Moldova) nu se arată.
         AND m.stare <> 'in_afara'
-        AND (${judetCerut === ""} OR m.judet = ${judetCerut})
+        AND (${judetCerut === ""}
+             OR m.judet = ${judetCerut}
+             OR (COALESCE(m.judet, '') = ''
+                 AND (${centru === null}
+                      OR sqrt(power((m.lat - ${centru?.lat ?? 0}) * 111.0, 2)
+                            + power((m.lng - ${centru?.lng ?? 0}) * 111.0 * ${cosLat}, 2)) <= ${LIMITA_KM})))
         AND (${!areChenar}
              OR (m.lat BETWEEN ${s ?? -90} AND ${n ?? 90}
                  AND m.lng BETWEEN ${v ?? -180} AND ${e ?? 180}))
